@@ -1,1 +1,1 @@
-# MolGrouper
+# molGrouper
