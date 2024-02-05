@@ -99,4 +99,39 @@ class GroupGraph(nx.Graph):
         for n in self.nodes(data=True):
             histogram[type_to_idx[n[1]['type']]] += 1
         return histogram
+    
+    def to_data(self, node_descriptor_generater, max_n_attachments):
+        """Convert the GroupGraph to a data representation."""
+        from torch_geometric.data import Data
+        import torch
+        one_hot_vector = lambda index, num_classes : torch.eye(num_classes)[index]
+
+        # Create the node features
+        dummy_feature = node_descriptor_generater(list(self.node_types.keys())[0])
+        node_features = torch.zeros(len(self.nodes), len(dummy_feature))
+        for i, n in enumerate(self.nodes(data=True)):
+            node_features[i] = node_descriptor_generater(n[1]['type'])
+        
+        # Create the edge index
+        edge_index = torch.zeros(2, len(self.edges))
+        for i, e in enumerate(self.edges):
+            edge_index[0, i] = list(self.nodes).index(e[0])
+            edge_index[1, i] = list(self.nodes).index(e[1])
+        
+        # Create the edge features
+        edge_features = torch.zeros(len(self.edges), max_n_attachments*2)
+
+        for i, e in enumerate(self.edges(data=True)):
+            
+            # get nodes and ports
+            node_ports = [node_port.split('.') for node_port in e[2]['ports'][0]]
+            # convert the ports to one-hot vectors
+            port_index_s = self.nodes(data=True)[node_ports[0][0]]['ports'].index(node_ports[0][1])
+            port_index_t = self.nodes(data=True)[node_ports[1][0]]['ports'].index(node_ports[1][1])
+            edge_features[i] = torch.cat([
+                one_hot_vector(port_index_s, max_n_attachments), 
+                one_hot_vector(port_index_t, max_n_attachments)
+            ])
+
+        return Data(x=node_features, edge_index=edge_index, edge_attr=edge_features)
             

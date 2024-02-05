@@ -1,7 +1,8 @@
 from mbuild.tests.base_test import BaseTest
-from group_graph import GroupGraph
+from molGrouper.group_graph import GroupGraph
 from group_selfies import Group
 import mbuild as mb
+import torch
 import pytest
 
 class TestGroupGraph(BaseTest):
@@ -91,7 +92,15 @@ class TestGroupGraph(BaseTest):
         assert vector_form == [1, 1]
 
     def test_group_graph_to_pyG(self):
-        pass
+        self.graph.add_node('node1', 'type1')
+        self.graph.add_node('node2', 'type2')
+        self.graph.add_edge('node1', 'port1', 'node2', 'port3')
+        group_featurizer = lambda node: torch.tensor([1, 0])
+        
+        data = self.graph.to_data(group_featurizer, max_n_attachments=2)
+        assert torch.equal(data.x, torch.tensor([ [1,0], [1,0] ], dtype=torch.float32)) # node features should just be identity
+        assert torch.equal(data.edge_index, torch.tensor([ [0], [1] ], dtype=torch.float32)) # graph is directed, node1 -> node2
+        assert torch.equal(data.edge_attr, torch.tensor([ [1,0,1,0] ], dtype=torch.float32)) # edge features are one-hot encoded port
 
 if __name__ == "__main__":
     test = TestGroupGraph()
