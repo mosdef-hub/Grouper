@@ -12,13 +12,14 @@ jobs:
     steps:  
       - uses: actions/checkout@v3  
       - name: Set up Python ${{ matrix.python-version }}  
-        uses: actions/setup-python@v4  
-        with:  
+        uses: conda-incubator/setup-miniconda@v3 
+        with:
+          auto-update-conda: true
           python-version: ${{ matrix.python-version }}  
       - name: Install dependencies  
         run: |  
           python -m pip install --upgrade pip  
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi  
+          if [ -f enviroment.yml ]; then conda env create -f environment.yml; fi  
       - name: Lint with Ruff  
         run: |  
           pip install ruff  
