@@ -20,16 +20,20 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Set up Miniconda
-      uses: conda-incubator/setup-miniconda@v2
+    - name: Setup micromamba
+    - uses: mamba-org/setup-micromamba@v1
       with:
-        python-version: ${{ matrix.python-version }}
         environment-file: environment.yml
+        create-args: >- # beware the >- instead of |, we don't split on newlines but on spaces
+          python=3.9
+        condarc: |
+          channels:
+            - conda-forge
+          channel_priority: strict
 
     - name: Install dependencies
-      run: |
-        conda env create --file environment.yml
-        conda activate molGrouper
+      run: micromamba install --file environment.yml --yes
+
 
     - name: Run tests with pytest
       run: pytest
