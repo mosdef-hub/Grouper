@@ -1,4 +1,4 @@
-name: molGrouper
+name: molGroupertest
 channels:
   - pytorch
   - conda-forge
@@ -151,7 +151,7 @@ dependencies:
   - pip:
       - exceptiongroup==1.2.0
       - global-chem==1.8.5.1
-      - group-selfies==1.0.0
+      - git+https://github.com/aspuru-guzik-group/group-selfies.git
       - iniconfig==2.0.0
       - joblib==1.3.2
       - pluggy==1.4.0
