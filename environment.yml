@@ -15,7 +15,7 @@ dependencies:
   - bzip2=1.0.8
   - c-ares=1.26.0
   - c-blosc2=2.8.0
-  - ca-certificates=2023.12.12
+  - ca-certificates
   - cairo=1.16.0
   - certifi=2023.11.17
   - chardet=5.2.0
@@ -116,7 +116,7 @@ dependencies:
   - python-dateutil=2.8.2
   - python-tzdata=2023.4
   - python_abi=3.9
-  - pytorch=2.2.0
+  - pytorch=2.*
   - cpuonly
   - pytz=2024.1
   - pyyaml=6.0.1
@@ -132,7 +132,7 @@ dependencies:
   - sqlite=3.41.2
   - sympy=1.12
   - tk=8.6.13
-  - torchaudio=2.2.0
+  - torchaudio=2.*
   - torchvision=0.17.0
   - treelib=1.7.0
   - typing-extensions=4.9.0
