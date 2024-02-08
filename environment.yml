@@ -4,6 +4,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - cpuonly
   - astunparse=1.6.3
   - blosc=1.21.3
   - boltons=23.1.1
@@ -117,7 +118,6 @@ dependencies:
   - python-tzdata=2023.4
   - python_abi=3.9
   - pytorch=2.*
-  - cpuonly
   - pytz=2024.1
   - pyyaml=6.0.1
   - readline=8.2
