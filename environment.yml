@@ -17,7 +17,7 @@ dependencies:
   - c-ares=1.26.0
   - c-blosc2=2.8.0
   - ca-certificates
-  - cairo=1.16.0
+  - cairo
   - certifi=2023.11.17
   - chardet=5.2.0
   - charset-normalizer=3.3.2
@@ -109,7 +109,7 @@ dependencies:
   - protobuf=4.21.12
   - pthread-stubs=0.4
   - py-cpuinfo=9.0.0
-  - pycairo=1.25.0
+  - pycairo
   - pyparsing=3.1.1
   - pysocks=1.7.1
   - pytables=3.8.0
@@ -132,8 +132,8 @@ dependencies:
   - sqlite=3.41.2
   - sympy=1.12
   - tk=8.6.13
-  - torchaudio=2.*
-  - torchvision=0.17.0
+  - torchaudio
+  - torchvision
   - treelib=1.7.0
   - typing-extensions=4.9.0
   - typing_extensions=4.9.0
