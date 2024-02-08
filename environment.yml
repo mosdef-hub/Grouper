@@ -117,6 +117,7 @@ dependencies:
   - python-tzdata=2023.4
   - python_abi=3.9
   - pytorch=2.2.0
+  - cpuonly
   - pytz=2024.1
   - pyyaml=6.0.1
   - readline=8.2
