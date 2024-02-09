@@ -1,4 +1,4 @@
-name: molGroupertest
+name: molGrouper
 channels:
   - pytorch
   - conda-forge
