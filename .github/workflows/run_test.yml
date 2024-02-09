@@ -29,7 +29,8 @@ jobs:
         condarc: |
           channels:
             - conda-forge
-          channel_priority: strict
+            - defaults
+            - pytorch
 
     - name: Install dependencies
       run: micromamba install --file environment.yml --yes
