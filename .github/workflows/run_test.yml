@@ -31,7 +31,7 @@ jobs:
       run: micromamba install --file environment.yml --yes
 
     - name: Activate environment
-      run: micromamba activate molGrouper
+      run: micromamba activate
 
     - name: Run tests with pytest
       run: pytest
