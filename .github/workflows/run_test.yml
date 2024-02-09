@@ -32,6 +32,7 @@ jobs:
 
     - name: Install package
       run: pip install -e .
+      shell: micromamba-shell {0}
 
     - name: Run tests with pytest
       run: pytest
