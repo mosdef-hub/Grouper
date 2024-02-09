@@ -30,6 +30,8 @@ jobs:
     - name: Install dependencies
       run: micromamba install --file environment.yml --yes
 
+    - name: Install package
+      run: pip install -e .
 
     - name: Run tests with pytest
       run: pytest
