@@ -14,14 +14,15 @@ class GroupGraph(nx.Graph):
 
         if not isinstance(node_types, dict):
             raise TypeError("node_types must be a dictionary of node types and their ports")
-        holder = next(iter(node_types.keys())) # raises error if empty
-        holder_type = type(holder)
-        if not all(isinstance(k, holder_type) for k in node_types.keys()):
-            raise ValueError("All keys in node_types must be of the same type")
-        if not all(isinstance(v, list) for v in node_types.values()):
-            raise ValueError("All values in node_types must be lists")
-        if not all(isinstance(p, holder_type) for v in node_types.values() for p in v):
-            raise ValueError("All values in node_types must be lists of the same type as the keys")
+        if len(node_types) != 0:
+            holder = next(iter(node_types.keys())) # raises error if empty
+            holder_type = type(holder)
+            if not all(isinstance(k, holder_type) for k in node_types.keys()):
+                raise ValueError("All keys in node_types must be of the same type")
+            if not all(isinstance(v, list) for v in node_types.values()):
+                raise ValueError("All values in node_types must be lists")
+            if not all(isinstance(p, holder_type) for v in node_types.values() for p in v):
+                raise ValueError("All values in node_types must be lists of the same type as the keys")
         
         self.node_types = node_types
 
