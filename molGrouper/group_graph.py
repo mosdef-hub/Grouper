@@ -12,10 +12,10 @@ class GroupGraph(nx.Graph):
         self.node_types = node_types
 
     def __str__(self):
-        return f"Nodes: {self.nodes.data('ports')} \nEdges: {self.edges.data('ports')}"
+        return f"Nodes: {self.nodes.data('ports')}\n\nEdges: {self.edges.data('ports')}\n\n"
 
     def __repr__(self):
-        return f"Nodes: {self.nodes.data('type')}, {self.nodes.data('ports')} \nEdges: {self.edges.data('ports')}"
+        return f"\nGroupGraph({','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))})"
     
     def __eq__(self, other):
         return self.nodes == other.nodes and self.edges == other.edges

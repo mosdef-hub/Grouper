@@ -130,14 +130,14 @@ gG = gG.from_compound(mol, groups)
 import molGrouper
 
 node_types = {
-    'type1': ['port1', 'port2'],
-    'type2': ['port3', 'port4'],
+    'CH2': ['C1', 'C2'], #methylene
+    'CONH': ['C', 'N'], #amide
 }
 
 gG = molGrouper.GroupGraph(node_types)
-gG.add_node('node1', 'type1')
-gG.add_node('node2', 'type2')
-gG.add_edge('node1', 'port1', 'node2', 'port3')
+gG.add_node('node1', 'CH2')
+gG.add_node('node2', 'CONH')
+gG.add_edge('node1', 'C1', 'node2', 'C')
 
 group_featurizer = lambda node: torch.tensor([1, 0]) # dummy group featurizer
 
@@ -150,7 +150,15 @@ data
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+<!-- ROADMAP -->
+## Roadmap
+[ ] Generate possible graphs with attachments points as limiter for number of connections 
 
+[ ] Process output of generation into python data structure
+
+[ ] Substiute nodes based on max attachments for graphs
+
+[ ] Verify structures with synthesizability checks
 
 <!-- CONTRIBUTING -->
 ## Contributing
