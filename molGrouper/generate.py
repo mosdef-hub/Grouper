@@ -1,25 +1,33 @@
 import typing as t
-import ctypes
+# import ctypes
 import pathlib
 import os
 import subprocess
 from molGrouper.group_graph import GroupGraph
+import rdkit.Chem
 
-_libgeng = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/libgeng.so"
-libgeng = ctypes.CDLL(_libgeng) # Load the shared library into c types.
-libgeng.main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)] # for now just use the main function of geng
-libgeng.main.restype = None
+# _libgeng = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/libgeng.so"
+# libgeng = ctypes.CDLL(_libgeng) # Load the shared library into c types.
+# libgeng.main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)] # for now just use the main function of geng
+# libgeng.main.restype = None
 
-_libvcolg = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/libvcolg.so"
-libvcolg = ctypes.CDLL(_libvcolg) # Load the shared library into c types.
-libvcolg.main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)] # for now just use the main function of geng
-libvcolg.main.restype = None
+# _libvcolg = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/libvcolg.so"
+# libvcolg = ctypes.CDLL(_libvcolg) # Load the shared library into c types.
+# libvcolg.main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)] # for now just use the main function of geng
+# libvcolg.main.restype = None
 
 
-_libmultig = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/libmultig.so"
-libmultig = ctypes.CDLL(_libmultig) # Load the shared library into c types.
-libmultig.main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)] # for now just use the main function of geng
+# _libmultig = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/libmultig.so"
+# libmultig = ctypes.CDLL(_libmultig) # Load the shared library into c types.
+# libmultig.main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)] # for now just use the main function of geng
 
+constrained_fragments = [
+    rdkit.Chem.MolFromSmarts('NN'),
+    rdkit.Chem.MolFromSmarts('NO'),
+    rdkit.Chem.MolFromSmarts('NCN'),
+    rdkit.Chem.MolFromSmarts('NCO'),
+    rdkit.Chem.MolFromSmarts('OCO'),
+]
 
 """
 To create libgeng.so:
@@ -35,21 +43,39 @@ To create libgeng.so:
 """
 
 
-def generate_group_graph_space(n_nodes, max_n_attachments, node_types):
-    unfiltered_space = _all_possible_group_graphs(n_nodes, max_n_attachments, len(node_types))
-    return _process_multig_output(node_types, max_n_attachments)
+def generate_group_graph_space(n_nodes, node_types, filter = False):
+    if not isinstance(n_nodes, int):
+        raise TypeError("n_nodes must be an int")
+    if not isinstance(node_types, dict):
+        raise TypeError("node_types must be a dictionary of node types and their ports")
+    holder = next(iter(node_types.keys()))
+    holder_type = type(holder)
+    if not all(isinstance(k, holder_type) for k in node_types.keys()):
+        raise ValueError("All keys in node_types must be of the same type")
+    if not all(isinstance(v, list) for v in node_types.values()):
+        raise ValueError("All values in node_types must be lists")
+    if not all(isinstance(p, holder_type) for v in node_types.values() for p in v):
+        raise ValueError("All values in node_types must be lists of the same type as the keys")
+
+    int_to_node_type = {i: k for i, k in enumerate(node_types.keys())}
+    node_int_to_port = {k: {j: k for j, k in enumerate(v)} for i, (k,v) in enumerate(node_types.items())}
+
+    _generate_all_possible_group_graphs(n_nodes, node_types) # call nauty
+    unfiltered_space = _process_multig_output(int_to_node_type, node_int_to_port, node_types)
+    if filter:
+        return _apply_filters(unfiltered_space)
+    else:
+        return unfiltered_space
     # filtered_space = _apply_filters(unfiltered_space)
     # return _convert_space_to_group_graphs(filtered_space)
 
-def _all_possible_group_graphs(n_nodes, max_n_attachments, n_node_types):
+def _generate_all_possible_group_graphs(n_nodes, node_types):
+    max_n_attachments = max(len(v) for v in node_types.values())
     _call_geng(n_nodes, max_n_attachments)
-    _call_vcolg(n_node_types)
+    _call_vcolg(len(node_types))
     _call_multig(max_n_attachments**2)
 
-def subset_possible():
-    pass
-
-def _apply_filters():
+def _apply_filters(unfiltered_space, filters = constrained_fragments):
     pass
 
 def _call_geng(n_nodes, max_edges):
@@ -82,7 +108,7 @@ def _multi_to_pair(multi, max_multi):
     else:
         raise ValueError("Input multi must be in the range 1-16")
 
-def _multig_output_to_graphs(line, node_types, max_n_attachments):
+def _multig_output_to_graphs(line, int_to_node_type, node_int_to_port, node_types):
     node_description, edge_description = line.split("  ")
     edge_description = edge_description.split(" ")
 
@@ -96,32 +122,45 @@ def _multig_output_to_graphs(line, node_types, max_n_attachments):
     n_vertices = int(node_description[0])
     n_edges = int(node_description[1])
     colors = node_description[2:]
+
+    max_n_attachments = max(len(v) for v in node_types.values())
     
     gG = GroupGraph(node_types)
     # Add nodes
     for i in range(n_vertices):
-        gG.add_node(f"node{i}", colors[i])
+        gG.add_node(f"n{i}", int_to_node_type[int(colors[i])])
     # Add edges
     try:
         for e in edge_list:
-            port1, port2 = _multi_to_pair(e[2], max_n_attachments**2)
-            gG.add_edge(f'node{e[0]}', f'port{port1}', f'node{e[1]}', f'port{port2}')
+            port_int_1, port_int_2 = _multi_to_pair(e[2], max_n_attachments**2)
+            node1 = int_to_node_type[int(colors[e[0]])]
+            node2 = int_to_node_type[int(colors[e[1]])]
+            port1 = node_int_to_port[node1][port_int_1]
+            port2 = node_int_to_port[node2][port_int_2]
+            gG.add_edge(f'n{e[0]}', port1,  f'n{e[1]}', port2)
         return gG
     except:
         print("Couldn't produce graph from multig output")
 
-def _process_multig_output(node_types, max_n_attachments):
+def _process_multig_output(int_to_node_type, node_int_to_port, node_types):
+    graphs = []
     for line in open("multig_out.txt"):
-        yield _multig_output_to_graphs(line, node_types, max_n_attachments)
+        out = _multig_output_to_graphs(line, int_to_node_type, node_int_to_port, node_types)
+        if out is not None:
+            graphs.append(out)
     os.remove("multig_out.txt")
     os.remove("vcolg_out.txt")
     os.remove("geng_out.txt")
+    return graphs
 
 
 if __name__ == "__main__":
     node_types = {
-        '0': ['port1', 'port2'],
-        '1': ['port1', 'port2'],
-        '2': ['port1', 'port2', 'port3'],
+        'NH2': ['N1'], # amine
+        'CO': ['C1', 'C2'], # carbonyl
+        'CC': ['C11', 'C12', 'C21', 'C22'], # alkene
     }
-    print(list(generate_group_graph_space(3, 3, node_types)))
+    out = generate_group_graph_space(3, node_types)
+    print(out)
+    print(len(out))
+    print(out[0])

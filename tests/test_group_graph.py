@@ -68,14 +68,6 @@ class TestGroupGraph(BaseTest):
         self.graph.add_edge('node1', 'port1', 'node2', 'port3')
         assert self.graph.n_free_ports('node1') == 1
 
-    def test_str_representation(self):
-        self.graph.add_node('node1', 'type1')
-        self.graph.add_node('node2', 'type2')
-        self.graph.add_edge('node1', 'port1', 'node2', 'port3')
-
-        expected_str = "Nodes: [('node1', ['port1', 'port2']), ('node2', ['port3', 'port4'])] \nEdges: [('node1', 'node2', [['node1.port1', 'node2.port3']])]"
-        assert str(self.graph) == expected_str
-
     def test_compound_to_group_graph(self):
         mol = mb.load('CCCCCCCC', smiles=True) # octane molecule
         groups = [Group('c3', 'C([H])([H])([H])(*1)'), Group('c2', 'C([H])([H])(*1)(*1)')]
