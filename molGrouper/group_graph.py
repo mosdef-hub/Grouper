@@ -9,10 +9,24 @@ class GroupGraph(nx.Graph):
 
     def __init__(self, node_types=None):
         super(GroupGraph, self).__init__()
+        if node_types is None:
+            node_types = {}
+
+        if not isinstance(node_types, dict):
+            raise TypeError("node_types must be a dictionary of node types and their ports")
+        holder = next(iter(node_types.keys())) # raises error if empty
+        holder_type = type(holder)
+        if not all(isinstance(k, holder_type) for k in node_types.keys()):
+            raise ValueError("All keys in node_types must be of the same type")
+        if not all(isinstance(v, list) for v in node_types.values()):
+            raise ValueError("All values in node_types must be lists")
+        if not all(isinstance(p, holder_type) for v in node_types.values() for p in v):
+            raise ValueError("All values in node_types must be lists of the same type as the keys")
+        
         self.node_types = node_types
 
     def __str__(self):
-        return f"Nodes: {self.nodes.data('ports')}\n\nEdges: {self.edges.data('ports')}\n\n"
+        return f"Nodes: {['{} ({}) {}'.format(d[0], d[1]['type'], d[1]['ports']) for d in self.nodes.data()]}\n\nEdges: {','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))}\n\n"
 
     def __repr__(self):
         return f"\nGroupGraph({','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))})"
@@ -22,6 +36,9 @@ class GroupGraph(nx.Graph):
     
     def __ne__(self, other):
         return not self.__eq__(other)
+    
+    def __bool__(self):
+        return len(self.nodes) > 0 and len(self.edges) > 0
 
     def add_node(self, nodeID, node_type):
         super(GroupGraph, self).add_node(nodeID)
