@@ -164,4 +164,5 @@ dependencies:
       - tomli==2.0.1
       - torch-geometric
       - tqdm==4.66.1
+      - pysmiles
 prefix: /Users/kieran/miniconda3/envs/molGrouper
