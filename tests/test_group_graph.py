@@ -94,6 +94,31 @@ class TestGroupGraph(BaseTest):
         assert torch.equal(data.edge_index, torch.tensor([ [0], [1] ], dtype=torch.float32)) # graph is directed, node1 -> node2
         assert torch.equal(data.edge_attr, torch.tensor([ [1,0,1,0] ], dtype=torch.float32)) # edge features are one-hot encoded port
 
+    def test_group_graph_to_atomic_graph(self):
+        graph = GroupGraph(
+            node_types = {
+                'NH2': ['N1'], # amine
+                'CO': ['C1', 'C2'], # carbonyl
+                'CC': ['C11', 'C12', 'C21', 'C22'], # alkene
+            }
+        )
+        node_type_to_smiles = {
+            'NH2': 'N([H])[H]',
+            'CO': 'C=O',
+            'CC': 'C=C',
+        }
+        node_port_to_atom_index = {
+            'NH2': {'N1': 0},
+            'CO': {'C1': 0, 'C2': 0},
+            'CC': {'C11': 0, 'C12': 0, 'C21': 2, 'C22': 2},
+        }
+        graph.add_node('node1', 'NH2')
+        graph.add_node('node2', 'CO')
+        graph.add_edge('node1', 'N1', 'node2', 'C1')
+        atomic_graph = graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
+        print(atomic_graph)
+
+
 if __name__ == "__main__":
     test = TestGroupGraph()
 

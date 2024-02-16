@@ -2,6 +2,7 @@ import networkx as nx
 import rdkit
 import rdkit.Chem
 import group_selfies
+from pysmiles import read_smiles, write_smiles
 #   taken from a good answer by Gambit1614 on StackOverflow https://stackoverflow.com/questions/57095809/networkx-connecting-nodes-using-ports
 
 class GroupGraph(nx.Graph):
@@ -117,6 +118,74 @@ class GroupGraph(nx.Graph):
         for n in self.nodes(data=True):
             histogram[type_to_idx[n[1]['type']]] += 1
         return histogram
+    
+    def to_molecular_graph(self, node_type_to_smiles, node_type_port_to_index):
+        """Converts the GroupGraph to a molecular graph using SMILES notation."""
+        molecular_graph = nx.Graph()
+
+        atom_id = -1
+        node_port_to_atom_index = {}
+        for node, data in self.nodes(data=True):
+            node_type = data['type']
+            ports = data['ports']
+            smiles = node_type_to_smiles[node_type]
+            mole_graph = read_smiles(smiles)
+            node_port_to_atom_index[node] = {}
+            group_atom_id = -1
+            for atom in mole_graph.nodes(data=True):
+                atom_data = atom[1]['element']
+                atom_id += 1
+                group_atom_id += 1
+                if group_atom_id in node_type_port_to_index[node_type].values():
+                    for i, port in enumerate(ports):
+                        node_port_to_atom_index[node][port] = atom_id
+                    
+
+        # Iterate over nodes in the GroupGraph
+        atom_id = -1
+        for node, data in self.nodes(data=True):
+            node_type = data['type']
+            ports = data['ports']
+
+            # Get SMILES notation for the node type
+            smiles = node_type_to_smiles[node_type]
+
+            # Read the SMILES notation to create a molecular graph
+            mole_graph = read_smiles(smiles)
+
+            # Add atoms to the molecular graph
+            for atom in mole_graph.nodes(data=True):
+                atom_id += 1
+                # atom_id = f"{node}.{atom[0]}"
+                atom_data = atom[1]['element']
+                molecular_graph.add_node(atom_id, element=atom_data)
+                
+
+        # Iterate over edges in the GroupGraph
+        for edge in self.edges(data=True):
+            node1, node2, data = edge
+            edge_ports_list = data['ports']
+
+            # Add bonds to the molecular graph
+            for edge_ports in edge_ports_list:
+                node1, node2 = edge_ports
+                node1, port1 = node1.split('.')[0], node1.split('.')[1]
+                node2, port2 = node2.split('.')[0], node2.split('.')[1]
+                # convert node to node_type
+                # node1 = self.nodes[node1]['type']
+                # node2 = self.nodes[node2]['type']
+                # need to convert node_port_index to index in the molecular graph
+                atom1 = node_port_to_atom_index[node1][port1]
+                atom2 = node_port_to_atom_index[node2][port2]
+                molecular_graph.add_edge(atom1, atom2)
+
+        return molecular_graph
+    
+    def to_smiles(self, node_type_to_smiles, node_type_port_to_index):
+        """Converts the GroupGraph to a SMILES notation."""
+        molecular_graph = self.to_molecular_graph(node_type_to_smiles, node_type_port_to_index)
+        return write_smiles(molecular_graph)
+    
     
     def to_data(self, node_descriptor_generater, max_n_attachments):
         """Convert the GroupGraph to a data representation."""
