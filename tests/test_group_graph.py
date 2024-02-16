@@ -115,8 +115,8 @@ class TestGroupGraph(BaseTest):
         graph.add_node('node1', 'NH2')
         graph.add_node('node2', 'CO')
         graph.add_edge('node1', 'N1', 'node2', 'C1')
-        atomic_graph = graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
-        print(atomic_graph)
+        molecular_graph = graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
+        print(molecular_graph)
 
 
 if __name__ == "__main__":

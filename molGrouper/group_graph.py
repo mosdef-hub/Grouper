@@ -139,6 +139,17 @@ class GroupGraph(nx.Graph):
                 if group_atom_id in node_type_port_to_index[node_type].values():
                     for i, port in enumerate(ports):
                         node_port_to_atom_index[node][port] = atom_id
+        
+        # Need conversion from node and subgraph indices to molecular graph indices
+        atom_id = -1
+        node_sub_graph_indices_to_molecular_graph_indices = {}
+        for node, data in self.nodes(data=True):
+            node_sub_graph_indices_to_molecular_graph_indices[node] = {}
+            mole_graph = read_smiles(node_type_to_smiles[data['type']])
+            for atom in mole_graph.nodes(data=True):
+                atom_id += 1
+                node_sub_graph_indices_to_molecular_graph_indices[node][atom[0]] = atom_id
+
                     
 
         # Iterate over nodes in the GroupGraph
@@ -159,6 +170,13 @@ class GroupGraph(nx.Graph):
                 # atom_id = f"{node}.{atom[0]}"
                 atom_data = atom[1]['element']
                 molecular_graph.add_node(atom_id, element=atom_data)
+            
+            # Add bonds from the subgraph to the molecular graph
+            for bond in mole_graph.edges(data=True):
+                sub_atom1, sub_atom2, data = bond
+                atom1 = node_sub_graph_indices_to_molecular_graph_indices[node][sub_atom1]
+                atom2 = node_sub_graph_indices_to_molecular_graph_indices[node][sub_atom2]
+                molecular_graph.add_edge(atom1, atom2)
                 
 
         # Iterate over edges in the GroupGraph
@@ -171,9 +189,6 @@ class GroupGraph(nx.Graph):
                 node1, node2 = edge_ports
                 node1, port1 = node1.split('.')[0], node1.split('.')[1]
                 node2, port2 = node2.split('.')[0], node2.split('.')[1]
-                # convert node to node_type
-                # node1 = self.nodes[node1]['type']
-                # node2 = self.nodes[node2]['type']
                 # need to convert node_port_index to index in the molecular graph
                 atom1 = node_port_to_atom_index[node1][port1]
                 atom2 = node_port_to_atom_index[node2][port2]
@@ -185,7 +200,6 @@ class GroupGraph(nx.Graph):
         """Converts the GroupGraph to a SMILES notation."""
         molecular_graph = self.to_molecular_graph(node_type_to_smiles, node_type_port_to_index)
         return write_smiles(molecular_graph)
-    
     
     def to_data(self, node_descriptor_generater, max_n_attachments):
         """Convert the GroupGraph to a data representation."""
