@@ -31,7 +31,7 @@ class GroupGraph(nx.Graph):
         return f"Nodes: {['{} ({}) {}'.format(d[0], d[1]['type'], d[1]['ports']) for d in self.nodes.data()]}\n\nEdges: {','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))}\n\n"
 
     def __repr__(self):
-        return f"\nGroupGraph({','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))})"
+        return f"GroupGraph({','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))})"
     
     def __eq__(self, other):
         return self.nodes == other.nodes and self.edges == other.edges
@@ -167,16 +167,21 @@ class GroupGraph(nx.Graph):
             # Add atoms to the molecular graph
             for atom in mole_graph.nodes(data=True):
                 atom_id += 1
-                # atom_id = f"{node}.{atom[0]}"
-                atom_data = atom[1]['element']
-                molecular_graph.add_node(atom_id, element=atom_data)
+                molecular_graph.add_node(
+                    atom_id, 
+                    element=atom[1]['element'], 
+                    charge=atom[1]['charge'], 
+                    aromatic=atom[1]['aromatic'], 
+                    # hcount=atom[1]['hcount']
+                    hcount=0
+                )
             
             # Add bonds from the subgraph to the molecular graph
             for bond in mole_graph.edges(data=True):
                 sub_atom1, sub_atom2, data = bond
                 atom1 = node_sub_graph_indices_to_molecular_graph_indices[node][sub_atom1]
                 atom2 = node_sub_graph_indices_to_molecular_graph_indices[node][sub_atom2]
-                molecular_graph.add_edge(atom1, atom2)
+                molecular_graph.add_edge(atom1, atom2, order=data['order'])
                 
 
         # Iterate over edges in the GroupGraph
@@ -192,7 +197,7 @@ class GroupGraph(nx.Graph):
                 # need to convert node_port_index to index in the molecular graph
                 atom1 = node_port_to_atom_index[node1][port1]
                 atom2 = node_port_to_atom_index[node2][port2]
-                molecular_graph.add_edge(atom1, atom2)
+                molecular_graph.add_edge(atom1, atom2, order=1)
 
         return molecular_graph
     

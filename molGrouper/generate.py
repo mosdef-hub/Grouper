@@ -104,11 +104,13 @@ def _multi_to_pair(multi, max_multi):
         # Calculate x and y values based on the input multi
         x = (multi - 1) % int(max_multi**.5) + 1
         y = (multi - 1) // int(max_multi**.5) + 1
+
+        x, y = x-1, y-1 # convert to 0-indexed
         return x, y
     else:
         raise ValueError("Input multi must be in the range 1-16")
 
-def _multig_output_to_graphs(line, int_to_node_type, node_int_to_port, node_types):
+def _multig_output_to_graphs(line, int_to_node_type, node_int_to_port, node_types, verbose = False):
     node_description, edge_description = line.split("  ")
     edge_description = edge_description.split(" ")
 
@@ -140,7 +142,9 @@ def _multig_output_to_graphs(line, int_to_node_type, node_int_to_port, node_type
             gG.add_edge(f'n{e[0]}', port1,  f'n{e[1]}', port2)
         return gG
     except:
-        print("Couldn't produce graph from multig output")
+        if verbose:
+            print("Couldn't produce graph from multig output")
+        
 
 def _process_multig_output(int_to_node_type, node_int_to_port, node_types):
     graphs = []
