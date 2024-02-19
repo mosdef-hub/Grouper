@@ -73,7 +73,7 @@ class TestGroupGraph(BaseTest):
         mol = mb.load('CCCCCCCC', smiles=True) # octane molecule
         groups = [Group('c3', 'C([H])([H])([H])(*1)'), Group('c2', 'C([H])([H])(*1)(*1)')]
         graph = GroupGraph()
-        group_graph = graph.from_compound(mol, groups)
+        group_graph = graph.from_mbuild(mol, groups)
         print(group_graph)
 
 
@@ -92,7 +92,7 @@ class TestGroupGraph(BaseTest):
         self.graph.add_edge('node1', 'port1', 'node2', 'port3')
         group_featurizer = lambda node: torch.tensor([1, 0])
 
-        data = self.graph.to_data(group_featurizer, max_n_attachments=2)
+        data = self.graph.to_PyG_Data(group_featurizer, max_n_attachments=2)
         assert torch.equal(data.x, torch.tensor([ [1,0], [1,0] ], dtype=torch.float32)) # node features should just be identity
         assert torch.equal(data.edge_index, torch.tensor([ [0], [1] ], dtype=torch.float32)) # graph is directed, node1 -> node2
         assert torch.equal(data.edge_attr, torch.tensor([ [1,0,1,0] ], dtype=torch.float32)) # edge features are one-hot encoded port

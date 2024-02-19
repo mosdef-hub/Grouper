@@ -13,7 +13,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/kierannp/molGrouper">
-    <img src="images/grouper.jpeg" alt="Logo" width="300" height="300">
+    <img src="images/grouper.jpeg" alt="Logo" width="700" height="300">
   </a>
 
 <h3 align="center">molGrouper</h3>
@@ -64,23 +64,13 @@
 
 The fundamental data structure behind this package is based on a port graph, look [here](https://doi.org/10.1017/S0960129518000270) for an excellent description of the data structure.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-### Port graph
-<br />
-<div align="center">
-  <a href="https://github.com/kierannp/molGrouper">
-    <img src="images/An-example-of-port-graph.png" alt="Logo" width="300" height="300">
-  </a>
-</div>
-
 
 <!-- GETTING STARTED -->
 ## Getting Started
 
 ### Prerequisites
 
-* Need to install nauty in packages in the base directory of `molGrouper`
+* Need to install [`nauty`](https://pallini.di.uniroma1.it/) in packages in the base directory of `molGrouper`
 
 ### Installation
 
@@ -103,18 +93,64 @@ pip install .
 ### Group graph initalization
 ```python
 node_types = {
-    'type1': ['port1', 'port2'],
-    'type2': ['port3', 'port4'],
+    'N': ['N1'], # amine
+    'CO': ['C1', 'C2'], # carbonyl
+    'CC': ['C11', 'C12', 'C21', 'C22'], # alkene
+    'C': ['C1'], # alkane
 }
 
 
-gG = GroupGraph(node_types)
-gG.add_node('node1', 'type1')
-gG.add_node('node2', 'type1')
-gG.add_node('node3', 'type2')
+groupG = GroupGraph(node_types)
+groupG.add_node('node1', 'N')
+groupG.add_node('node2', 'CC')
 
-gG.add_edge('node1', 'port1', 'node2', 'port1')
+groupG.add_edge('node1', 'N1', 'node2', 'C12')
 ```
+
+### Exhaustive molecular space generation
+```python
+node_types = {
+    'N': ['N1'], # amine
+    'CO': ['C1', 'C2'], # carbonyl
+    'CC': ['C11', 'C12', 'C21', 'C22'], # alkene
+    'C': ['C1', "C2", "C3", "C4"], # alkane
+}
+
+group_graph_space = generate_group_graph_space(
+  n_nodes = 4, # number of groups to combine
+  node_types = node_types
+)
+```
+
+### Group graph to molecular graph
+```python
+node_type_to_smiles = {
+    'N': 'N',
+    'CO': 'C=O',
+    'CC': 'C=C',
+    'C': 'C',
+}
+node_port_to_atom_index = { # atom index is the atom that the port originates from
+    'N': {'N1': 0}, 
+    'CO': {'C1': 0, 'C2': 0},
+    'CC': {'C11': 0, 'C12': 0, 'C21': 1, 'C22': 1},
+    'C': {'C1': 0, 'C2': 0, 'C3': 0, 'C4': 0},
+}
+
+mol_G = g.to_molecular_graph(
+  node_type_to_smiles, 
+  node_port_to_atom_index
+)
+```
+
+### Molecular graph to SMILES
+```python
+from pysmiles import write_smiles
+
+write_smiles(mol_G)
+```
+
+
 ### Group graph from `mBuild.Compound`
 ```python
 import mbuild as mb
@@ -123,8 +159,8 @@ from molGrouper import GroupGraph
 
 mol = mb.load('CCCCCCCC', smiles=True) # octane molecule
 groups = [Group('c3', 'C([H])([H])([H])(*1)'), Group('c2', 'C([H])([H])(*1)(*1)')]
-gG = GroupGraph()
-gG = gG.from_compound(mol, groups)
+groupG = GroupGraph()
+groupG = groupG.from_mbuild(mol, groups)
 ```
 ### Conversion to `torch_geometric.Data`
 ```python
@@ -135,18 +171,19 @@ node_types = {
     'CONH': ['C', 'N'], #amide
 }
 
-gG = molGrouper.GroupGraph(node_types)
-gG.add_node('node1', 'CH2')
-gG.add_node('node2', 'CONH')
-gG.add_edge('node1', 'C1', 'node2', 'C')
+groupG = molGrouper.GroupGraph(node_types)
+groupG.add_node('node1', 'CH2')
+groupG.add_node('node2', 'CONH')
+groupG.add_edge('node1', 'C1', 'node2', 'C')
 
 group_featurizer = lambda node: torch.tensor([1, 0]) # dummy group featurizer
 
-data = gG.to_data(group_featurizer, max_n_attachments=2)
+data = groupG.to_PyG_Data(group_featurizer, max_n_attachments=2)
 
 data
 # Data(x=[2,2], edge_index=[2,1], edge_attr=[1,4])
 ```
+
 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

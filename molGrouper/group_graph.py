@@ -106,7 +106,7 @@ class GroupGraph(nx.Graph):
 
         return group_graph
     
-    def from_compound(self, compound, groups):
+    def from_mbuild(self, compound, groups):
         """Create a GroupGraph from a mb.Compound and a list of Groups."""
         smiles = compound.get_smiles()
         return self.group_graph_from_smiles(smiles, groups)
@@ -206,7 +206,7 @@ class GroupGraph(nx.Graph):
         molecular_graph = self.to_molecular_graph(node_type_to_smiles, node_type_port_to_index)
         return write_smiles(molecular_graph)
     
-    def to_data(self, node_descriptor_generater, max_n_attachments):
+    def to_PyG_Data(self, node_descriptor_generater, max_n_attachments):
         """Convert the GroupGraph to a data representation."""
         from torch_geometric.data import Data
         import torch
