@@ -30,14 +30,3 @@ class TestGroupGraph(BaseTest):
     def test_generate_group_graph_space(self):
         out = generate_group_graph_space(3, self.node_types)
         assert len(out) == 539
-
-
-if __name__ == "__main__":
-    test = TestGroupGraph()
-
-    test.test_add_node()
-    test.test_add_edge()
-    test.test_make_undirected()
-    test.test_n_free_ports()
-    test.test_str_representation()
-    test.test_Compound_to_group_graph()
