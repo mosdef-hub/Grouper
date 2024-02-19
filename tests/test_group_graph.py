@@ -1,8 +1,7 @@
 from mbuild.tests.base_test import BaseTest
 from molGrouper.group_graph import GroupGraph
 from group_selfies import Group
-import mbuild as mb
-import torch
+from molGrouper.io import has_mbuild, has_torch
 import pytest
 
 class TestGroupGraph(BaseTest):
@@ -68,13 +67,15 @@ class TestGroupGraph(BaseTest):
         self.graph.add_edge('node1', 'port1', 'node2', 'port3')
         assert self.graph.n_free_ports('node1') == 1
 
+    @pytest.mark.skipif(not has_mbuild, reason="mBuild package not installed")
     def test_compound_to_group_graph(self):
+        import mbuild as mb
         mol = mb.load('CCCCCCCC', smiles=True) # octane molecule
         groups = [Group('c3', 'C([H])([H])([H])(*1)'), Group('c2', 'C([H])([H])(*1)(*1)')]
         graph = GroupGraph()
         group_graph = graph.from_compound(mol, groups)
         print(group_graph)
-        
+
 
     def test_group_graph_to_vector(self):
         self.graph.add_node('node1', 'type1')
@@ -83,12 +84,14 @@ class TestGroupGraph(BaseTest):
         vector_form = self.graph.to_vector()
         assert vector_form == [1, 1]
 
+    @pytest.mark.skipif(not has_torch, reason="torch package not installed")
     def test_group_graph_to_pyG(self):
+        import torch
         self.graph.add_node('node1', 'type1')
         self.graph.add_node('node2', 'type2')
         self.graph.add_edge('node1', 'port1', 'node2', 'port3')
         group_featurizer = lambda node: torch.tensor([1, 0])
-        
+
         data = self.graph.to_data(group_featurizer, max_n_attachments=2)
         assert torch.equal(data.x, torch.tensor([ [1,0], [1,0] ], dtype=torch.float32)) # node features should just be identity
         assert torch.equal(data.edge_index, torch.tensor([ [0], [1] ], dtype=torch.float32)) # graph is directed, node1 -> node2
@@ -118,13 +121,3 @@ class TestGroupGraph(BaseTest):
         molecular_graph = graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
         print(molecular_graph)
 
-
-if __name__ == "__main__":
-    test = TestGroupGraph()
-
-    test.test_add_node()
-    test.test_add_edge()
-    test.test_make_undirected()
-    test.test_n_free_ports()
-    test.test_str_representation()
-    test.test_Compound_to_group_graph()
