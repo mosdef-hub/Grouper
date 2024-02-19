@@ -40,9 +40,6 @@
   <ol>
     <li>
       <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
     </li>
     <li>
       <a href="#getting-started">Getting Started</a>
@@ -69,7 +66,7 @@ The fundamental data structure behind this package is based on a port graph, loo
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-### Portgraph
+### Port graph
 <br />
 <div align="center">
   <a href="https://github.com/kierannp/molGrouper">
@@ -81,6 +78,10 @@ The fundamental data structure behind this package is based on a port graph, loo
 <!-- GETTING STARTED -->
 ## Getting Started
 
+### Prerequisites
+
+* Need to install nauty in packages in the base directory of `molGrouper`
+
 ### Installation
 
 1. Clone the repo
@@ -88,7 +89,7 @@ The fundamental data structure behind this package is based on a port graph, loo
 git clone https://github.com/kierannp/molGrouper
 cd molGrouper
 ```
-2. Install with pip
+2. Install with `pip`
 ```python
 pip install .
 ```
@@ -114,7 +115,7 @@ gG.add_node('node3', 'type2')
 
 gG.add_edge('node1', 'port1', 'node2', 'port1')
 ```
-### Group graph from mBuild.Compound
+### Group graph from `mBuild.Compound`
 ```python
 import mbuild as mb
 from group_selfies import Group
@@ -125,7 +126,7 @@ groups = [Group('c3', 'C([H])([H])([H])(*1)'), Group('c2', 'C([H])([H])(*1)(*1)'
 gG = GroupGraph()
 gG = gG.from_compound(mol, groups)
 ```
-### Conversion to torch_geometric.Data
+### Conversion to `torch_geometric.Data`
 ```python
 import molGrouper
 
@@ -152,11 +153,15 @@ data
 
 <!-- ROADMAP -->
 ## Roadmap
-[ ] Generate possible graphs with attachments points as limiter for number of connections 
+[X] Generate possible graphs with attachments points as limiter for number of connections 
 
-[ ] Process output of generation into python data structure
+[X] Process output of generation into python data structure
 
-[ ] Substiute nodes based on max attachments for graphs
+[X] Substiute nodes based on max attachments for graphs
+
+[ ] Rdkit demo
+
+[ ] group graph visualizaiton
 
 [ ] Verify structures with synthesizability checks
 
@@ -168,11 +173,12 @@ Contributions are what make the open source community such an amazing place to l
 If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
 Don't forget to give the project a star! Thanks again!
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. Fork the project
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Test modified project (`pytest`)
+4. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+5. Push to the branch (`git push origin feature/AmazingFeature`)
+6. Open a pull request
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -200,8 +206,6 @@ Project Link: [https://github.com/kierannp/molGrouper](https://github.com/kieran
 
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
-
-* Cal Craven
 * NSF GRFP
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -218,5 +222,5 @@ Project Link: [https://github.com/kierannp/molGrouper](https://github.com/kieran
 [stars-url]: https://github.com/kierannp/molGrouper/stargazers
 [issues-shield]: https://img.shields.io/github/issues/kierannp/molGrouper.svg?style=for-the-badge
 [issues-url]: https://github.com/kierannp/molGrouper/issues
-[license-shield]: https://img.shields.io/github/license/kierannp/molGrouper.svg?style=for-the-badge
+[license-shield]: https://img.shields.io/badge/License-MIT-yellow.svg
 [license-url]: https://github.com/kierannp/molGrouper/blob/master/LICENSE.txt
