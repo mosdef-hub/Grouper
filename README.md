@@ -243,7 +243,7 @@ Project Link: [https://github.com/kierannp/molGrouper](https://github.com/kieran
 
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
-* NSF GRFP
+[NSF GRFP](https://www.nsfgrfp.org/)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
