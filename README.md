@@ -6,6 +6,7 @@
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![MIT License][license-shield]][license-url]
+[![CI](https://github.com/kierannp/molGrouper/actions/workflows/CI.yaml/badge.svg)](https://github.com/kierannp/molGrouper/actions/workflows/CI.yaml)
 
 
 
