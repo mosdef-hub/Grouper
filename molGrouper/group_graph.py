@@ -93,14 +93,14 @@ class GroupGraph(nx.Graph):
         
     def n_free_ports(self, nodeID: Any):
         # num ports - num edges - num edges with node as target
-        n_edges_with_node_target = 0
+        occupied_ports = 0
         if len(self.edges()) == 0:
-            return len(self.nodes[node]['ports'])
-        for e in self.edges():
-            for port_edge in self.edges[e]['ports']:
-                if port_edge[-1].split('.')[0] == node:
-                    n_edges_with_node_target += 1
-        return len(self.nodes[nodeID]['ports']) - len(list(list(self.edges(data=True))[0][-1].values())[0]) - n_edges_with_node_target
+            return len(self.nodes[nodeID]['ports'])
+        for e in self.edges(data=True):
+            for node_port in e[-1]['ports']:
+                if node_port[0].split('.')[0] == nodeID or node_port[1].split('.')[0] == nodeID:
+                    occupied_ports += 1
+        return len(self.nodes[nodeID]['ports']) - occupied_ports # total number of ports - number of ports with edges
     
     def group_graph_from_smiles(self, smiles: str, groups: List[group_selfies.Group]) -> 'GroupGraph':
         """

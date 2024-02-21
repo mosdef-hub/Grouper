@@ -66,6 +66,7 @@ class TestGroupGraph(BaseTest):
         # Connect a edge and recheck
         self.graph.add_edge('node1', 'port1', 'node2', 'port3')
         assert self.graph.n_free_ports('node1') == 1
+        assert self.graph.n_free_ports('node2') == 1
 
     @pytest.mark.skipif(not has_mbuild, reason="mBuild package not installed")
     def test_compound_to_group_graph(self):
@@ -92,7 +93,7 @@ class TestGroupGraph(BaseTest):
         self.graph.add_edge('node1', 'port1', 'node2', 'port3')
         group_featurizer = lambda node: torch.tensor([1, 0])
 
-        data = self.graph.to_PyG_Data(group_featurizer, max_n_attachments=2)
+        data = self.graph.to_PyG_Data(group_featurizer)
         assert torch.equal(data.x, torch.tensor([ [1,0], [1,0] ], dtype=torch.float32)) # node features should just be identity
         assert torch.equal(data.edge_index, torch.tensor([ [0], [1] ], dtype=torch.float32)) # graph is directed, node1 -> node2
         assert torch.equal(data.edge_attr, torch.tensor([ [1,0,1,0] ], dtype=torch.float32)) # edge features are one-hot encoded port
