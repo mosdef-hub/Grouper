@@ -3,12 +3,16 @@ import rdkit
 import rdkit.Chem
 import group_selfies
 from pysmiles import read_smiles, write_smiles
+import mbuild
+import networkx 
+import torch_geometric
+from typing import List, Dict, Tuple, Union, Any, Callable, Sequence
 #   taken from a good answer by Gambit1614 on StackOverflow https://stackoverflow.com/questions/57095809/networkx-connecting-nodes-using-ports
 
 class GroupGraph(nx.Graph):
     """A graph with ports as parts of nodes that can be connected to other ports."""
 
-    def __init__(self, node_types=None):
+    def __init__(self, node_types: Dict[str, List] = None):
         super(GroupGraph, self).__init__()
         if node_types is None:
             node_types = {}
@@ -24,7 +28,10 @@ class GroupGraph(nx.Graph):
                 raise ValueError("All values in node_types must be lists")
             if not all(isinstance(p, holder_type) for v in node_types.values() for p in v):
                 raise ValueError("All values in node_types must be lists of the same type as the keys")
-        
+        for k, v in node_types.items(): # check if ports are unique
+            if len(v) != len(set(v)):
+                raise ValueError("All ports in node_types must be unique")
+            
         self.node_types = node_types
 
     def __str__(self):
@@ -42,12 +49,20 @@ class GroupGraph(nx.Graph):
     def __bool__(self):
         return len(self.nodes) > 0 and len(self.edges) > 0
 
-    def add_node(self, nodeID, node_type):
+    def add_node(self, nodeID: Any, node_type: str):
+        # Sanity check to see if the node is already present in Graph
+        if nodeID in self.nodes:
+            raise Exception(f"Node: {nodeID} is already present in Graph")
         super(GroupGraph, self).add_node(nodeID)
         self.nodes[nodeID]['type'] = node_type
         self.nodes[nodeID]['ports'] = self.node_types[self.nodes[nodeID]['type']]
     
-    def add_edge(self, node1, port1, node2, port2):
+    def add_edge(self, node1: Any, port1: Any, node2: Any, port2: Any):
+
+        if self.n_free_ports(node1) == 0:
+            raise Exception(f"Node: {node1} has no free ports!")
+        if self.n_free_ports(node2) == 0:
+            raise Exception(f"Node: {node2} has no free ports!")
 
         edge_ports = []
 
@@ -57,6 +72,8 @@ class GroupGraph(nx.Graph):
                 raise Exception(f"Node: {p} is not present in Graph")
             if p not in self.nodes(data=True)[n]['ports']:
                 raise Exception(f"Port: {p} is incorrect for Node: {n}!")
+            
+            
 
             edge_ports.append(n + '.' + str(p))
 
@@ -74,7 +91,7 @@ class GroupGraph(nx.Graph):
             self.add_bond(node_t, port_t, node_s, port_s)
             self.edges[edge]['ports'].append(f'{node_port[1]}.{node_port[0]}')
         
-    def n_free_ports(self, node):
+    def n_free_ports(self, nodeID: Any):
         # num ports - num edges - num edges with node as target
         n_edges_with_node_target = 0
         if len(self.edges()) == 0:
@@ -83,9 +100,9 @@ class GroupGraph(nx.Graph):
             for port_edge in self.edges[e]['ports']:
                 if port_edge[-1].split('.')[0] == node:
                     n_edges_with_node_target += 1
-        return len(self.nodes[node]['ports']) - len(list(list(self.edges(data=True))[0][-1].values())[0]) - n_edges_with_node_target
+        return len(self.nodes[nodeID]['ports']) - len(list(list(self.edges(data=True))[0][-1].values())[0]) - n_edges_with_node_target
     
-    def group_graph_from_smiles(self, smiles, groups):
+    def group_graph_from_smiles(self, smiles: str, groups: List[group_selfies.Group]) -> 'GroupGraph':
         """
         Generates the group graph from a smiles string by identifying the groups in the molecule and making the nessisary connections between these groups
         """
@@ -106,12 +123,12 @@ class GroupGraph(nx.Graph):
 
         return group_graph
     
-    def from_mbuild(self, compound, groups):
-        """Create a GroupGraph from a mb.Compound and a list of Groups."""
+    def from_mbuild(self, compound: mbuild.Compound, groups: List[group_selfies.Group]) -> 'GroupGraph':
+        """Create a GroupGraph from a mbuild.Compound and a list of group_selfies.Groups."""
         smiles = compound.get_smiles()
         return self.group_graph_from_smiles(smiles, groups)
     
-    def to_vector(self):
+    def to_vector(self) -> List[int]:
         """Convert the GroupGraph to a vector representation."""
         type_to_idx = { t : i for i, t in enumerate(self.node_types.keys()) }
         histogram = [0] * len(self.node_types)
@@ -119,7 +136,11 @@ class GroupGraph(nx.Graph):
             histogram[type_to_idx[n[1]['type']]] += 1
         return histogram
     
-    def to_molecular_graph(self, node_type_to_smiles, node_type_port_to_index):
+    def to_molecular_graph(
+            self, 
+            node_type_to_smiles: Dict[str, str], 
+            node_type_port_to_index: Dict[str , Dict[str, int]]
+    ) -> networkx.Graph:
         """Converts the GroupGraph to a molecular graph using SMILES notation."""
         molecular_graph = nx.Graph()
 
@@ -201,15 +222,16 @@ class GroupGraph(nx.Graph):
 
         return molecular_graph
     
-    def to_smiles(self, node_type_to_smiles, node_type_port_to_index):
+    def to_smiles(self, node_type_to_smiles: Dict[str, str], node_type_port_to_index: Dict[str, Dict[any, int]]) -> str:
         """Converts the GroupGraph to a SMILES notation."""
         molecular_graph = self.to_molecular_graph(node_type_to_smiles, node_type_port_to_index)
         return write_smiles(molecular_graph)
     
-    def to_PyG_Data(self, node_descriptor_generater, max_n_attachments):
+    def to_PyG_Data(self, node_descriptor_generater: Callable[[str], Sequence[float]]) -> torch_geometric.data.Data:
         """Convert the GroupGraph to a data representation."""
         from torch_geometric.data import Data
         import torch
+        max_n_attachments = max(len(v) for v in self.node_types.values())
         one_hot_vector = lambda index, num_classes : torch.eye(num_classes)[index]
 
         # Create the node features
