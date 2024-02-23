@@ -71,7 +71,7 @@ The fundamental data structure behind this package is based on a port graph, loo
 
 ### Prerequisites
 
-*  Download and install [`nauty`](https://pallini.di.uniroma1.it/) according to their installation instructions in molGrouper/packages`
+*  Download and install [`nauty`](https://pallini.di.uniroma1.it/) according to their installation instructions in `molGrouper/packages`
 
 ### Installation
 
