@@ -1,25 +1,9 @@
 import typing as t
-# import ctypes
 import pathlib
 import os
 import subprocess
 from molGrouper.group_graph import GroupGraph
 import rdkit.Chem
-
-# _libgeng = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/libgeng.so"
-# libgeng = ctypes.CDLL(_libgeng) # Load the shared library into c types.
-# libgeng.main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)] # for now just use the main function of geng
-# libgeng.main.restype = None
-
-# _libvcolg = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/libvcolg.so"
-# libvcolg = ctypes.CDLL(_libvcolg) # Load the shared library into c types.
-# libvcolg.main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)] # for now just use the main function of geng
-# libvcolg.main.restype = None
-
-
-# _libmultig = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/libmultig.so"
-# libmultig = ctypes.CDLL(_libmultig) # Load the shared library into c types.
-# libmultig.main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)] # for now just use the main function of geng
 
 constrained_fragments = [
     rdkit.Chem.MolFromSmarts('NN'),
@@ -29,21 +13,20 @@ constrained_fragments = [
     rdkit.Chem.MolFromSmarts('OCO'),
 ]
 
-"""
-To create libgeng.so:
-    1. Download nauty.tar.gz from http://pallini.di.uniroma1.it/
-    2. Extract the tar file and cd into the directory
-    3. ./configure
-    4. make
-    5. gcc -o geng.o -c -O3  -march=native -DMAXN=WORDSIZE -DWORDSIZE=32 geng.c gtoolsW.o nautyW1.o \
-                nautilW1.o naugraphW1.o schreier.o naurng.o
-    6. gcc -shared -O3  -march=native -DMAXN=WORDSIZE -DWORDSIZE=32 geng.o gtoolsW.o nautyW1.o \
-                nautilW1.o naugraphW1.o schreier.o naurng.o -o libgeng.so
-
-"""
 
 
-def generate_group_graph_space(n_nodes, node_types, filter = False):
+def generate_group_graph_space(n_nodes: int, node_types: dict, filter: bool = False) -> t.List[GroupGraph]:
+    """
+    Generate all possible group graphs for a given set of node types and their connections.
+
+    Parameters:
+    - n_nodes (int): Number of nodes in the graphs.
+    - node_types (dict): Dictionary of node types and their corresponding ports.
+    - filter (bool): If True, apply filters to the generated space. Default is False.
+
+    Returns:
+    - List[GroupGraph]: List of generated group graphs.
+    """
     if not isinstance(n_nodes, int):
         raise TypeError("n_nodes must be an int")
     if not isinstance(node_types, dict):
@@ -69,7 +52,14 @@ def generate_group_graph_space(n_nodes, node_types, filter = False):
     # filtered_space = _apply_filters(unfiltered_space)
     # return _convert_space_to_group_graphs(filtered_space)
 
-def _generate_all_possible_group_graphs(n_nodes, node_types):
+def _generate_all_possible_group_graphs(n_nodes: int, node_types: dict) -> None:
+    """
+    Generate all possible group graphs using nauty.
+
+    Parameters:
+    - n_nodes (int): Number of nodes in the graphs.
+    - node_types (dict): Dictionary of node types and their corresponding ports.
+    """
     max_n_attachments = max(len(v) for v in node_types.values())
     _call_geng(n_nodes, max_n_attachments)
     _call_vcolg(len(node_types))
@@ -78,28 +68,38 @@ def _generate_all_possible_group_graphs(n_nodes, node_types):
 def _apply_filters(unfiltered_space, filters = constrained_fragments):
     pass
 
-def _call_geng(n_nodes, max_edges):
+def _call_geng(n_nodes: int, max_edges: int):
     geng_path = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/geng"
     args = [geng_path, str(n_nodes), f"1:{max_edges}", "geng_out.txt", "-ctf"]
     subprocess.run(args)
     if not os.path.exists("geng_out.txt"):
         raise FileNotFoundError("geng failed to create all possible graphs. Check the input parameters.")
 
-def _call_vcolg(n_colors):
+def _call_vcolg(n_colors: int):
     vcolg_path = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/vcolg"
     args = [vcolg_path, "geng_out.txt", "-T", f"-m{n_colors}", "vcolg_out.txt"]
     subprocess.run(args)
     if not os.path.exists("vcolg_out.txt"):
         raise FileNotFoundError("vcolg failed to create all graphs with colors. Check the input parameters.")
 
-def _call_multig(edge_multiplicity):
+def _call_multig(edge_multiplicity: int):
     multig_path = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/multig"
     args = [multig_path, "vcolg_out.txt", "-T", "-V", f"-m{edge_multiplicity}", "multig_out.txt"]
     subprocess.run(args)
     if not os.path.exists("multig_out.txt"):
         raise FileNotFoundError("multig failed to create all graphs with different edges. Check the input parameters.")
 
-def _multi_to_pair(multi, max_multi):
+def _multi_to_pair(multi: int, max_multi: int) -> t.Tuple[int, int]:
+    """
+    Convert a linear index `multi` to 2D coordinates (x, y) within a square grid.
+
+    Parameters:
+    - multi (int): Linear index to be converted.
+    - max_multi (int): Maximum allowed value for the linear index.
+
+    Returns:
+    - Tuple[int, int]: Two-dimensional coordinates (x, y) within the grid.
+    """
     if 1 <= multi <= max_multi:
         # Calculate x and y values based on the input multi
         x = (multi - 1) % int(max_multi**.5) + 1
@@ -108,9 +108,31 @@ def _multi_to_pair(multi, max_multi):
         x, y = x-1, y-1 # convert to 0-indexed
         return x, y
     else:
-        raise ValueError("Input multi must be in the range 1-16")
+        raise ValueError("Input multi must be in the range 1 to max_multi.")
 
-def _multig_output_to_graphs(line, int_to_node_type, node_int_to_port, node_types, verbose = False):
+def _multig_output_to_graphs(
+        line: str, 
+        int_to_node_type: dict, 
+        node_int_to_port: dict,
+        node_types: dict, 
+        verbose: bool = False
+) -> GroupGraph:
+    """
+    Convert the output line from the 'multig' command to a GroupGraph object.
+
+    Parameters:
+    - line (str): Output line from 'multig' command.
+    - int_to_node_type (dict): Mapping from integer to node type.
+    - node_int_to_port (dict): Mapping from node type to port.
+    - node_types (dict): Dictionary of node types and their corresponding ports.
+    - verbose (bool): If True, print a message when the conversion fails. Default is False.
+
+    Returns:
+    - GroupGraph: GroupGraph object representing the converted graph, or None if conversion fails.
+
+    Note:
+    The 'multig' output format consists of node and edge descriptions.
+    """
     node_description, edge_description = line.split("  ")
     edge_description = edge_description.split(" ")
 
@@ -146,7 +168,18 @@ def _multig_output_to_graphs(line, int_to_node_type, node_int_to_port, node_type
             print("Couldn't produce graph from multig output")
         
 
-def _process_multig_output(int_to_node_type, node_int_to_port, node_types):
+def _process_multig_output(int_to_node_type, node_int_to_port, node_types) -> t.List[GroupGraph]:
+    """
+    Process the output of multig and convert it to a list of GroupGraph objects.
+
+    Parameters:
+    - int_to_node_type: Mapping from integer to node type.
+    - node_int_to_port: Mapping from node type to port.
+    - node_types: Dictionary of node types and their corresponding ports.
+
+    Returns:
+    - List[GroupGraph]: List of processed group graphs.
+    """
     graphs = []
     for line in open("multig_out.txt"):
         out = _multig_output_to_graphs(line, int_to_node_type, node_int_to_port, node_types)

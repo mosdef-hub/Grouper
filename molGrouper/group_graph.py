@@ -13,6 +13,16 @@ class GroupGraph(nx.Graph):
     """A graph with ports as parts of nodes that can be connected to other ports."""
 
     def __init__(self, node_types: Dict[str, List] = None):
+        """
+        Initialize a GroupGraph.
+
+        Parameters:
+        - node_types (dict): Dictionary of node types and their corresponding ports.
+
+        Raises:
+        - TypeError: If node_types is not a dictionary.
+        - ValueError: If keys in node_types are not of the same type or values are not lists.
+        """
         super(GroupGraph, self).__init__()
         if node_types is None:
             node_types = {}
@@ -34,22 +44,68 @@ class GroupGraph(nx.Graph):
             
         self.node_types = node_types
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Return a string representation of the GroupGraph.
+
+        Returns:
+        - str: String representation of nodes and edges.
+        """
         return f"Nodes: {['{} ({}) {}'.format(d[0], d[1]['type'], d[1]['ports']) for d in self.nodes.data()]}\n\nEdges: {','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))}\n\n"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Return a representation of the GroupGraph.
+
+        Returns:
+        - str: Representation of the GroupGraph.
+        """
         return f"GroupGraph({','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))})"
     
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
+        """
+        Check if two GroupGraph objects are equal.
+
+        Parameters:
+        - other: Another GroupGraph object.
+
+        Returns:
+        - bool: True if equal, False otherwise.
+        """
         return self.nodes == other.nodes and self.edges == other.edges
     
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
+        """
+        Check if two GroupGraph objects are not equal.
+
+        Parameters:
+        - other: Another GroupGraph object.
+
+        Returns:
+        - bool: True if not equal, False otherwise.
+        """
         return not self.__eq__(other)
     
-    def __bool__(self):
+    def __bool__(self) -> bool:
+        """
+        Check if the GroupGraph is non-empty.
+
+        Returns:
+        - bool: True if non-empty, False otherwise.
+        """
         return len(self.nodes) > 0 and len(self.edges) > 0
 
     def add_node(self, nodeID: Any, node_type: str):
+        """
+        Add a node to the GroupGraph.
+
+        Parameters:
+        - nodeID: Identifier for the node.
+        - node_type: Type of the node.
+
+        Raises:
+        - Exception: If the node is already present in the Graph.
+        """
         # Sanity check to see if the node is already present in Graph
         if nodeID in self.nodes:
             raise Exception(f"Node: {nodeID} is already present in Graph")
@@ -58,7 +114,18 @@ class GroupGraph(nx.Graph):
         self.nodes[nodeID]['ports'] = self.node_types[self.nodes[nodeID]['type']]
     
     def add_edge(self, node1: Any, port1: Any, node2: Any, port2: Any):
+        """
+        Add an edge between two nodes in the GroupGraph.
 
+        Parameters:
+        - node1: First node.
+        - port1: Port on the first node.
+        - node2: Second node.
+        - port2: Port on the second node.
+
+        Raises:
+        - Exception: If a node has no free ports or if nodes or ports are not present in the Graph.
+        """
         if self.n_free_ports(node1) == 0:
             raise Exception(f"Node: {node1} has no free ports!")
         if self.n_free_ports(node2) == 0:
@@ -84,6 +151,11 @@ class GroupGraph(nx.Graph):
             super(GroupGraph, self).add_edge(node1, node2, ports=[edge_ports])
 
     def make_undirected(self):
+        """
+        Convert the GroupGraph to an undirected graph.
+
+        Adds bonds and updates edge ports accordingly.
+        """
         for edge in self.edges:
             node_port = tuple(self.edges[edge]['ports'][0])
             node_s, node_t = edge
@@ -92,6 +164,15 @@ class GroupGraph(nx.Graph):
             self.edges[edge]['ports'].append(f'{node_port[1]}.{node_port[0]}')
         
     def n_free_ports(self, nodeID: Any):
+        """
+        Get the number of free ports on a node.
+
+        Parameters:
+        - nodeID: Identifier for the node.
+
+        Returns:
+        - int: Number of free ports.
+        """
         # num ports - num edges - num edges with node as target
         occupied_ports = 0
         if len(self.edges()) == 0:
@@ -104,7 +185,14 @@ class GroupGraph(nx.Graph):
     
     def group_graph_from_smiles(self, smiles: str, groups: List[group_selfies.Group]) -> 'GroupGraph':
         """
-        Generates the group graph from a smiles string by identifying the groups in the molecule and making the nessisary connections between these groups
+        Generate a GroupGraph from a SMILES string and a list of group_selfies.Groups.
+
+        Parameters:
+        - smiles (str): SMILES string.
+        - groups (List[group_selfies.Group]): List of group_selfies.Groups.
+
+        Returns:
+        - GroupGraph: Generated GroupGraph.
         """
         vocab_fragment = dict([(f'frag{idx}',group_selfies.Group(f'frag{idx}', g.canonsmiles)) for idx, g in enumerate(groups)])
         grammar_fragment = group_selfies.GroupGrammar(vocab=vocab_fragment)
@@ -124,12 +212,26 @@ class GroupGraph(nx.Graph):
         return group_graph
     
     def from_mbuild(self, compound: mbuild.Compound, groups: List[group_selfies.Group]) -> 'GroupGraph':
-        """Create a GroupGraph from a mbuild.Compound and a list of group_selfies.Groups."""
+        """
+        Create a GroupGraph from an mbuild.Compound and a list of group_selfies.Groups.
+
+        Parameters:
+        - compound (mbuild.Compound): Input mbuild.Compound.
+        - groups (List[group_selfies.Group]): List of group_selfies.Groups.
+
+        Returns:
+        - GroupGraph: Generated GroupGraph.
+        """
         smiles = compound.get_smiles()
         return self.group_graph_from_smiles(smiles, groups)
     
     def to_vector(self) -> List[int]:
-        """Convert the GroupGraph to a vector representation."""
+        """
+        Convert the GroupGraph to a vector representation.
+
+        Returns:
+        - List[int]: Vector representation of the GroupGraph.
+        """
         type_to_idx = { t : i for i, t in enumerate(self.node_types.keys()) }
         histogram = [0] * len(self.node_types)
         for n in self.nodes(data=True):
@@ -141,7 +243,16 @@ class GroupGraph(nx.Graph):
             node_type_to_smiles: Dict[str, str], 
             node_type_port_to_index: Dict[str , Dict[str, int]]
     ) -> networkx.Graph:
-        """Converts the GroupGraph to a molecular graph using SMILES notation."""
+        """
+        Convert the GroupGraph to a molecular graph using SMILES notation.
+
+        Parameters:
+        - node_type_to_smiles (Dict[str, str]): Mapping from node type to SMILES notation.
+        - node_type_port_to_index (Dict[str, Dict[any, int]]): Mapping from node type and port to index.
+
+        Returns:
+        - networkx.Graph: Molecular graph.
+        """
         molecular_graph = nx.Graph()
 
         atom_id = -1
@@ -223,12 +334,29 @@ class GroupGraph(nx.Graph):
         return molecular_graph
     
     def to_smiles(self, node_type_to_smiles: Dict[str, str], node_type_port_to_index: Dict[str, Dict[any, int]]) -> str:
-        """Converts the GroupGraph to a SMILES notation."""
+        """
+        Convert the GroupGraph to a SMILES notation.
+
+        Parameters:
+        - node_type_to_smiles (Dict[str, str]): Mapping from node type to SMILES notation.
+        - node_type_port_to_index (Dict[str, Dict[any, int]]): Mapping from node type and port to index.
+
+        Returns:
+        - str: SMILES notation.
+        """
         molecular_graph = self.to_molecular_graph(node_type_to_smiles, node_type_port_to_index)
         return write_smiles(molecular_graph)
     
     def to_PyG_Data(self, node_descriptor_generater: Callable[[str], Sequence[float]]) -> torch_geometric.data.Data:
-        """Convert the GroupGraph to a data representation."""
+        """
+        Convert the GroupGraph to a PyG Data representation.
+
+        Parameters:
+        - node_descriptor_generater (Callable[[str], Sequence[float]]): Callable to generate node descriptors.
+
+        Returns:
+        - torch_geometric.data.Data: PyG Data representation.
+        """
         from torch_geometric.data import Data
         import torch
         max_n_attachments = max(len(v) for v in self.node_types.values())
