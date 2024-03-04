@@ -31,3 +31,21 @@ class TestGroupGraph(BaseTest):
         out = generate_group_graph_space(3, self.node_types)
         # assert len(out) == 539
         pass
+
+    def test_single_node_type(self):
+        # Define node types with ports
+        node_types = {
+            'CC': ['C11', 'C12', 'C13', 'C21', 'C22', 'C23'] #alkane
+        }
+        node_types_to_smiles = {
+            'CC': 'CC'
+        }
+        node_port_to_atom_index = {
+            'CC': {'C11': 0, 'C12': 0, 'C13': 0, 'C21': 1, 'C22': 1, 'C23': 1}
+        }
+
+        graph = GroupGraph(node_types)
+
+        out = generate_group_graph_space(3, node_types)
+
+
