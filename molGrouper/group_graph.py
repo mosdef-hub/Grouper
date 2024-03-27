@@ -36,8 +36,7 @@ class GroupGraph(nx.Graph):
                 raise ValueError("All keys in node_types must be of the same type")
             if not all(isinstance(v, list) for v in node_types.values()):
                 raise ValueError("All values in node_types must be lists")
-            if not all(isinstance(p, holder_type) for v in node_types.values() for p in v):
-                raise ValueError("All values in node_types must be lists of the same type as the keys")
+
         for k, v in node_types.items(): # check if ports are unique
             if len(v) != len(set(v)):
                 raise ValueError("All ports in node_types must be unique")
@@ -108,7 +107,7 @@ class GroupGraph(nx.Graph):
         """
         # Sanity check to see if the node is already present in Graph
         if nodeID in self.nodes:
-            raise Exception(f"Node: {nodeID} is already present in Graph")
+            raise AttributeError(f"Node: {nodeID} is already present in Graph")
         super(GroupGraph, self).add_node(nodeID)
         self.nodes[nodeID]['type'] = node_type
         self.nodes[nodeID]['ports'] = self.node_types[self.nodes[nodeID]['type']]
@@ -126,23 +125,29 @@ class GroupGraph(nx.Graph):
         Raises:
         - Exception: If a node has no free ports or if nodes or ports are not present in the Graph.
         """
-        if self.n_free_ports(node1) == 0:
-            raise Exception(f"Node: {node1} has no free ports!")
-        if self.n_free_ports(node2) == 0:
-            raise Exception(f"Node: {node2} has no free ports!")
+        if self.n_free_ports(node1) <= 0:
+            raise AttributeError(f"Node: {node1} has no free ports!")
+        if self.n_free_ports(node2) <= 0:
+            raise AttributeError(f"Node: {node2} has no free ports!")
+        # check if node is already occupied
+        if self.has_edge(node1, node2):
+            for edge in self.edges:
+                for node_port in edge[-1]['ports']:
+                    if node_port[0].split('.')[0] == node1 or node_port[1].split('.')[0] == node1:
+                        raise AttributeError(f"Node: {node1} is already occupied!")
+                    if node_port[0].split('.')[0] == node2 or node_port[1].split('.')[0] == node2:
+                        raise AttributeError(f"Node: {node2} is already occupied!")
 
         edge_ports = []
 
         for n, p in [(node1, port1), (node2, port2)]:
             # Sanity check to see if the nodes and ports are present in Graph
             if n not in self.nodes:
-                raise Exception(f"Node: {p} is not present in Graph")
+                raise AttributeError(f"Node: {p} is not present in Graph")
             if p not in self.nodes(data=True)[n]['ports']:
-                raise Exception(f"Port: {p} is incorrect for Node: {n}!")
-            
-            
+                raise AttributeError(f"Port: {p} is incorrect for Node: {n}!")
 
-            edge_ports.append(n + '.' + str(p))
+            edge_ports.append(str(n) + '.' + str(p))
 
         # Add the port points as edge attributes
         if self.has_edge(node1, node2):
@@ -262,7 +267,7 @@ class GroupGraph(nx.Graph):
             ports = data['ports']
             smiles = node_type_to_smiles[node_type]
             mole_graph = read_smiles(smiles)
-            node_port_to_atom_index[node] = {}
+            node_port_to_atom_index[str(node)] = {}
             group_atom_id = -1
             for atom in mole_graph.nodes(data=True):
                 atom_data = atom[1]['element']
@@ -270,7 +275,7 @@ class GroupGraph(nx.Graph):
                 group_atom_id += 1
                 if group_atom_id in node_type_port_to_index[node_type].values():
                     for i, port in enumerate(ports):
-                        node_port_to_atom_index[node][port] = atom_id
+                        node_port_to_atom_index[str(node)][str(port)] = atom_id
         
         # Need conversion from node and subgraph indices to molecular graph indices
         atom_id = -1
