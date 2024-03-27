@@ -1,11 +1,10 @@
 cmake_minimum_required(VERSION 3.12)
 project(groupGraphBindings)
 
-# Find Python
-find_package(Python REQUIRED COMPONENTS Development)
+find_package(Python 3.8 EXACT COMPONENTS Interpreter Development)
 
-# Specify the Python interpreter path
-set(PYTHON_EXECUTABLE /Users/kieran/miniconda3/envs/molGrouper/bin/python3)
+# # Find Python
+# find_package(Python REQUIRED COMPONENTS Development)
 
 # Find Pybind11
 find_package(pybind11 REQUIRED)

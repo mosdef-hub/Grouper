@@ -8,7 +8,11 @@
  */
 
 class GroupGraph {
-private:
+public:
+    /**
+     * @brief Constructs a GroupGraph with specified node types.
+     * @param types A map of node types to their respective ports.
+     */
     using NodeID = int; // Change this type according to your needs
     using PortType = int; // Change this type according to your needs
 
@@ -24,11 +28,7 @@ private:
     std::vector<std::tuple<NodeID, PortType, NodeID, PortType>> edges; ///< List of edges connecting nodes.
     std::unordered_map< std::string, std::vector<PortType> > nodeTypes; ///< Map of node types to their respective ports.
 
-public:
-    /**
-     * @brief Constructs a GroupGraph with specified node types.
-     * @param types A map of node types to their respective ports.
-     */
+
     GroupGraph(const std::unordered_map<std::string, std::vector<PortType>>& types) {
         // Constructor to initialize the node types
         nodeTypes = types;
@@ -56,7 +56,21 @@ public:
      * @param toPort The port on the second node.
      * @throws std::invalid_argument if the nodes or ports do not exist.
      */
-    void addEdge(NodeID from, PortType fromPort, NodeID to, PortType toPort) {
+    bool addEdge(NodeID from, PortType fromPort, NodeID to, PortType toPort, bool verbose = false ) { // return true if sucessful false otherwise
+        if (n_free_ports(from) <= 0){
+            if (verbose) {
+                std::cout << "Source node doesn't have enough ports!"<<std::endl;
+            }
+            return false;
+            // throw std::invalid_argument("Source node doesn't have enough ports!");
+        }
+        if (n_free_ports(to) <= 0){
+            if (verbose) {
+                std::cout << "Destination node doesn't have enough ports!"<<std::endl;
+            }
+            return false;
+            // throw std::invalid_argument("Source node doesn't have enough ports!");
+        }
         // Add an edge to the graph
         if (nodes.find(from) == nodes.end() || nodes.find(to) == nodes.end()) {
             throw std::invalid_argument("Node does not exist");
@@ -65,6 +79,8 @@ public:
             throw std::invalid_argument("Port does not exist");
         }
         edges.push_back(std::make_tuple(from, fromPort, to, toPort));
+        edges.push_back(std::make_tuple(to, toPort, from, fromPort));
+        return true;
     }
     
     /**
@@ -91,22 +107,8 @@ public:
         return node.ports.size() - occupied_ports;
     }
 
-    /**
-     * @brief Converts the GroupGraph to an undirected graph.
-     */
-    void make_undirected() {
-        std::vector<std::tuple<NodeID, PortType, NodeID, PortType>> undirectedEdges;
-        for (const auto& edge : edges) {
-            NodeID node1 = std::get<0>(edge);
-            PortType port1 = std::get<1>(edge);
-            NodeID node2 = std::get<2>(edge);
-            PortType port2 = std::get<3>(edge);
-
-            // Add an undirected edge
-            undirectedEdges.push_back(std::make_tuple(node2, port2, node1, port1));
-        }
-        // Add the undirected edges to the main edges container
-        edges.insert(edges.begin(), undirectedEdges.begin(), undirectedEdges.end());
+    int numNodes() const {
+        return nodes.size();
     }
 
     /**
@@ -123,7 +125,7 @@ public:
             std::cout << "\n";
         }
 
-        std::cout << "\nEdges:\n";
+        std::cout << "Edges:\n";
         for (const auto& edge : edges) {
             std::cout << "Edge: " 
             << std::get<0>(edge) << "(" << std::get<1>(edge)  << ")"
@@ -133,22 +135,22 @@ public:
     }
 };
 
-int main() {
-    // Example usage
-    GroupGraph myGraph({{"type1", {1, 2, 3}}, {"type2", {4, 5, 6}}});
+// int main() {
+//     // Example usage
+//     GroupGraph myGraph({{"type1", {1, 2, 3}}, {"type2", {4, 5, 6}}});
 
-    myGraph.addNode(1, "type1");
-    myGraph.addNode(2, "type2");
-    myGraph.addEdge(1,2, 2,5);
-    myGraph.addEdge(1,3, 2,4);
+//     myGraph.addNode(1, "type1");
+//     myGraph.addNode(2, "type2");
+//     myGraph.addEdge(1,2, 2,5);
+//     myGraph.addEdge(1,3, 2,4);
 
-    myGraph.make_undirected();
+//     myGraph.make_undirected();
 
-    myGraph.printGraph();
+//     myGraph.printGraph();
 
-    std::cout << "Free Ports for Node 1: " << myGraph.n_free_ports(1) << "\n";
-    std::cout << "Free Ports for Node 2: " << myGraph.n_free_ports(2) << "\n\n";
+//     std::cout << "Free Ports for Node 1: " << myGraph.n_free_ports(1) << "\n";
+//     std::cout << "Free Ports for Node 2: " << myGraph.n_free_ports(2) << "\n\n";
 
 
-    return 0;
-}
+//     return 0;
+// }
