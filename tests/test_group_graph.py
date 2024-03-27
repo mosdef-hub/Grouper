@@ -46,6 +46,33 @@ class TestGroupGraph(BaseTest):
         assert ('node3', 'node2') in self.graph.edges
         assert self.graph.edges[('node3', 'node2')]['ports'][0] == ['node3.port3', 'node2.port2']
 
+    def test_add_edge_with_invalid_nodes(self):
+        with pytest.raises(KeyError):
+            self.graph.add_edge('node1', 'port1', 'node2', 'port1')
+    
+    def test_add_edge_with_invalid_ports(self):
+        self.graph.add_node('node1', 'type1')
+        self.graph.add_node('node2', 'type1')
+        with pytest.raises(AttributeError):
+            self.graph.add_edge('node1', 'port1', 'node2', 'port3')
+            
+    def test_add_edge_with_too_many_ports(self):
+        self.graph.add_node('node1', 'type1')
+        self.graph.add_node('node2', 'type1')
+        self.graph.add_node('node3', 'type2')
+        self.graph.add_edge('node1', 'port1', 'node2', 'port1')
+        self.graph.add_edge('node1', 'port2', 'node2', 'port2')
+        with pytest.raises(AttributeError):
+            self.graph.add_edge('node3', 'port3', 'node2', 'port2')
+
+    def test_add_edge_with_same_ports(self):
+        self.graph.add_node('node1', 'type1')
+        self.graph.add_node('node2', 'type1')
+        self.graph.add_node('node3', 'type2')
+        self.graph.add_edge('node1', 'port1', 'node2', 'port1')
+        with pytest.raises(AttributeError):
+            self.graph.add_edge('node1', 'port1', 'node2', 'port1')
+
     def test_make_undirected(self):
         # self.graph.add_node('node1', 'type1')
         # self.graph.add_node('node2', 'type2')
