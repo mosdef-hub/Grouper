@@ -287,6 +287,7 @@ class GroupGraph(nx.Graph):
                 atom_id += 1
                 node_sub_graph_indices_to_molecular_graph_indices[node][atom[0]] = atom_id
 
+        # Add atoms and bonds from the subgraphs to the molecular graph
         atom_id = -1
         for node, data in self.nodes(data=True):
             node_type = data['type']
@@ -318,7 +319,7 @@ class GroupGraph(nx.Graph):
                 molecular_graph.add_edge(atom1, atom2, order=data['order'])
                 
 
-        # Iterate over edges in the GroupGraph
+        # Add bonds from the group graph to the molecular graph
         for edge in self.edges(data=True):
             node1, node2, data = edge
             edge_ports_list = data['ports']
