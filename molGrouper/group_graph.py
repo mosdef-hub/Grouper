@@ -129,14 +129,15 @@ class GroupGraph(nx.Graph):
             raise AttributeError(f"Node: {node1} has no free ports!")
         if self.n_free_ports(node2) <= 0:
             raise AttributeError(f"Node: {node2} has no free ports!")
-        # check if node is already occupied
-        if self.has_edge(node1, node2):
-            for edge in self.edges:
+        # check if port is already occupied
+        if node1 in [e[0] for e in self.edges(data=True)] or node1 in [e[1] for e in self.edges(data=True)]\
+        or node2 in [e[0] for e in self.edges(data=True)] or node2 in [e[1] for e in self.edges(data=True)]:
+            for edge in self.edges(data=True):
                 for node_port in edge[-1]['ports']:
-                    if node_port[0].split('.')[0] == node1 or node_port[1].split('.')[0] == node1:
-                        raise AttributeError(f"Node: {node1} is already occupied!")
-                    if node_port[0].split('.')[0] == node2 or node_port[1].split('.')[0] == node2:
-                        raise AttributeError(f"Node: {node2} is already occupied!")
+                    if node_port[0].split('.')[1] == port1 or node_port[1].split('.')[1] == port1:
+                        raise AttributeError(f"Node: {node1}.{port1} is already occupied!")
+                    if node_port[0].split('.')[1] == port2 or node_port[1].split('.')[1] == port2:
+                        raise AttributeError(f"Node: {node2}.{port2} is already occupied!")
 
         edge_ports = []
 
@@ -260,22 +261,21 @@ class GroupGraph(nx.Graph):
         """
         molecular_graph = nx.Graph()
 
-        atom_id = -1
+        # Need conversion from node and port in the group graph to atom index in the molecular graph
         node_port_to_atom_index = {}
+        atom_count = 0
         for node, data in self.nodes(data=True):
             node_type = data['type']
             ports = data['ports']
+
             smiles = node_type_to_smiles[node_type]
             mole_graph = read_smiles(smiles)
+
             node_port_to_atom_index[str(node)] = {}
-            group_atom_id = -1
-            for atom in mole_graph.nodes(data=True):
-                atom_data = atom[1]['element']
-                atom_id += 1
-                group_atom_id += 1
-                if group_atom_id in node_type_port_to_index[node_type].values():
-                    for i, port in enumerate(ports):
-                        node_port_to_atom_index[str(node)][str(port)] = atom_id
+            for i, port in enumerate(ports):
+                node_port_to_atom_index[str(node)][str(port)] = atom_count + node_type_port_to_index[node_type][port]
+            
+            atom_count += len(mole_graph.nodes)
         
         # Need conversion from node and subgraph indices to molecular graph indices
         atom_id = -1
@@ -287,9 +287,6 @@ class GroupGraph(nx.Graph):
                 atom_id += 1
                 node_sub_graph_indices_to_molecular_graph_indices[node][atom[0]] = atom_id
 
-                    
-
-        # Iterate over nodes in the GroupGraph
         atom_id = -1
         for node, data in self.nodes(data=True):
             node_type = data['type']

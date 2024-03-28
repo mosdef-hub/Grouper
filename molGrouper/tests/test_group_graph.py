@@ -1,6 +1,7 @@
 from mbuild.tests.base_test import BaseTest
 from molGrouper.group_graph import GroupGraph
 from group_selfies import Group
+import networkx as nx
 from molGrouper.io import has_mbuild, has_torch
 import pytest
 
@@ -12,7 +13,9 @@ class TestGroupGraph(BaseTest):
         node_types = {
             'type1': ['port1', 'port2'],
             'type2': ['port3', 'port4'],
+            'r1' : ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'],
         }
+        self.node_types = node_types
 
         # Create an instance of GroupGraph for testing
         self.graph = GroupGraph(node_types)
@@ -72,18 +75,49 @@ class TestGroupGraph(BaseTest):
         self.graph.add_edge('node1', 'port1', 'node2', 'port1')
         with pytest.raises(AttributeError):
             self.graph.add_edge('node1', 'port1', 'node2', 'port1')
+        with pytest.raises(AttributeError):
+            self.graph.add_edge('node1', 'port1', 'node2', 'port2')
+        with pytest.raises(AttributeError):
+            self.graph.add_edge('node1', 'port2', 'node2', 'port1')
+        with pytest.raises(AttributeError):
+            self.graph.add_edge('node1', 'port2', 'node2', 'port1')
+        with pytest.raises(AttributeError):
+            self.graph.add_edge('node3', 'port1', 'node2', 'port1')
+        with pytest.raises(AttributeError):
+            self.graph.add_edge('node1', 'port1', 'node3', 'port1')
 
-    def test_make_undirected(self):
-        # self.graph.add_node('node1', 'type1')
-        # self.graph.add_node('node2', 'type2')
-        # self.graph.add_edge('node1', 'port1', 'node2', 'port3')
-        # self.graph.make_undirected()
+    def test_rings(self):
+        self.graph.add_node('n0', 'r1')
+        self.graph.add_node('n1', 'r1')
+        self.graph.add_node('n2', 'r1')
 
-        # # Check if the graph is undirected
-        # assert ('node1', 'node2') in self.graph.edges
-        # assert ('node2', 'node1') in self.graph.edges
-        # assert self.graph.edges['node1', 'node2']['ports'][1] == ['node2.port3', 'node1.port1']
-        pass
+        self.graph.add_edge('n0', 'C1', 'n2', 'C1')
+        with pytest.raises(AttributeError):
+            self.graph.add_edge('n1', 'C1', 'n2', 'C1')
+
+    def test_to_molecular_graph(self):
+        self.graph.add_node('n0', 'r1')
+        self.graph.add_node('n1', 'r1')
+        self.graph.add_node('n2', 'r1')
+
+        self.graph.add_edge('n0', 'C2', 'n2', 'C2')
+        self.graph.add_edge('n1', 'C1', 'n2', 'C1')
+
+        node_type_to_smiles = {
+            'r1' : 'c1ccccc1',
+        }
+        node_port_to_atom_index = {
+            'r1' : {'C1': 0, 'C2': 1, 'C3': 2, 'C4': 3, 'C5': 4, 'C6': 5},
+        }
+        node_type_to_smiles = {
+            'r1' : 'c1ccccc1',
+        }
+        node_port_to_atom_index = {
+            'r1' : {'C1': 0, 'C2': 1, 'C3': 2, 'C4': 3, 'C5': 4, 'C6': 5},
+        }
+        # ('n0.C2', 'n2.C2'),('n1.C1', 'n2.C1')
+        molecular_graph = self.graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
+        assert set(molecular_graph.edges) == set([(0, 1), (0, 5), (1, 2), (2, 3), (3, 4), (4, 5), (1, 13), (6, 7), (6, 11), (7, 8), (8, 9), (9, 10), (10, 11), (6, 12), (12, 13), (12, 17), (13, 14), (14, 15), (15, 16), (16, 17)])
 
     def test_n_free_ports(self):
         self.graph.add_node('node1', 'type1')
