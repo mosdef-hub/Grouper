@@ -17,6 +17,7 @@ class TestGroupGraph(BaseTest):
             'd6' : ['C1', 'C2'],
             'c' : ['C1', 'C2', 'C3', 'C4'],
             'r3': ['C11', 'C12', 'C13', 'C14', 'C15', 'C16', 'C17', 'C18', 'C19', 'C20', 'C21', 'C22'],
+            's1': ['C1'],
         }
         self.node_types = node_types
 
@@ -117,7 +118,6 @@ class TestGroupGraph(BaseTest):
             'c': {'C1': 0, 'C2': 0, 'C3': 0, 'C4': 0},
             'r3': {'C11': 0, 'C12': 0, 'C13': 1, 'C14': 1, 'C15': 2, 'C16': 2, 'C17': 3, 'C18': 3, 'C19': 4, 'C20': 4, 'C21': 5, 'C22': 5}
         }
-    
         self.graph.add_node('n0', 'r1')
         self.graph.add_node('n1', 'r1')
         self.graph.add_node('n2', 'r1')
@@ -125,7 +125,6 @@ class TestGroupGraph(BaseTest):
         self.graph.add_edge('n1', 'C1', 'n2', 'C1')
         molecular_graph = self.graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
         assert set(molecular_graph.edges) == set([(0, 1), (0, 5), (1, 2), (2, 3), (3, 4), (4, 5), (1, 13), (6, 7), (6, 11), (7, 8), (8, 9), (9, 10), (10, 11), (6, 12), (12, 13), (12, 17), (13, 14), (14, 15), (15, 16), (16, 17)])
-
 
         self.graph = GroupGraph(
             node_types = {
@@ -148,6 +147,26 @@ class TestGroupGraph(BaseTest):
         self.graph.add_node('node2', 'CO')
         self.graph.add_edge('node1', 'N1', 'node2', 'C1')
         molecular_graph = self.graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
+
+        self.graph = GroupGraph( self.node_types )
+        node_type_to_smiles = {
+            's1': 'C',
+            'r1': 'c1ccccc1',
+            'c': 'C',
+        }
+        node_port_to_atom_index = {
+            's1': {'C1': 0},
+            'r1': {'C1': 0, 'C2': 1, 'C3': 2, 'C4': 3, 'C5': 4, 'C6': 5},
+            'c': {'C1': 0, 'C2': 0, 'C3': 0, 'C4': 0},
+        }
+        self.graph.add_node('n0', 'c')
+        self.graph.add_node('n1', 's1')
+        self.graph.add_node('n2', 'r1')
+        self.graph.add_edge('n0', 'C4', 'n2', 'C3')
+        self.graph.add_edge('n1', 'C1', 'n2', 'C1')
+        molecular_graph = self.graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
+        assert set(molecular_graph.edges) == set([(0, 4), (1, 2), (2, 7), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7)])
+
 
 
     def test_n_free_ports(self):
