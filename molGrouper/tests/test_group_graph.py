@@ -48,50 +48,50 @@ class TestGroupGraph(BaseTest):
         self.graph.add_node('node2', 'type1')
         self.graph.add_node('node3', 'type2')
 
-        self.graph.add_edge('node1', 'port1', 'node2', 'port1')
+        self.graph.add_edge(('node1', 'port1'), ('node2', 'port1'))
         assert ('node1', 'node2') in self.graph.edges
         assert self.graph.edges[('node1', 'node2')]['ports'][0] == ['node1.port1', 'node2.port1']
 
-        self.graph.add_edge('node3', 'port3', 'node2', 'port2')
+        self.graph.add_edge(('node3', 'port3'), ('node2', 'port2'))
         assert ('node3', 'node2') in self.graph.edges
         assert self.graph.edges[('node3', 'node2')]['ports'][0] == ['node3.port3', 'node2.port2']
 
     def test_add_edge_with_invalid_nodes(self):
         with pytest.raises(KeyError):
-            self.graph.add_edge('node1', 'port1', 'node2', 'port1')
+            self.graph.add_edge(('node1', 'port1'), ('node2', 'port1'))
     
     def test_add_edge_with_invalid_ports(self):
         self.graph.add_node('node1', 'type1')
         self.graph.add_node('node2', 'type1')
         with pytest.raises(AttributeError):
-            self.graph.add_edge('node1', 'port1', 'node2', 'port3')
+            self.graph.add_edge(('node1', 'port1'), ('node2', 'port3'))
             
     def test_add_edge_with_too_many_ports(self):
         self.graph.add_node('node1', 'type1')
         self.graph.add_node('node2', 'type1')
         self.graph.add_node('node3', 'type2')
-        self.graph.add_edge('node1', 'port1', 'node2', 'port1')
-        self.graph.add_edge('node1', 'port2', 'node2', 'port2')
+        self.graph.add_edge(('node1', 'port1'), ('node2', 'port1'))
+        self.graph.add_edge(('node1', 'port2'), ('node2', 'port2'))
         with pytest.raises(AttributeError):
-            self.graph.add_edge('node3', 'port3', 'node2', 'port2')
+            self.graph.add_edge(('node3', 'port3'), ('node2', 'port2'))
 
     def test_add_edge_with_same_ports(self):
         self.graph.add_node('node1', 'type1')
         self.graph.add_node('node2', 'type1')
         self.graph.add_node('node3', 'type2')
-        self.graph.add_edge('node1', 'port1', 'node2', 'port1')
+        self.graph.add_edge(('node1', 'port1'), ('node2', 'port1'))
         with pytest.raises(AttributeError):
-            self.graph.add_edge('node1', 'port1', 'node2', 'port1')
+            self.graph.add_edge(('node1', 'port1'), ('node2', 'port1'))
         with pytest.raises(AttributeError):
-            self.graph.add_edge('node1', 'port1', 'node2', 'port2')
+            self.graph.add_edge(('node1', 'port1'), ('node2', 'port2'))
         with pytest.raises(AttributeError):
-            self.graph.add_edge('node1', 'port2', 'node2', 'port1')
+            self.graph.add_edge(('node1', 'port2'), ('node2', 'port1'))
         with pytest.raises(AttributeError):
-            self.graph.add_edge('node1', 'port2', 'node2', 'port1')
+            self.graph.add_edge(('node1', 'port2'), ('node2', 'port1'))
         with pytest.raises(AttributeError):
-            self.graph.add_edge('node3', 'port1', 'node2', 'port1')
+            self.graph.add_edge(('node3', 'port1'), ('node2', 'port1'))
         with pytest.raises(AttributeError):
-            self.graph.add_edge('node1', 'port1', 'node3', 'port1')
+            self.graph.add_edge(('node1', 'port1'), ('node3', 'port1'))
 
     def test_equal(self):
         graph1 = GroupGraph(self.node_types)
@@ -110,10 +110,10 @@ class TestGroupGraph(BaseTest):
         graph2.add_node('node2', 'type2')
         assert graph1 == graph2
 
-        graph1.add_edge('node1', 'port1', 'node2', 'port3')
+        graph1.add_edge(('node1', 'port1'), ('node2', 'port3'))
         assert graph1 != graph2
 
-        graph2.add_edge('node1', 'port1', 'node2', 'port3')
+        graph2.add_edge(('node1', 'port1'), ('node2', 'port3'))
         assert graph1 == graph2
         
     def test_in(self):
@@ -134,10 +134,10 @@ class TestGroupGraph(BaseTest):
         graph2.add_node('node2', 'type2')
         assert graph1 in [graph2]
 
-        graph1.add_edge('node1', 'port1', 'node2', 'port3')
+        graph1.add_edge(('node1', 'port1'), ('node2', 'port3'))
         assert graph1 not in [graph2]
 
-        graph2.add_edge('node1', 'port1', 'node2', 'port3')
+        graph2.add_edge(('node1', 'port1'), ('node2', 'port3'))
         assert graph1 in [graph2]
 
         assert graph1 in [graph1, graph2]
@@ -147,9 +147,9 @@ class TestGroupGraph(BaseTest):
         self.graph.add_node('n1', 'r1')
         self.graph.add_node('n2', 'r1')
 
-        self.graph.add_edge('n0', 'C1', 'n2', 'C1')
+        self.graph.add_edge(('n0', 'C1'), ('n2', 'C1'))
         with pytest.raises(AttributeError):
-            self.graph.add_edge('n1', 'C1', 'n2', 'C1')
+            self.graph.add_edge(('n1', 'C1'), ('n2', 'C1'))
 
     def test_to_molecular_graph(self):
         node_type_to_smiles = {
@@ -173,8 +173,8 @@ class TestGroupGraph(BaseTest):
         self.graph.add_node('n0', 'r1')
         self.graph.add_node('n1', 'r1')
         self.graph.add_node('n2', 'r1')
-        self.graph.add_edge('n0', 'C2', 'n2', 'C2')
-        self.graph.add_edge('n1', 'C1', 'n2', 'C1')
+        self.graph.add_edge(('n0', 'C2'), ('n2', 'C2'))
+        self.graph.add_edge(('n1', 'C1'), ('n2', 'C1'))
         molecular_graph = self.graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
         assert set(molecular_graph.edges) == set([(0, 1), (0, 5), (1, 2), (2, 3), (3, 4), (4, 5), (1, 13), (6, 7), (6, 11), (7, 8), (8, 9), (9, 10), (10, 11), (6, 12), (12, 13), (12, 17), (13, 14), (14, 15), (15, 16), (16, 17)])
 
@@ -197,7 +197,7 @@ class TestGroupGraph(BaseTest):
         }
         self.graph.add_node('node1', 'NH2')
         self.graph.add_node('node2', 'CO')
-        self.graph.add_edge('node1', 'N1', 'node2', 'C1')
+        self.graph.add_edge(('node1', 'N1'), ('node2', 'C1'))
         molecular_graph = self.graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
 
         self.graph = GroupGraph( self.node_types )
@@ -214,8 +214,8 @@ class TestGroupGraph(BaseTest):
         self.graph.add_node('n0', 'c')
         self.graph.add_node('n1', 's1')
         self.graph.add_node('n2', 'r1')
-        self.graph.add_edge('n0', 'C4', 'n2', 'C3')
-        self.graph.add_edge('n1', 'C1', 'n2', 'C1')
+        self.graph.add_edge(('n0', 'C4'), ('n2', 'C3'))
+        self.graph.add_edge(('n1', 'C1'), ('n2', 'C1'))
         molecular_graph = self.graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
         assert set(molecular_graph.edges) == set([(0, 4), (1, 2), (2, 7), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7)])
 
@@ -225,7 +225,7 @@ class TestGroupGraph(BaseTest):
         assert self.graph.n_free_ports('node1') ==  2
 
         # Connect a edge and recheck
-        self.graph.add_edge('node1', 'port1', 'node2', 'port3')
+        self.graph.add_edge(('node1', 'port1'), ('node2', 'port3'))
         assert self.graph.n_free_ports('node1') == 1
         assert self.graph.n_free_ports('node2') == 1
 
@@ -253,8 +253,8 @@ class TestGroupGraph(BaseTest):
         graph.add_node('n0', 'OH')
         graph.add_node('n1', 'CC')
         graph.add_node('n2', 'OH')
-        graph.add_edge('n0', 'O1', 'n1', 'C11')
-        graph.add_edge('n2', 'O1', 'n1', 'C22')
+        graph.add_edge(('n0', 'O1'), ('n1', 'C11'))
+        graph.add_edge(('n2', 'O1'), ('n1', 'C22'))
         mG = graph.to_molecular_graph(node_types_to_smiles, node_port_to_atom_index)
         smiles = write_smiles(mG)
 
@@ -276,7 +276,7 @@ class TestGroupGraph(BaseTest):
     def test_group_graph_to_vector(self):
         self.graph.add_node('node1', 'type1')
         self.graph.add_node('node2', 'type2')
-        self.graph.add_edge('node1', 'port1', 'node2', 'port3')
+        self.graph.add_edge(('node1', 'port1'), ('node2', 'port3'))
         vector_form = self.graph.to_vector()
         assert vector_form == [1, 1]
 
@@ -285,7 +285,7 @@ class TestGroupGraph(BaseTest):
         import torch
         self.graph.add_node('node1', 'type1')
         self.graph.add_node('node2', 'type2')
-        self.graph.add_edge('node1', 'port1', 'node2', 'port3')
+        self.graph.add_edge(('node1', 'port1'), ('node2', 'port3'))
         group_featurizer = lambda node: torch.tensor([1, 0])
 
         data = self.graph.to_PyG_Data(group_featurizer)

@@ -113,45 +113,43 @@ class GroupGraph(nx.Graph):
         self.nodes[nodeID]['type'] = node_type
         self.nodes[nodeID]['ports'] = self.node_types[self.nodes[nodeID]['type']]
     
-    def add_edge(self, node1: Any, port1: Any, node2: Any, port2: Any) -> None:
+    def add_edge(self, node_port_1: Tuple[Any, Any], node_port_2: Tuple[Any, Any]) -> None:
         """
         Add an edge between two nodes in the GroupGraph.
 
         Parameters:
-        - node1: First node.
-        - port1: Port on the first node.
-        - node2: Second node.
-        - port2: Port on the second node.
+        - node_port_1: Tuple of node and port on the first node.
+        - node_port_2: Tuple of node and port on the second node.
 
         Raises:
         - Exception: If a node has no free ports or if nodes or ports are not present in the Graph.
         """
-        if self.n_free_ports(node1) <= 0:
-            raise AttributeError(f"Node: {node1} has no free ports!")
-        if self.n_free_ports(node2) <= 0:
-            raise AttributeError(f"Node: {node2} has no free ports!")
+        if self.n_free_ports(node_port_1[0]) <= 0:
+            raise AttributeError(f"Node: {node_port_1[0]} has no free ports!")
+        if self.n_free_ports(node_port_2[0]) <= 0:
+            raise AttributeError(f"Node: {node_port_2[0]} has no free ports!")
         # check if port is already occupied
         for edge in self.edges(data=True):
             for node_port in edge[-1]['ports']:
                 src_node, src_port = node_port[0].split('.')
                 dst_node, dst_port = node_port[1].split('.')
-                if src_node == node1:
-                    if src_port == port1:
-                        raise AttributeError(f"Node: {node1}.{port1} is already occupied!")
-                if src_node == node2:
-                    if src_port == port2:
-                        raise AttributeError(f"Node: {node2}.{port2} is already occupied!")
-                if dst_node == node1:
-                    if dst_port == port1:
-                        raise AttributeError(f"Node: {node1}.{port1} is already occupied!")
-                if dst_node == node2:
-                    if dst_port == port2:
-                        raise AttributeError(f"Node: {node2}.{port2} is already occupied!")
+                if src_node == node_port_1[0]:
+                    if src_port == node_port_1[1]:
+                        raise AttributeError(f"Node: {node_port_1[0]}.{node_port_1[1]} is already occupied!")
+                if src_node == node_port_2[0]:
+                    if src_port == node_port_2[1]:
+                        raise AttributeError(f"Node: {node_port_2[0]}.{node_port_2[1]} is already occupied!")
+                if dst_node == node_port_1[0]:
+                    if dst_port == node_port_1[1]:
+                        raise AttributeError(f"Node: {node_port_1[0]}.{node_port_1[1]} is already occupied!")
+                if dst_node == node_port_2[0]:
+                    if dst_port == node_port_2[1]:
+                        raise AttributeError(f"Node: {node_port_2[0]}.{node_port_2[1]} is already occupied!")
                 
 
         edge_ports = []
 
-        for n, p in [(node1, port1), (node2, port2)]:
+        for n, p in [(node_port_1[0], node_port_1[1]), (node_port_2[0], node_port_2[1])]:
             # Sanity check to see if the nodes and ports are present in Graph
             if n not in self.nodes:
                 raise AttributeError(f"Node: {p} is not present in Graph")
@@ -161,10 +159,10 @@ class GroupGraph(nx.Graph):
             edge_ports.append(str(n) + '.' + str(p))
 
         # Add the port points as edge attributes
-        if self.has_edge(node1, node2):
-            self.edges[node1, node2]['ports'].append(edge_ports)
+        if self.has_edge(node_port_1[0], node_port_2[0]):
+            self.edges[node_port_1[0], node_port_2[0]]['ports'].append(edge_ports)
         else:
-            super(GroupGraph, self).add_edge(node1, node2, ports=[edge_ports])
+            super(GroupGraph, self).add_edge(node_port_1[0], node_port_2[0], ports=[edge_ports])
 
     def make_undirected(self):
         """
@@ -223,7 +221,7 @@ class GroupGraph(nx.Graph):
                     for port in group[0].attachment_points:
                         for port2 in group2[0].attachment_points:
                             if port == port2:
-                                group_graph.add_edge(f'node{i}', port, f'node{j}', port2)
+                                group_graph.add_edge((f'node{i}', port), (f'node{j}', port2))
 
         return group_graph
     
@@ -335,7 +333,6 @@ class GroupGraph(nx.Graph):
             edge_ports_list = data['ports']
 
             # Add bonds to the molecular graph
-            #TODO check if port1 and port2 are of same marriage group
             for edge_ports in edge_ports_list:
                 node1, node2 = edge_ports
                 node1, port1 = node1.split('.')[0], node1.split('.')[1]

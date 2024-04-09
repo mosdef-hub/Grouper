@@ -162,7 +162,7 @@ def _multig_output_to_graphs(
             node2 = int_to_node_type[int(colors[e[1]])]
             port1 = node_int_to_port[node1][port_int_1]
             port2 = node_int_to_port[node2][port_int_2]
-            gG.add_edge(f'n{e[0]}', port1,  f'n{e[1]}', port2)
+            gG.add_edge((f'n{e[0]}', port1),  (f'n{e[1]}', port2))
         return gG
     except:
         if verbose:
