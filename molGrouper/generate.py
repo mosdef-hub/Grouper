@@ -4,6 +4,7 @@ import os
 import subprocess
 from molGrouper.group_graph import GroupGraph
 import rdkit.Chem
+from tqdm import tqdm
 
 constrained_fragments = [
     rdkit.Chem.MolFromSmarts('NN'),
@@ -181,6 +182,7 @@ def _process_multig_output(int_to_node_type, node_int_to_port, node_types) -> t.
     - List[GroupGraph]: List of processed group graphs.
     """
     graphs = []
+    #TODO write with tqdm
     for line in open("multig_out.txt"):
         out = _multig_output_to_graphs(line, int_to_node_type, node_int_to_port, node_types)
         if out is not None:

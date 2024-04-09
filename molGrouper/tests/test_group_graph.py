@@ -1,8 +1,10 @@
-from mbuild.tests.base_test import BaseTest
 from molGrouper.group_graph import GroupGraph
+from molGrouper.io import has_mbuild, has_torch
+from molGrouper.post_process import substitute_chiral_smiles
+from mbuild.tests.base_test import BaseTest
 from group_selfies import Group
 import networkx as nx
-from molGrouper.io import has_mbuild, has_torch
+from pysmiles import write_smiles
 import pytest
 
 class TestGroupGraph(BaseTest):
@@ -14,10 +16,11 @@ class TestGroupGraph(BaseTest):
             'type1': ['port1', 'port2'],
             'type2': ['port3', 'port4'],
             'r1' : ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'],
-            'd6' : ['C1', 'C2'],
+            'd6' : ['C1', 'C2'], # alkane
             'c' : ['C1', 'C2', 'C3', 'C4'],
             'r3': ['C11', 'C12', 'C13', 'C14', 'C15', 'C16', 'C17', 'C18', 'C19', 'C20', 'C21', 'C22'],
             's1': ['C1'],
+            'sulfonate_ester': ['C1', 'O1'],
         }
         self.node_types = node_types
 
@@ -89,6 +92,55 @@ class TestGroupGraph(BaseTest):
             self.graph.add_edge('node3', 'port1', 'node2', 'port1')
         with pytest.raises(AttributeError):
             self.graph.add_edge('node1', 'port1', 'node3', 'port1')
+
+    def test_equal(self):
+        graph1 = GroupGraph(self.node_types)
+        graph2 = GroupGraph(self.node_types)
+        assert graph1 == graph2
+
+        graph1.add_node('node1', 'type1')
+        assert graph1 != graph2
+
+        graph2.add_node('node1', 'type1')
+        assert graph1 == graph2
+
+        graph1.add_node('node2', 'type2')
+        assert graph1 != graph2
+
+        graph2.add_node('node2', 'type2')
+        assert graph1 == graph2
+
+        graph1.add_edge('node1', 'port1', 'node2', 'port3')
+        assert graph1 != graph2
+
+        graph2.add_edge('node1', 'port1', 'node2', 'port3')
+        assert graph1 == graph2
+        
+    def test_in(self):
+        graph1 = GroupGraph(self.node_types)
+        graph2 = GroupGraph(self.node_types)
+
+        assert graph1 in [graph1]
+
+        graph1.add_node('node1', 'type1')
+        assert graph1 not in [graph2]
+
+        graph2.add_node('node1', 'type1')
+        assert graph1 in [graph2]
+
+        graph1.add_node('node2', 'type2')
+        assert graph1 not in [graph2]
+
+        graph2.add_node('node2', 'type2')
+        assert graph1 in [graph2]
+
+        graph1.add_edge('node1', 'port1', 'node2', 'port3')
+        assert graph1 not in [graph2]
+
+        graph2.add_edge('node1', 'port1', 'node2', 'port3')
+        assert graph1 in [graph2]
+
+        assert graph1 in [graph1, graph2]
 
     def test_rings(self):
         self.graph.add_node('n0', 'r1')
@@ -167,8 +219,6 @@ class TestGroupGraph(BaseTest):
         molecular_graph = self.graph.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
         assert set(molecular_graph.edges) == set([(0, 4), (1, 2), (2, 7), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7)])
 
-
-
     def test_n_free_ports(self):
         self.graph.add_node('node1', 'type1')
         self.graph.add_node('node2', 'type2')
@@ -179,6 +229,41 @@ class TestGroupGraph(BaseTest):
         assert self.graph.n_free_ports('node1') == 1
         assert self.graph.n_free_ports('node2') == 1
 
+    def test_chiral_smiles_conversion(self):
+        # Define node types with ports
+        node_types = {
+            'CC': ['C11', 'C12', 'C21', 'C22',],
+            'OH': ['O1'],
+        }
+        node_types_to_smiles = {
+            'CC': 'C=C',
+            'OH': 'O',
+        }
+        node_port_to_atom_index = {
+            'CC': {'C11': 0, 'C12': 0, 'C21': 1, 'C22': 1},
+            'OH': {'O1': 0},
+        }
+        node_type_to_chiral_subs = {
+            'CC': {'[C]=[C]' : ['/[C]=[C]/', '/[C]=[C]\\']},
+            'OH': {'O': []} # no chiral subs
+        }
+
+        # cis
+        graph = GroupGraph(node_types)
+        graph.add_node('n0', 'OH')
+        graph.add_node('n1', 'CC')
+        graph.add_node('n2', 'OH')
+        graph.add_edge('n0', 'O1', 'n1', 'C11')
+        graph.add_edge('n2', 'O1', 'n1', 'C22')
+        mG = graph.to_molecular_graph(node_types_to_smiles, node_port_to_atom_index)
+        smiles = write_smiles(mG)
+
+        chiral_smiles = substitute_chiral_smiles(smiles, '[C]=[C]', node_type_to_chiral_subs['CC']['[C]=[C]'])
+        #cis
+        assert '[O]/[C]=[C]\\[O]' in chiral_smiles
+        #trans 
+        assert '[O]/[C]=[C]/[O]' in chiral_smiles
+
     @pytest.mark.skipif(not has_mbuild, reason="mBuild package not installed")
     def test_compound_to_group_graph(self):
         import mbuild as mb
@@ -187,7 +272,6 @@ class TestGroupGraph(BaseTest):
         graph = GroupGraph()
         group_graph = graph.from_mbuild(mol, groups)
         print(group_graph)
-
 
     def test_group_graph_to_vector(self):
         self.graph.add_node('node1', 'type1')
@@ -208,4 +292,3 @@ class TestGroupGraph(BaseTest):
         assert torch.equal(data.x, torch.tensor([ [1,0], [1,0] ], dtype=torch.float32)) # node features should just be identity
         assert torch.equal(data.edge_index, torch.tensor([ [0], [1] ], dtype=torch.float32)) # graph is directed, node1 -> node2
         assert torch.equal(data.edge_attr, torch.tensor([ [1,0,1,0] ], dtype=torch.float32)) # edge features are one-hot encoded port
-

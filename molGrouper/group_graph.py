@@ -50,7 +50,7 @@ class GroupGraph(nx.Graph):
         Returns:
         - str: String representation of nodes and edges.
         """
-        return f"Nodes: {['{} ({}) {}'.format(d[0], d[1]['type'], d[1]['ports']) for d in self.nodes.data()]}\n\nEdges: {','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))}\n\n"
+        return f"Nodes: {['{} ({}) {}'.format(d[0], d[1]['type'], d[1]['ports']) for d in self.nodes.data()]}\nEdges: {','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))}\n"
 
     def __repr__(self) -> str:
         """
@@ -71,7 +71,8 @@ class GroupGraph(nx.Graph):
         Returns:
         - bool: True if equal, False otherwise.
         """
-        return self.nodes == other.nodes and self.edges == other.edges
+        # return self.nodes(data=True) == other.nodes(data=True) and self.edges(data=True) == other.edges(data=True)
+        return nx.utils.misc.graphs_equal(self, other)
     
     def __ne__(self, other) -> bool:
         """
@@ -94,7 +95,7 @@ class GroupGraph(nx.Graph):
         """
         return len(self.nodes) > 0 and len(self.edges) > 0
 
-    def add_node(self, nodeID: Any, node_type: str):
+    def add_node(self, nodeID: Any, node_type: str) -> None:
         """
         Add a node to the GroupGraph.
 
@@ -112,7 +113,7 @@ class GroupGraph(nx.Graph):
         self.nodes[nodeID]['type'] = node_type
         self.nodes[nodeID]['ports'] = self.node_types[self.nodes[nodeID]['type']]
     
-    def add_edge(self, node1: Any, port1: Any, node2: Any, port2: Any):
+    def add_edge(self, node1: Any, port1: Any, node2: Any, port2: Any) -> None:
         """
         Add an edge between two nodes in the GroupGraph.
 
@@ -130,14 +131,23 @@ class GroupGraph(nx.Graph):
         if self.n_free_ports(node2) <= 0:
             raise AttributeError(f"Node: {node2} has no free ports!")
         # check if port is already occupied
-        if node1 in [e[0] for e in self.edges(data=True)] or node1 in [e[1] for e in self.edges(data=True)]\
-        or node2 in [e[0] for e in self.edges(data=True)] or node2 in [e[1] for e in self.edges(data=True)]:
-            for edge in self.edges(data=True):
-                for node_port in edge[-1]['ports']:
-                    if node_port[0].split('.')[1] == port1 or node_port[1].split('.')[1] == port1:
+        for edge in self.edges(data=True):
+            for node_port in edge[-1]['ports']:
+                src_node, src_port = node_port[0].split('.')
+                dst_node, dst_port = node_port[1].split('.')
+                if src_node == node1:
+                    if src_port == port1:
                         raise AttributeError(f"Node: {node1}.{port1} is already occupied!")
-                    if node_port[0].split('.')[1] == port2 or node_port[1].split('.')[1] == port2:
+                if src_node == node2:
+                    if src_port == port2:
                         raise AttributeError(f"Node: {node2}.{port2} is already occupied!")
+                if dst_node == node1:
+                    if dst_port == port1:
+                        raise AttributeError(f"Node: {node1}.{port1} is already occupied!")
+                if dst_node == node2:
+                    if dst_port == port2:
+                        raise AttributeError(f"Node: {node2}.{port2} is already occupied!")
+                
 
         edge_ports = []
 
@@ -169,7 +179,7 @@ class GroupGraph(nx.Graph):
             self.add_bond(node_t, port_t, node_s, port_s)
             self.edges[edge]['ports'].append(f'{node_port[1]}.{node_port[0]}')
         
-    def n_free_ports(self, nodeID: Any):
+    def n_free_ports(self, nodeID: Any) -> int:
         """
         Get the number of free ports on a node.
 
@@ -325,6 +335,7 @@ class GroupGraph(nx.Graph):
             edge_ports_list = data['ports']
 
             # Add bonds to the molecular graph
+            #TODO check if port1 and port2 are of same marriage group
             for edge_ports in edge_ports_list:
                 node1, node2 = edge_ports
                 node1, port1 = node1.split('.')[0], node1.split('.')[1]
@@ -393,4 +404,5 @@ class GroupGraph(nx.Graph):
             ])
 
         return Data(x=node_features, edge_index=edge_index, edge_attr=edge_features)
+    
             
