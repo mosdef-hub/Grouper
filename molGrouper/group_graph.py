@@ -310,14 +310,23 @@ class GroupGraph(nx.Graph):
             # Add atoms to the molecular graph
             for atom in mole_graph.nodes(data=True):
                 atom_id += 1
-                molecular_graph.add_node(
-                    atom_id, 
-                    element=atom[1]['element'], 
-                    charge=atom[1]['charge'], 
-                    aromatic=atom[1]['aromatic'], 
-                    # hcount=atom[1]['hcount']
-                    hcount=0
-                )
+                if 'element' in atom[1]:
+                    molecular_graph.add_node(
+                        atom_id, 
+                        element=atom[1]['element'], 
+                        charge=atom[1]['charge'], 
+                        aromatic=atom[1]['aromatic'], 
+                        # hcount=atom[1]['hcount']
+                        hcount=0
+                    )
+                else:
+                    molecular_graph.add_node(
+                        atom_id, 
+                        charge=atom[1]['charge'], 
+                        aromatic=atom[1]['aromatic'], 
+                        # hcount=atom[1]['hcount']
+                        hcount=0
+                    )
             
             # Add bonds from the subgraph to the molecular graph
             for bond in mole_graph.edges(data=True):

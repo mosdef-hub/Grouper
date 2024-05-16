@@ -5,6 +5,7 @@ import subprocess
 from molGrouper.group_graph import GroupGraph
 import rdkit.Chem
 from tqdm import tqdm
+from utils import multi_to_pair
 
 constrained_fragments = [
     rdkit.Chem.MolFromSmarts('NN'),
@@ -90,27 +91,6 @@ def _call_multig(edge_multiplicity: int):
     if not os.path.exists("multig_out.txt"):
         raise FileNotFoundError("multig failed to create all graphs with different edges. Check the input parameters.")
 
-def _multi_to_pair(multi: int, max_multi: int) -> t.Tuple[int, int]:
-    """
-    Convert a linear index `multi` to 2D coordinates (x, y) within a square grid.
-
-    Parameters:
-    - multi (int): Linear index to be converted.
-    - max_multi (int): Maximum allowed value for the linear index.
-
-    Returns:
-    - Tuple[int, int]: Two-dimensional coordinates (x, y) within the grid.
-    """
-    if 1 <= multi <= max_multi:
-        # Calculate x and y values based on the input multi
-        x = (multi - 1) % int(max_multi**.5) + 1
-        y = (multi - 1) // int(max_multi**.5) + 1
-
-        x, y = x-1, y-1 # convert to 0-indexed
-        return x, y
-    else:
-        raise ValueError("Input multi must be in the range 1 to max_multi.")
-
 def _multig_output_to_graphs(
         line: str, 
         int_to_node_type: dict, 
@@ -157,7 +137,7 @@ def _multig_output_to_graphs(
     # Add edges
     try:
         for e in edge_list:
-            port_int_1, port_int_2 = _multi_to_pair(e[2], max_n_attachments**2)
+            port_int_1, port_int_2 = multi_to_pair(e[2], max_n_attachments**2)
             node1 = int_to_node_type[int(colors[e[0]])]
             node2 = int_to_node_type[int(colors[e[1]])]
             port1 = node_int_to_port[node1][port_int_1]
