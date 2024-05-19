@@ -33,7 +33,6 @@ def run_performance_eval(
 ):
     """
     Run performance evaluation of the molGrouper generation featrure with growing sized graphs.
-    
     """
     import os
     import time
