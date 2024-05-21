@@ -5,7 +5,7 @@ import subprocess
 from molGrouper.group_graph import GroupGraph
 import rdkit.Chem
 from tqdm import tqdm
-from utils import multi_to_pair
+from molGrouper.utils import multi_to_pair
 
 constrained_fragments = [
     rdkit.Chem.MolFromSmarts('NN'),
@@ -72,7 +72,7 @@ def _apply_filters(unfiltered_space, filters = constrained_fragments):
 
 def _call_geng(n_nodes: int, max_edges: int):
     geng_path = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/geng"
-    args = [geng_path, str(n_nodes), f"1:{max_edges}", "geng_out.txt", "-ctf"]
+    args = [geng_path, str(n_nodes), f"-D{max_edges}", "geng_out.txt", "-ctf"]
     subprocess.run(args)
     if not os.path.exists("geng_out.txt"):
         raise FileNotFoundError("geng failed to create all possible graphs. Check the input parameters.")
