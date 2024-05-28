@@ -4,7 +4,7 @@ import time
 from rdkit import Chem
 from pysmiles import write_smiles
 import argparse
-
+import pickle
 
 if __name__ == "__main__":
     node_types = {
@@ -54,6 +54,9 @@ if __name__ == "__main__":
     end = time.time()
     print(f"Time taken for process_nauty_vcolg__mp: {end - start}")
     print(f"Total graphs: {len(out)}")
+
+    with open('group_graphs.pkl', 'wb') as f:
+        pickle.dump(out, f)
 
     # convert to rdkit mol
     start = time.time()
