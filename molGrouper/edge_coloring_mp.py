@@ -86,9 +86,9 @@ def _process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_i
         non_colored_edge_list.append((src, dst))
         edge_index_to_edge_color[i] = list(product(src_ports, dst_ports))
     #if the degree of the node is larger than the number of ports, then discard this graph
-    g = nx.Graph(non_colored_edge_list) # README NEED TO CONFIRM THIS WORKS
-    for n in g.nodes:
-        if n.degree() > len(node_types[int_to_node_type[int(colors[n])]]):
+    G = nx.Graph(non_colored_edge_list) # README NEED TO CONFIRM THIS WORKS
+    for n, degree in G.degree():
+        if degree > len(node_types[int_to_node_type[int(colors[n])]]):
             return []
     #TODO only generate edge colors that account for the symmetries of the node_type,
     #  for example an edge between benzene has the symmetryies of the dihedral group D6 (6 rotations and 6 reflections)
