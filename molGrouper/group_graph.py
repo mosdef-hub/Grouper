@@ -163,6 +163,8 @@ class GroupGraph(nx.Graph):
             self.edges[node_port_1[0], node_port_2[0]]['ports'].append(edge_ports)
         else:
             super(GroupGraph, self).add_edge(node_port_1[0], node_port_2[0], ports=[edge_ports])
+        
+        # remove ports from portsList
 
     def make_undirected(self):
         """
@@ -211,17 +213,16 @@ class GroupGraph(nx.Graph):
         vocab_fragment = dict([(f'frag{idx}',group_selfies.Group(f'frag{idx}', g.canonsmiles)) for idx, g in enumerate(groups)])
         grammar_fragment = group_selfies.GroupGrammar(vocab=vocab_fragment)
         mol = rdkit.Chem.MolFromSmiles(smiles)
-        extracted_groups = grammar_fragment.extract_groups(mol)
+        extracted_groups = grammar_fragment.extract_groups(mol) # list of group name, matched atoms, matched bonds
         group_graph = GroupGraph(node_types= { g[0].name : g[0].attachment_points for g in extracted_groups } )
         for i, group in enumerate(extracted_groups):
             group_graph.add_node(f'node{i}', group[0].name)
-        for i, group in enumerate(extracted_groups):
-            for j, group2 in enumerate(extracted_groups):
-                if i != j:
-                    for port in group[0].attachment_points:
-                        for port2 in group2[0].attachment_points:
-                            if port == port2:
-                                group_graph.add_edge((f'node{i}', port), (f'node{j}', port2))
+        for i, group in enumerate(extracted_groups[:-1]):
+            for j, group2 in enumerate(extracted_groups[i+1:]):
+                for port in group[2]:
+                    for port2 in group2[2]:
+                        if port[0] == port2[0][::-1]:
+                            group_graph.add_edge((f'node{i}', port[1]), (f'node{j+i+1}', port2[1]))
 
         return group_graph
     
@@ -403,8 +404,8 @@ class GroupGraph(nx.Graph):
             # get nodes and ports
             node_ports = [node_port.split('.') for node_port in e[2]['ports'][0]]
             # convert the ports to one-hot vectors
-            port_index_s = self.nodes(data=True)[node_ports[0][0]]['ports'].index(node_ports[0][1])
-            port_index_t = self.nodes(data=True)[node_ports[1][0]]['ports'].index(node_ports[1][1])
+            port_index_s = list(map(str, self.nodes(data=True)[node_ports[0][0]]['ports'])).index(node_ports[0][1])
+            port_index_t = list(map(str, self.nodes(data=True)[node_ports[1][0]]['ports'])).index(node_ports[1][1])
             edge_features[i] = torch.cat([
                 one_hot_vector(port_index_s, max_n_attachments), 
                 one_hot_vector(port_index_t, max_n_attachments)
