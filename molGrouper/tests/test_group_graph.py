@@ -6,6 +6,7 @@ from group_selfies import Group
 import networkx as nx
 from pysmiles import write_smiles
 import pytest
+import numpy as np
 
 class TestGroupGraph(BaseTest):
 
@@ -274,11 +275,26 @@ class TestGroupGraph(BaseTest):
         print(group_graph)
 
     def test_group_graph_to_vector(self):
+        def get_ground_truth(graph):
+            node_freq = {node: 0 for node in graph.node_types}
+            for node in graph.nodes(data=True):
+                node_freq[node[1]['type']] += 1
+            ground_truth = [0 for _ in range(len(graph.node_types))]
+            node_order = list(graph.node_types.keys())
+            for i, node in enumerate(node_order):
+                ground_truth[i] = node_freq[node]
+            return ground_truth, node_order
+
         self.graph.add_node('node1', 'type1')
         self.graph.add_node('node2', 'type2')
         self.graph.add_edge(('node1', 'port1'), ('node2', 'port3'))
-        vector_form = self.graph.to_vector()
-        assert vector_form == [1, 1]
+
+        group_vector, node_order = self.graph.to_vector()
+        ground_truth, truth_node_order = get_ground_truth(self.graph)
+
+        assert len(group_vector) == len(ground_truth)
+        for i, node in enumerate(node_order):
+            assert group_vector[i] == ground_truth[i]
 
     @pytest.mark.skipif(not has_torch, reason="torch package not installed")
     def test_group_graph_to_pyG(self):

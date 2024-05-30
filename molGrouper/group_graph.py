@@ -246,11 +246,12 @@ class GroupGraph(nx.Graph):
         Returns:
         - List[int]: Vector representation of the GroupGraph.
         """
-        type_to_idx = { t : i for i, t in enumerate(self.node_types.keys()) }
+        node_order = list(self.node_types.keys())
+        type_to_idx = { t : i for i, t in enumerate(node_order) }
         histogram = [0] * len(self.node_types)
         for n in self.nodes(data=True):
             histogram[type_to_idx[n[1]['type']]] += 1
-        return histogram
+        return histogram, node_order
     
     def to_molecular_graph(
             self, 
