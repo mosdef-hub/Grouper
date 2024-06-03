@@ -3,21 +3,55 @@ from itertools import product
 from tqdm import tqdm
 from molGrouper.group_graph import GroupGraph
 import networkx as nx
+from rdkit import Chem
+from pysmiles import write_smiles
 
 # def worker(line, node_types, int_to_node_type, node_int_to_port, verbose):
 #     return _process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose)
-def worker(chunk, node_types, int_to_node_type, node_int_to_port, verbose):
+def worker(chunk, node_types, int_to_node_type, node_int_to_port, verbose, just_smiles=False, node_type_to_smiles=None, node_port_to_atom_index=None):
     results = []
-    for i, line in enumerate(chunk):
-        results.extend(_process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose))
-        if i % 100 == 0:
-            print(f"Processed {i} lines")
+    if not just_smiles:
+        for i, line in enumerate(chunk):
+            results.extend(_process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose))
+            if i % 100 == 0:
+                print(f"Processed {i} lines")
+        
+    else:
+        assert node_type_to_smiles is not None
+        assert node_port_to_atom_index is not None
+        unique_mols = set()
+        groupGraphs = []
+        for i, line in enumerate(chunk):
+            edge_colored_graphs = _process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose)
+            for g in edge_colored_graphs:
+                mG = g.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
+                if Chem.MolFromSmiles(write_smiles(mG)) is not None:
+                    canon = Chem.MolToSmiles(Chem.MolFromSmiles(write_smiles(mG)), canonical=True)
+                    if canon in unique_mols:
+                        continue
+                    unique_mols.add(canon)
+                    groupGraphs.append(g)
+                else:
+                    if verbose:
+                        print("Rdkit failed from conversion between smiles and molecular graph")
+                        print(g)
+                    break
+            if i % 100 == 0:
+                print(f"Processed {i} lines")
+        
+        results = groupGraphs
+        
     print("Finished processing chunk")
+        
     return results
 
-def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False):
+def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False, just_smiles=False, node_type_to_smiles=None, node_port_to_atom_index=None):
     int_to_node_type = {i: k for i, k in enumerate(node_types.keys())}
     node_int_to_port = {k: {j: k for j, k in enumerate(v)} for i, (k, v) in enumerate(node_types.items())}
+
+    if just_smiles:
+        assert node_type_to_smiles is not None
+        assert node_port_to_atom_index is not None
     
     if n_processes == -1:
         num_workers = mp.cpu_count()
@@ -27,7 +61,7 @@ def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False
     with open(filename) as f:
         lines = f.readlines()
 
-    lines = lines[:10000]
+    # lines = lines[:30000]
 
     # Create a partial function for the worker to include the other parameters
     from functools import partial
@@ -36,11 +70,20 @@ def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False
         # Create chunks of lines
     chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
 
-    worker_func = partial(worker, node_types=node_types, int_to_node_type=int_to_node_type, node_int_to_port=node_int_to_port, verbose=verbose)
+    worker_func = partial(
+        worker, 
+        node_types=node_types, 
+        int_to_node_type=int_to_node_type, 
+        node_int_to_port=node_int_to_port, 
+        verbose=verbose,
+        just_smiles=just_smiles,
+        node_type_to_smiles=node_type_to_smiles,
+        node_port_to_atom_index=node_port_to_atom_index
+        )
     
     # Use multiprocessing to process lines in parallel
 
-    with mp.Pool(processes=num_workers) as pool:
+    with mp.Pool(processes=num_workers, maxtasksperchild=1000) as pool:
         try:
             # results = list(tqdm(pool.imap(worker_func, lines), total=len(lines), desc="Line progress"))
             results = list(tqdm(pool.imap(worker_func, chunks), total=len(chunks), desc="Chunk progress"))

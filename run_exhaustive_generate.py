@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
     # process nauty output
     start = time.time()
-    out = process_nauty_vcolg_mp('vcolg_out.txt', node_types, verbose=False, n_processes=args.n_cpus)
+    out = process_nauty_vcolg_mp('vcolg_out.txt', node_types, verbose=False, n_processes=args.n_cpus, just_smiles=True, node_type_to_smiles=node_type_to_smiles, node_port_to_atom_index=node_port_to_atom_index)
     end = time.time()
     print(f"Time taken for process_nauty_vcolg__mp: {end - start}")
     print(f"Total graphs: {len(out)}")
@@ -58,27 +58,12 @@ if __name__ == "__main__":
     with open('group_graphs.pkl', 'wb') as f:
         pickle.dump(out, f)
 
-    # convert to rdkit mol
-    start = time.time()
-    unique_mols = set()
-    groupGraphs = []
-    for g in out:
-        mG = g.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
-        if Chem.MolFromSmiles(write_smiles(mG)) is not None:
-            canon = Chem.MolToSmiles(Chem.MolFromSmiles(write_smiles(mG)), canonical=True)
-            if canon in unique_mols:
-                continue
-            unique_mols.add(canon)
-            groupGraphs.append(g)
-        else:
-            print("Rdkit failed from conversion between smiles and molecular graph")
-            print(g)
-            break
     end = time.time()
     print(f"Time taken for conversion to rdkit mol: {end - start}")
-    print(f"Unique: {len(unique_mols)}, Total: {len(out)}")
 
-    # save set of unique mols
-    with open("unique_mols.txt", "w") as f:
-        for mol in unique_mols:
-            f.write(f"{mol}\n")
+
+
+    # # save set of unique mols
+    # with open("unique_mols.txt", "w") as f:
+    #     for mol in out:
+    #         f.write(f"{mol}\n")

@@ -1,3 +1,7 @@
+# Data files
+*.txt
+*.pkl
+
 foo.ipynb
 packages/nauty2_8_8
 .DS_Store
