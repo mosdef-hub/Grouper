@@ -1,5 +1,6 @@
 
 import typing as t
+from copy import deepcopy
 
 def multi_to_pair(multi: int, max_multi: int) -> t.Tuple[int, int]:
     """
@@ -55,3 +56,18 @@ def run_performance_eval(
             total_time += end - start
         print(f"Average time for {n} nodes: {total_time/n_runs}")
 
+def convert_edges_to_nodetype(G):
+    new_G = deepcopy(G)
+    for edge in new_G.edges():
+        for i in range(len(new_G.edges[edge]['ports'])):
+            node_port_str_tuple = new_G.edges[edge]['ports'][i]
+            src, dst = node_port_str_tuple
+            srcnode, srcport = src.split('.')
+            srcnode_type = new_G.nodes[srcnode]['type']
+
+            dstnode, dstport = dst.split('.')
+            dstnode_type = new_G.nodes[dstnode]['type']
+
+            new_G.edges[edge]['ports'][i] = (f'{srcnode_type}.{srcport}', f'{dstnode_type}.{dstport}')
+
+    return new_G

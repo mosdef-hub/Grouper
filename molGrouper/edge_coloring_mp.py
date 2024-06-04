@@ -1,49 +1,81 @@
 import multiprocessing as mp
 from itertools import product
 from tqdm import tqdm
-from molGrouper.group_graph import GroupGraph
 import networkx as nx
 from rdkit import Chem
 from pysmiles import write_smiles
+import datetime
+import pickle
+import pathlib
+from glob import glob
+import os
+
+from molGrouper.group_graph import GroupGraph
+from molGrouper.utils import convert_edges_to_nodetype
+
 
 # def worker(line, node_types, int_to_node_type, node_int_to_port, verbose):
 #     return _process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose)
+
+def node_match(n1, n2):
+    return n1['type'] == n2['type']
+
+def edge_match(e1, e2):
+    return set(e1['ports']) == set(e2['ports'])
+
 def worker(chunk, node_types, int_to_node_type, node_int_to_port, verbose, just_smiles=False, node_type_to_smiles=None, node_port_to_atom_index=None):
     results = []
     if not just_smiles:
         for i, line in enumerate(chunk):
             results.extend(_process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose))
-            if i % 100 == 0:
+            if i % 1000 == 0:
                 print(f"Processed {i} lines")
         
     else:
         assert node_type_to_smiles is not None
         assert node_port_to_atom_index is not None
-        unique_mols = set()
+        unique_smiles = set()
         groupGraphs = []
+        basis = []
         for i, line in enumerate(chunk):
             edge_colored_graphs = _process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose)
-            for g in edge_colored_graphs:
+            if len(edge_colored_graphs) == 0:
+                continue
+            g = convert_edges_to_nodetype(edge_colored_graphs[0])
+            basis.append(g)
+            for g in edge_colored_graphs[1:]:
+                is_isomorph = False
+                g_converted = convert_edges_to_nodetype(g)
+                for uniqueG in basis: # check if the molecular graph is isomorphic to a previously generated one
+                    if nx.is_isomorphic(g_converted, uniqueG, node_match=node_match, edge_match=edge_match):
+                        is_isomorph = True
+                        break
+                if is_isomorph:
+                    continue
+                basis.append(g_converted)
+                groupGraphs.append(g) # if non-isomorphic, add to the list of unique molecular graphs
                 mG = g.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
                 if Chem.MolFromSmiles(write_smiles(mG)) is not None:
                     canon = Chem.MolToSmiles(Chem.MolFromSmiles(write_smiles(mG)), canonical=True)
-                    if canon in unique_mols:
-                        continue
-                    unique_mols.add(canon)
-                    groupGraphs.append(g)
+                    unique_smiles.add(canon)
                 else:
                     if verbose:
                         print("Rdkit failed from conversion between smiles and molecular graph")
                         print(g)
-                    break
-            if i % 100 == 0:
+            if i % 1000 == 0 and i != 0:
                 print(f"Processed {i} lines")
-        
-        results = groupGraphs
-        
-    print("Finished processing chunk")
-        
-    return results
+
+    now = datetime.datetime.now()
+    microtime = now.strftime("%f")
+    parent = str(pathlib.Path(__file__).parent.absolute())
+    with open(f'{parent}/../group_graph_{microtime}.pkl', 'wb') as f:
+        pickle.dump(groupGraphs, f)
+    
+    with open(f"{parent}/../group_graph_smiles_{microtime}.txt", "w") as f:
+        for g in unique_smiles:
+            f.write(g + "\n")
+    
+    print("Finished processing chunk at", now)
 
 def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False, just_smiles=False, node_type_to_smiles=None, node_port_to_atom_index=None):
     int_to_node_type = {i: k for i, k in enumerate(node_types.keys())}
@@ -57,7 +89,6 @@ def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False
         num_workers = mp.cpu_count()
     else:
         num_workers = n_processes
-
     with open(filename) as f:
         lines = f.readlines()
 
@@ -83,20 +114,51 @@ def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False
     
     # Use multiprocessing to process lines in parallel
 
-    with mp.Pool(processes=num_workers, maxtasksperchild=1000) as pool:
+    with mp.Pool(processes=num_workers) as pool:
         try:
             # results = list(tqdm(pool.imap(worker_func, lines), total=len(lines), desc="Line progress"))
-            results = list(tqdm(pool.imap(worker_func, chunks), total=len(chunks), desc="Chunk progress"))
+            tqdm(pool.imap(worker_func, chunks), total=len(chunks), desc="Worker progress")
         except Exception as e:
             print(f"Error in multiprocessing: {e}")
             pool.terminate()
         finally:
             pool.close()
             pool.join()
-    # Combine results
-    all_group_graphs = [graph for sublist in results for graph in sublist]
-    
-    return all_group_graphs
+    # Process text outputs into single file
+    glob_files = glob(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_*.pkl")
+    groupGraphs = []
+    gg_basis = []
+    for file in glob_files:
+        with open(file, 'rb') as f:
+            lines = pickle.load(f)
+        for g in lines:
+            is_isomorph = False
+            g_converted = convert_edges_to_nodetype(g)
+            for uniqueG in gg_basis: # check if the molecular graph is isomorphic to a previously generated one
+                if nx.is_isomorphic(g_converted, uniqueG, node_match=node_match, edge_match=edge_match):
+                    is_isomorph = True
+                    break
+            if is_isomorph:
+                continue
+            gg_basis.append(g_converted)
+            groupGraphs.append(g) # if non-isomorphic, add to the list of unique molecular graphs
+    with open(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_basis.pkl", 'wb') as f:
+        pickle.dump(groupGraphs, f)
+    for file in glob_files:
+        os.remove(file)
+    # Process text outputs into single file
+    glob_files = glob(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_smiles_*.txt")
+    unique_smiles = set()
+    for file in glob_files:
+        with open(file, 'r') as f:
+            lines = f.readlines()
+        for l in lines:
+            unique_smiles.add(l)
+    with open(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_smiles.txt", "w") as f:
+        for g in unique_smiles:
+            f.write(g)
+    for file in glob_files:
+        os.remove(file)
 
 def _process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose=False):
     group_graphs_list = []

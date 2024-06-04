@@ -70,18 +70,18 @@ def _generate_all_possible_group_graphs(n_nodes: int, node_types: dict) -> None:
 def _apply_filters(unfiltered_space, filters = constrained_fragments):
     pass
 
-def _call_geng(n_nodes: int, max_edges: int):
+def _call_geng(parent_path: str, n_nodes: int, max_edges: int):
     geng_path = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/geng"
-    args = [geng_path, str(n_nodes), f"-D{max_edges}", "geng_out.txt", "-ctf"]
+    args = [geng_path, str(n_nodes), f"-D{max_edges}", f"{parent_path}/geng_out.txt", "-ctf"]
     subprocess.run(args)
-    if not os.path.exists("geng_out.txt"):
+    if not os.path.exists(f"{parent_path}/geng_out.txt"):
         raise FileNotFoundError("geng failed to create all possible graphs. Check the input parameters.")
 
-def _call_vcolg(n_colors: int):
+def _call_vcolg(parent_path: str, n_colors: int):
     vcolg_path = str(pathlib.Path(__file__).parent) + "/../packages/nauty2_8_8/vcolg"
-    args = [vcolg_path, "geng_out.txt", "-T", f"-m{n_colors}", "vcolg_out.txt"]
+    args = [vcolg_path, f"{parent_path}/geng_out.txt", "-T", f"-m{n_colors}", f"{parent_path}/vcolg_out.txt"]
     subprocess.run(args)
-    if not os.path.exists("vcolg_out.txt"):
+    if not os.path.exists(f"{parent_path}/vcolg_out.txt"):
         raise FileNotFoundError("vcolg failed to create all graphs with colors. Check the input parameters.")
 
 def _call_multig(edge_multiplicity: int):

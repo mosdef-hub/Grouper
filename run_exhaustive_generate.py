@@ -5,6 +5,7 @@ from rdkit import Chem
 from pysmiles import write_smiles
 import argparse
 import pickle
+import pathlib
 
 if __name__ == "__main__":
     node_types = {
@@ -37,31 +38,25 @@ if __name__ == "__main__":
     parser.add_argument('--n_cpus', type=int, default=8, help='Number of cpus to use for multiprocessing')
     args = parser.parse_args()
 
+    parent = str(pathlib.Path(__file__).parent.absolute())
+
     print(f"Generating all possible molecular graphs with {args.n} nodes\n")
     print(f"Multiprocessing with {args.n_cpus} cpus\n")
 
     # call nauty
     start = time.time()
     print(args.n, len(max(node_types.values(), key=len)))
-    _call_geng(n_nodes = args.n, max_edges = len(max(node_types.values(), key=len)))
-    _call_vcolg(args.n)
+    _call_geng(parent_path=parent, n_nodes = args.n, max_edges = len(max(node_types.values(), key=len)))
+    _call_vcolg(parent_path=parent, n_colors=len(node_types))
     end = time.time()
     print(f"Time taken for nauty: {end - start}")
 
     # process nauty output
     start = time.time()
-    out = process_nauty_vcolg_mp('vcolg_out.txt', node_types, verbose=False, n_processes=args.n_cpus, just_smiles=True, node_type_to_smiles=node_type_to_smiles, node_port_to_atom_index=node_port_to_atom_index)
+    process_nauty_vcolg_mp(f'{parent}/vcolg_out.txt', node_types, verbose=False, n_processes=args.n_cpus, just_smiles=True, node_type_to_smiles=node_type_to_smiles, node_port_to_atom_index=node_port_to_atom_index)
     end = time.time()
     print(f"Time taken for process_nauty_vcolg__mp: {end - start}")
-    print(f"Total graphs: {len(out)}")
-
-    with open('group_graphs.pkl', 'wb') as f:
-        pickle.dump(out, f)
-
-    end = time.time()
-    print(f"Time taken for conversion to rdkit mol: {end - start}")
-
-
+    # print(f"Total graphs: {len(out)}")
 
     # # save set of unique mols
     # with open("unique_mols.txt", "w") as f:
