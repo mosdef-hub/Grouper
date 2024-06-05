@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     # process nauty output
     start = time.time()
-    process_nauty_vcolg_mp(f'{parent}/vcolg_out.txt', node_types, verbose=False, n_processes=args.n_cpus, just_smiles=True, node_type_to_smiles=node_type_to_smiles, node_port_to_atom_index=node_port_to_atom_index)
+    process_nauty_vcolg_mp(f'{parent}/vcolg_out.txt', node_types, verbose=False, n_processes=args.n_cpus, process_smiles=False, node_type_to_smiles=node_type_to_smiles, node_port_to_atom_index=node_port_to_atom_index)
     end = time.time()
     print(f"Time taken for process_nauty_vcolg__mp: {end - start}")
     # print(f"Total graphs: {len(out)}")

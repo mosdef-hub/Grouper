@@ -9,6 +9,7 @@ import pickle
 import pathlib
 from glob import glob
 import os
+import time
 
 from molGrouper.group_graph import GroupGraph
 from molGrouper.utils import convert_edges_to_nodetype
@@ -23,47 +24,25 @@ def node_match(n1, n2):
 def edge_match(e1, e2):
     return set(e1['ports']) == set(e2['ports'])
 
-def worker(chunk, node_types, int_to_node_type, node_int_to_port, verbose, just_smiles=False, node_type_to_smiles=None, node_port_to_atom_index=None):
-    results = []
-    if not just_smiles:
-        for i, line in enumerate(chunk):
-            results.extend(_process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose))
-            if i % 1000 == 0:
-                print(f"Processed {i} lines")
-        
-    else:
-        assert node_type_to_smiles is not None
-        assert node_port_to_atom_index is not None
-        unique_smiles = set()
-        groupGraphs = []
-        basis = []
-        for i, line in enumerate(chunk):
-            edge_colored_graphs = _process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose)
-            if len(edge_colored_graphs) == 0:
+def worker(chunk, node_types, int_to_node_type, node_int_to_port, verbose, node_type_to_smiles=None, node_port_to_atom_index=None):
+    assert node_type_to_smiles is not None
+    assert node_port_to_atom_index is not None
+    groupGraphs = []
+    basis = set()
+    for i, line in enumerate(chunk):
+        edge_colored_graphs = _process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose)
+        if len(edge_colored_graphs) == 0:
+            continue
+        g_hash = nx.weisfeiler_lehman_graph_hash(edge_colored_graphs[0], edge_attr="ports", node_attr="type")
+        basis.add(g_hash)
+        for g in edge_colored_graphs[1:]:
+            g_hash = nx.weisfeiler_lehman_graph_hash(g, edge_attr="ports", node_attr="type")
+            if g_hash in basis:
                 continue
-            g = convert_edges_to_nodetype(edge_colored_graphs[0])
-            basis.append(g)
-            for g in edge_colored_graphs[1:]:
-                is_isomorph = False
-                g_converted = convert_edges_to_nodetype(g)
-                for uniqueG in basis: # check if the molecular graph is isomorphic to a previously generated one
-                    if nx.is_isomorphic(g_converted, uniqueG, node_match=node_match, edge_match=edge_match):
-                        is_isomorph = True
-                        break
-                if is_isomorph:
-                    continue
-                basis.append(g_converted)
-                groupGraphs.append(g) # if non-isomorphic, add to the list of unique molecular graphs
-                mG = g.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
-                if Chem.MolFromSmiles(write_smiles(mG)) is not None:
-                    canon = Chem.MolToSmiles(Chem.MolFromSmiles(write_smiles(mG)), canonical=True)
-                    unique_smiles.add(canon)
-                else:
-                    if verbose:
-                        print("Rdkit failed from conversion between smiles and molecular graph")
-                        print(g)
-            if i % 1000 == 0 and i != 0:
-                print(f"Processed {i} lines")
+            basis.add(g_hash)
+            groupGraphs.append(g) # if non-isomorphic, add to the list of unique molecular graphs
+        if i % 100 == 0 and i != 0:
+            print(f"Processed {i} lines")
 
     now = datetime.datetime.now()
     microtime = now.strftime("%f")
@@ -71,19 +50,14 @@ def worker(chunk, node_types, int_to_node_type, node_int_to_port, verbose, just_
     with open(f'{parent}/../group_graph_{microtime}.pkl', 'wb') as f:
         pickle.dump(groupGraphs, f)
     
-    with open(f"{parent}/../group_graph_smiles_{microtime}.txt", "w") as f:
-        for g in unique_smiles:
-            f.write(g + "\n")
-    
     print("Finished processing chunk at", now)
 
-def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False, just_smiles=False, node_type_to_smiles=None, node_port_to_atom_index=None):
+def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False, process_smiles = False, node_type_to_smiles=None, node_port_to_atom_index=None):
     int_to_node_type = {i: k for i, k in enumerate(node_types.keys())}
     node_int_to_port = {k: {j: k for j, k in enumerate(v)} for i, (k, v) in enumerate(node_types.items())}
 
-    if just_smiles:
-        assert node_type_to_smiles is not None
-        assert node_port_to_atom_index is not None
+    assert node_type_to_smiles is not None
+    assert node_port_to_atom_index is not None
     
     if n_processes == -1:
         num_workers = mp.cpu_count()
@@ -98,7 +72,7 @@ def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False
     from functools import partial
 
     chunk_size = len(lines) // num_workers
-        # Create chunks of lines
+    # Create chunks of lines
     chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
 
     worker_func = partial(
@@ -107,13 +81,12 @@ def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False
         int_to_node_type=int_to_node_type, 
         node_int_to_port=node_int_to_port, 
         verbose=verbose,
-        just_smiles=just_smiles,
         node_type_to_smiles=node_type_to_smiles,
         node_port_to_atom_index=node_port_to_atom_index
         )
     
     # Use multiprocessing to process lines in parallel
-
+    start = time.time()
     with mp.Pool(processes=num_workers) as pool:
         try:
             # results = list(tqdm(pool.imap(worker_func, lines), total=len(lines), desc="Line progress"))
@@ -124,41 +97,47 @@ def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False
         finally:
             pool.close()
             pool.join()
+    end = time.time()
+    print(f"Time taken in parallel: {end - start}")
     # Process text outputs into single file
     glob_files = glob(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_*.pkl")
     groupGraphs = []
-    gg_basis = []
+    basis = set()
+
     for file in glob_files:
         with open(file, 'rb') as f:
             lines = pickle.load(f)
         for g in lines:
-            is_isomorph = False
-            g_converted = convert_edges_to_nodetype(g)
-            for uniqueG in gg_basis: # check if the molecular graph is isomorphic to a previously generated one
-                if nx.is_isomorphic(g_converted, uniqueG, node_match=node_match, edge_match=edge_match):
-                    is_isomorph = True
-                    break
-            if is_isomorph:
+            g_hash = nx.weisfeiler_lehman_graph_hash(g, edge_attr="ports", node_attr="type")
+            if g_hash in basis:
                 continue
-            gg_basis.append(g_converted)
+            basis.add(g_hash)
             groupGraphs.append(g) # if non-isomorphic, add to the list of unique molecular graphs
+
     with open(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_basis.pkl", 'wb') as f:
         pickle.dump(groupGraphs, f)
     for file in glob_files:
         os.remove(file)
-    # Process text outputs into single file
-    glob_files = glob(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_smiles_*.txt")
-    unique_smiles = set()
-    for file in glob_files:
-        with open(file, 'r') as f:
-            lines = f.readlines()
-        for l in lines:
-            unique_smiles.add(l)
-    with open(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_smiles.txt", "w") as f:
-        for g in unique_smiles:
-            f.write(g)
-    for file in glob_files:
-        os.remove(file)
+
+    print(f"{len(groupGraphs)} unique group graphs found")
+    
+    # Process smiles
+    if process_smiles:
+        start = time.time()
+        unique_smiles = set()
+        for g in groupGraphs:
+            mG = g.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
+            unique_smiles.add(write_smiles(mG))
+        with open(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_smiles.txt", "w") as f:
+            for g in unique_smiles:
+                f.write(g + "\n")
+        end = time.time()
+        print(f"Time taken to convert to smiles: {end - start}")
+
+    # Remove nauty files
+    os.remove(f"{pathlib.Path(__file__).parent.absolute()}/../geng_out.txt")
+    os.remove(f"{pathlib.Path(__file__).parent.absolute()}/../vcolg_out.txt")
+
 
 def _process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose=False):
     group_graphs_list = []
