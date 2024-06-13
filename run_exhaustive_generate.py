@@ -35,7 +35,7 @@ if __name__ == "__main__":
     # parse arguments
     parser = argparse.ArgumentParser(description='Exhaustively generate set of molecular graphs')
     parser.add_argument('--n', type=int, default=3, help='Number of nodes in the graph')
-    parser.add_argument('--n_cpus', type=int, default=8, help='Number of cpus to use for multiprocessing')
+    parser.add_argument('--n_cpus', type=int, default=-1, help='Number of cpus to use for multiprocessing')
     args = parser.parse_args()
 
     parent = str(pathlib.Path(__file__).parent.absolute())
@@ -53,12 +53,7 @@ if __name__ == "__main__":
 
     # process nauty output
     start = time.time()
-    process_nauty_vcolg_mp(f'{parent}/vcolg_out.txt', node_types, verbose=False, n_processes=args.n_cpus, process_smiles=False, node_type_to_smiles=node_type_to_smiles, node_port_to_atom_index=node_port_to_atom_index)
+    process_nauty_vcolg_mp(f'{parent}/vcolg_out.txt', node_types, verbose=False, n_processes=args.n_cpus, smiles_hash=True, node_type_to_smiles=node_type_to_smiles, node_port_to_atom_index=node_port_to_atom_index)
     end = time.time()
     print(f"Time taken for process_nauty_vcolg__mp: {end - start}")
-    # print(f"Total graphs: {len(out)}")
-
-    # # save set of unique mols
-    # with open("unique_mols.txt", "w") as f:
-    #     for mol in out:
-    #         f.write(f"{mol}\n")
+    
