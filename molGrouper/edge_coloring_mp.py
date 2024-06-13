@@ -2,7 +2,7 @@ import multiprocessing as mp
 from itertools import product
 from tqdm import tqdm
 import networkx as nx
-from rdkit import Chem
+import rdkit.Chem
 from pysmiles import write_smiles
 import datetime
 import pickle
@@ -24,25 +24,39 @@ def node_match(n1, n2):
 def edge_match(e1, e2):
     return set(e1['ports']) == set(e2['ports'])
 
-def worker(chunk, node_types, int_to_node_type, node_int_to_port, verbose, node_type_to_smiles=None, node_port_to_atom_index=None):
-    assert node_type_to_smiles is not None
-    assert node_port_to_atom_index is not None
+def worker(chunk, node_types, int_to_node_type, node_int_to_port, verbose=False, smiles_hash=True, node_type_to_smiles=None, node_port_to_atom_index=None):
+    if smiles_hash:
+        assert node_type_to_smiles is not None
+        assert node_port_to_atom_index is not None
     groupGraphs = []
     basis = set()
-    for i, line in enumerate(chunk):
+    for i, line in tqdm(enumerate(chunk), desc="Chunk progress", total=len(chunk)):
         edge_colored_graphs = _process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, node_int_to_port, verbose)
+        if verbose:
+            print(f"Lots of colored edge graphs found: {len(edge_colored_graphs)}")
+            print(f"Total unique graphs: {len(basis)}")
         if len(edge_colored_graphs) == 0:
             continue
-        g_hash = nx.weisfeiler_lehman_graph_hash(edge_colored_graphs[0], edge_attr="ports", node_attr="type")
-        basis.add(g_hash)
-        for g in edge_colored_graphs[1:]:
-            g_hash = nx.weisfeiler_lehman_graph_hash(g, edge_attr="ports", node_attr="type")
-            if g_hash in basis:
+        for g in edge_colored_graphs:
+            # Convert graph to a hash either using WL or SMILES
+            if smiles_hash:
+                try:
+                    mG = g.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
+                    smiles = write_smiles(mG)
+                    mol = rdkit.Chem.MolFromSmiles(smiles)
+                    g_hash = rdkit.Chem.MolToSmiles(mol, canonical=True)
+                except Exception as e:
+                    continue
+            else:
+                g_hash = nx.weisfeiler_lehman_graph_hash(g, edge_attr="ports", node_attr="type")  
+
+            if g_hash in basis: # TODO this check if the graphs are isomorphic, but not automorphic. Need to check for automorphism, it is possible that the graph is isomorphic but actually represents a different molecule
                 continue
             basis.add(g_hash)
             groupGraphs.append(g) # if non-isomorphic, add to the list of unique molecular graphs
-        if i % 100 == 0 and i != 0:
-            print(f"Processed {i} lines")
+        if verbose:
+            if i % 100 == 0 and i != 0:
+                print(f"Processed {i} lines")
 
     now = datetime.datetime.now()
     microtime = now.strftime("%f")
@@ -52,7 +66,7 @@ def worker(chunk, node_types, int_to_node_type, node_int_to_port, verbose, node_
     
     print("Finished processing chunk at", now)
 
-def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False, process_smiles = False, node_type_to_smiles=None, node_port_to_atom_index=None):
+def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False, smiles_hash = False, node_type_to_smiles=None, node_port_to_atom_index=None):
     int_to_node_type = {i: k for i, k in enumerate(node_types.keys())}
     node_int_to_port = {k: {j: k for j, k in enumerate(v)} for i, (k, v) in enumerate(node_types.items())}
 
@@ -71,7 +85,8 @@ def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False
     # Create a partial function for the worker to include the other parameters
     from functools import partial
 
-    chunk_size = len(lines) // num_workers
+    # A rule of thumb is we don't want our chunk_size to be larger than 1000
+    chunk_size = min(len(lines) // (num_workers), 1000) 
     # Create chunks of lines
     chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
 
@@ -81,6 +96,7 @@ def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False
         int_to_node_type=int_to_node_type, 
         node_int_to_port=node_int_to_port, 
         verbose=verbose,
+        smiles_hash=smiles_hash,
         node_type_to_smiles=node_type_to_smiles,
         node_port_to_atom_index=node_port_to_atom_index
         )
@@ -108,27 +124,40 @@ def process_nauty_vcolg_mp(filename, node_types, n_processes = -1, verbose=False
         with open(file, 'rb') as f:
             lines = pickle.load(f)
         for g in lines:
-            g_hash = nx.weisfeiler_lehman_graph_hash(g, edge_attr="ports", node_attr="type")
+            if smiles_hash:
+                try:
+                    mG = g.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
+                    smiles = write_smiles(mG)
+                    mol = rdkit.Chem.MolFromSmiles(smiles)
+                    g_hash = rdkit.Chem.MolToSmiles(mol, canonical=True)
+                except Exception as e:
+                    continue
+            else:
+                g_hash = nx.weisfeiler_lehman_graph_hash(g, edge_attr="ports", node_attr="type")
+
             if g_hash in basis:
                 continue
             basis.add(g_hash)
             groupGraphs.append(g) # if non-isomorphic, add to the list of unique molecular graphs
 
-    with open(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_basis.pkl", 'wb') as f:
+    with open(f"{pathlib.Path(__file__).parent.absolute()}/../basis.pkl", 'wb') as f:
         pickle.dump(groupGraphs, f)
-    for file in glob_files:
-        os.remove(file)
 
     print(f"{len(groupGraphs)} unique group graphs found")
     
     # Process smiles
-    if process_smiles:
+    if smiles_hash:
         start = time.time()
         unique_smiles = set()
         for g in groupGraphs:
             mG = g.to_molecular_graph(node_type_to_smiles, node_port_to_atom_index)
-            unique_smiles.add(write_smiles(mG))
-        with open(f"{pathlib.Path(__file__).parent.absolute()}/../group_graph_smiles.txt", "w") as f:
+            try:
+                smiles = write_smiles(mG)
+                unique_smiles.add(smiles)
+            except Exception as e:
+                continue
+            
+        with open(f"{pathlib.Path(__file__).parent.absolute()}/../basis_smiles.txt", "w") as f:
             for g in unique_smiles:
                 f.write(g + "\n")
         end = time.time()
