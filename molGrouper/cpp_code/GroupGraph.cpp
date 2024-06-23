@@ -35,6 +35,20 @@ public:
     }
 
     /**
+     * @brief Copy constructor for GroupGraph.
+     */
+    GroupGraph(const GroupGraph& other) {
+        // Copy nodes
+        for (const auto& pair : other.nodes) {
+            nodes[pair.first] = pair.second;
+        }
+        // Copy edges
+        edges = other.edges;
+        // Copy node types
+        nodeTypes = other.nodeTypes;
+    }
+
+    /**
      * @brief Adds a node to the graph.
      * @param id The identifier for the node.
      * @param type The type of the node.
