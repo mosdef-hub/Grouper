@@ -27,26 +27,34 @@
 //     thrust::copy(d_vec.begin(), d_vec.end(), h_vec.begin());
 // }
 
-__global__ void removeDuplicatesKernel(unsigned long* d_data, size_t num_elements) {
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    if (tid < num_elements - 1) {
-        if (d_data[tid] == d_data[tid + 1]) {
-            d_data[tid] = 0; // or any value to mark duplicates
-        }
-    }
-}
+// __global__ void removeDuplicatesKernel(unsigned long* d_data, size_t num_elements) {
+//     int tid = threadIdx.x + blockIdx.x * blockDim.x;
+//     if (tid < num_elements - 1) {
+//         if (d_data[tid] == d_data[tid + 1]) {
+//             d_data[tid] = 0; // Marking duplicates
+//         }
+//     }
+//     // Ensure all threads have completed marking duplicates before compacting
+//     __syncthreads();
+
+//     // Compact the data by shifting non-zero elements forward
+//     if (tid < num_elements - 1) {
+//         if (d_data[tid] == 0) {
+//             for (int i = tid; i < num_elements - 1; ++i) {
+//                 d_data[i] = d_data[i + 1];
+//             }
+//             d_data[num_elements - 1] = 0; // Set last element to zero
+//         }
+//     }
+// }
 
 void removeDuplicatesGPU(thrust::device_vector<unsigned long>& hash_vector) {
-    size_t num_elements = hash_vector.size();
-    unsigned long* d_data = thrust::raw_pointer_cast(hash_vector.data());
-
-    // Sort the data to bring duplicates next to each other
+    // Sort the vector first
     thrust::sort(hash_vector.begin(), hash_vector.end());
 
-    // Remove duplicates using a kernel
-    removeDuplicatesKernel<<<(num_elements + 255) / 256, 256>>>(d_data, num_elements);
+    // Use thrust::unique to remove consecutive duplicates
+    auto new_end = thrust::unique(hash_vector.begin(), hash_vector.end());
 
-    // Remove marked duplicates
-    auto new_end = thrust::remove(hash_vector.begin(), hash_vector.end(), 0);
+    // Resize the vector to remove the duplicates
     hash_vector.erase(new_end, hash_vector.end());
 }

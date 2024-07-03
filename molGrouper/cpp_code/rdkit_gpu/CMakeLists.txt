@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.18)
 project(lineProcessor LANGUAGES CXX CUDA)
 
 # Debug
-set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE Debug)
 
 # Specify the C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -17,7 +17,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Packages
 find_package(RDKit REQUIRED)
-# find_package(CUDAToolkit REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(Boost COMPONENTS system REQUIRED)
 
@@ -33,6 +32,7 @@ include_directories(${CUDA_INCLUDE_DIRS})
 
 set_target_properties(lineProcessor PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
+find_library(RT_LIBRARY rt)
 
 target_link_libraries(lineProcessor 
     RDKit::SmilesParse 
@@ -41,5 +41,6 @@ target_link_libraries(lineProcessor
     RDKit::RDGeneral 
     RDKit::FileParsers 
     ${CUDA_LIBRARIES}
+    rt
 )
 

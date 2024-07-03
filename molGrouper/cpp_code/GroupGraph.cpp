@@ -147,6 +147,20 @@ public:
             << std::get<2>(edge) << "(" << std::get<3>(edge)<< ")"<<"\n";
         }
     }
+
+    size_t calculateMemoryUsage() const {
+        size_t nodesSize = nodes.size() * (sizeof(NodeID) + sizeof(Node)); // Approximation for map storage
+        size_t edgesSize = edges.size() * sizeof(std::tuple<NodeID, PortType, NodeID, PortType>);
+        size_t nodeTypesSize = 0;
+        for (const auto& entry : nodeTypes) {
+            nodeTypesSize += entry.first.capacity() * sizeof(char); // assuming std::string storage
+            nodeTypesSize += entry.second.size() * sizeof(PortType);
+        }
+
+        // Calculate total size
+        size_t totalSize = sizeof(*this) + nodesSize + edgesSize + nodeTypesSize;
+        return totalSize;
+    }
 };
 
 // int main() {

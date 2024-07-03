@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 project(lineProcessor)
 
-# set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-g -O0")
-# set_source_files_properties(GroupGraph.cpp PROPERTIES COMPILE_FLAGS "-g -O0")
-# set_source_files_properties(process_colored_graphs.cpp PROPERTIES COMPILE_FLAGS "-g -O0")
-
 set(CMAKE_BUILD_TYPE Debug)
 
 # Add debug flags

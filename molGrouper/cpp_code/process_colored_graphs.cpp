@@ -145,34 +145,37 @@ std::vector<GroupGraph> process_nauty_graph_vcolg_output(const std::string& line
 }
 
 
-int main() {
+// int main() {
 
-    std::unordered_map<std::string, std::vector<int>> node_types = {
-        {"N", {0}},
-        {"CO", {0, 1}},
-        {"CC", {0, 1, 2, 3}}
-    };
-    std::unordered_map<int, std::string> int_to_node_type = {
-        {0, "N"},
-        {1, "CO"},
-        {2, "CC"},
-        {3, "CC"},
-        {4, "CC"}
-    };
-    std::ifstream input_file("/Users/kieran/projects/molGrouper/molGrouper/cpp_code/vcolg_out.txt");
-    if (!input_file.is_open()) {
-        std::cerr << "Error opening input file." << std::endl;
-        return 1;
-    }
-    std::string line;
-    while (std::getline(input_file, line)) {
-        if (line.empty()) {
-            continue; // Skip empty lines
-        }
-        auto result = process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, true);
-        std::cout << "Processed line. Result size: " << result.size() << std::endl;
-    }
-    input_file.close();
+//     std::unordered_map<std::string, std::vector<int>> node_types = {
+//         {"N", {0}},
+//         {"CO", {0, 1}},
+//         {"CC", {0, 1, 2, 3}}
+//     };
+//     std::unordered_map<int, std::string> int_to_node_type = {
+//         {0, "N"},
+//         {1, "CO"},
+//         {2, "CC"},
+//         {3, "CC"},
+//         {4, "CC"}
+//     };
+//     std::ifstream input_file("vcolg_out.txt");
+//     if (!input_file.is_open()) {
+//         std::cerr << "Error opening input file." << std::endl;
+//         return 1;
+//     }
+//     std::string line;
+//     while (std::getline(input_file, line)) {
+//         if (line.empty()) {
+//             continue; // Skip empty lines
+//         }
+//         auto result = process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, true);
+//         for (const auto& gG : result) {
+//             std::cout << gG.calculateMemoryUsage() << std::endl;
+//         }
+//         std::cout << "Processed line. Result size: " << result.size() << std::endl;
+//     }
+//     input_file.close();
 
-    return 0;
-}
+//     return 0;
+// }
