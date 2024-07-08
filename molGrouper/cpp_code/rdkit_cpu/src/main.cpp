@@ -4,12 +4,15 @@
 #include <GraphMol/GraphMol.h>
 #include <GraphMol/Atom.h>
 #include <GraphMol/Bond.h>
+
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
 #include <omp.h>
+#include <stdio.h>
 
 #include "GroupGraph.cpp"
 #include "process_colored_graphs.cpp"
@@ -52,16 +55,11 @@ int main() {
         {"CC", "C=C"}
     };
 
-    std::ifstream input_file("/Users/kieran/foo/molGrouper/molGrouper/cpp_code/rdkit_cpu/vcolg_out.txt");
+    std::ifstream input_file("/raid6/homes/kierannp/foo/gpufoo/molGrouper/molGrouper/cpp_code/rdkit_cpu/vcolg_out.txt");
     if (!input_file.is_open()) {
         std::cerr << "Error opening input file." << std::endl;
         return 1;
     }
-
-    std::cout
-    << omp_get_num_procs() << " "
-    << omp_get_max_threads() << " "
-    << omp_get_thread_limit() << std::endl;
 
     std::string line;
     std::vector<std::string> lines;
@@ -81,16 +79,24 @@ int main() {
 
     std::unordered_set<std::string> smiles_basis;
 
-    int num_threads = 4; // Set this to your desired number of threads
-    omp_set_num_threads(num_threads);
+    int num_procs = 32; // Get the number of available processors
+    omp_set_num_threads(num_procs);      // Set the number of threads to match
+
+    std::cout<< "Using "<<num_procs << " processors" << std::endl;
 
     #pragma omp parallel
     {
+
+        int thread_id = omp_get_thread_num();
+        // std::cout<< "Thread " << thread_id << " started" << std::endl;
+        std::cout.flush();
+
         // Thread-local data structures
         std::unordered_set<std::string> local_smiles_basis;
 
         #pragma omp for schedule(dynamic) nowait
         for (int i = 0; i < total_lines; ++i) {
+            // std::cout<< "Thread " << thread_id << " processing line " << i << std::endl;
             std::unordered_set<std::string> result = process_nauty_graph_vcolg_output(lines[i], node_types, int_to_node_type, nodeTypeToSmiles, nodeTypePortToIndex, false);
 
             for (auto it : result) {
@@ -102,6 +108,8 @@ int main() {
                 update_progress(i + 1, total_lines);
             }
         }
+        // std::cout << "Thread " << thread_id << " finished" << std::endl;
+        // std::cout.flush();
 
         // Merge thread-local results into global results
         #pragma omp critical

@@ -41,7 +41,7 @@ void get_sensible_port_combos(
     auto size = std::accumulate(v.begin(), v.end(), 1,
                                 [](size_t s, const std::vector<std::pair<int, int>>& sub) { return s * sub.size(); });
 
-    std::cout << "Size of Cartesian product: " << size << std::endl;
+    std::cout << "\nSize of Cartesian product: " << size << std::endl;
 
     // Initialize counters for each vector of pairs
     std::vector<size_t> counters(v.size(), 0);
