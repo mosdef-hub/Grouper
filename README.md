@@ -191,17 +191,16 @@ data
 
 <!-- ROADMAP -->
 ## Roadmap
-[X] Generate possible graphs with attachments points as limiter for number of connections 
 
-[X] Process output of generation into python data structure
+[ ] Linegraph transformation
 
-[X] Substiute nodes based on max attachments for graphs
+[ ] Mutation hotspot location specification
 
-[ ] Rdkit demo
+[ ] Reaction network (Suzuki coupling)
 
-[ ] group graph visualizaiton
+[ ] Synthesizability score
 
-[ ] Verify structures with synthesizability checks
+[ ] Specific symmetry enumeration
 
 <!-- CONTRIBUTING -->
 ## Contributing
