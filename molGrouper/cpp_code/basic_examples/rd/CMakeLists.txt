@@ -1,11 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(lineProcessor)
-
-set(CMAKE_BUILD_TYPE Debug)
-
-# Add debug flags
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g")
+project(RDKitToSmiles)
 
 # Ensure RDBASE is set
 if(NOT DEFINED ENV{RDBASE})
@@ -24,14 +18,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(RDKit REQUIRED)
 
 # Add executable
-add_executable(lineProcessor src/main.cpp)
+add_executable(RDKitToSmiles src/main.cpp)
 
 # Include RDKit directories
 include_directories(${RDBASE}/Code /opt/homebrew/Cellar/cairo/1.18.0/include /opt/homebrew/Cellar/boost/1.85.0/include)
 
 # Link RDKit libraries
 link_directories(${RDBASE}/lib)
-target_link_libraries(lineProcessor
+target_link_libraries(RDKitToSmiles
     ${RDBASE}/lib/libRDKitFileParsers.dylib
     ${RDBASE}/lib/libRDKitSmilesParse.dylib
     ${RDBASE}/lib/libRDKitGraphMol.dylib
