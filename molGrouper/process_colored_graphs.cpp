@@ -13,64 +13,13 @@
 #include <tuple>
 #include <functional>
 #include <unordered_map>
-#include <sys/resource.h>
+
+#include "GroupGraph.h"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
 #include <GraphMol/SmilesParse/SmilesParse.h>
 #include <GraphMol/GraphMol.h>
-
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
-
-void removeDuplicatesGPU(thrust::device_vector<unsigned long>& hash_vector);
-
-void logMemoryUsage(const std::string& message) {
-    struct rusage usage;
-    getrusage(RUSAGE_SELF, &usage);
-    std::cout << message << " - Memory usage: " << usage.ru_maxrss << " kilobytes" << std::endl;
-}
-
-template<typename T>
-size_t getHostVectorMemoryUsage(const thrust::host_vector<T>& vec) {
-    return vec.capacity() * sizeof(T);
-}
-
-template<typename T>
-size_t getVectorMemoryUsage(const std::vector<T>& vec) {
-    return vec.capacity() * sizeof(T);
-}
-
-// Helper function to estimate memory usage of unordered maps
-template<typename K, typename V>
-size_t getUnorderedMapMemoryUsage(const std::unordered_map<K, V>& umap) {
-    return umap.size() * (sizeof(K) + sizeof(V)) + sizeof(umap);
-}
-
-// Helper function to estimate memory usage of unordered sets
-template<typename T>
-size_t getUnorderedSetMemoryUsage(const std::unordered_set<T>& uset) {
-    return uset.size() * sizeof(T) + sizeof(uset);
-}
-
-class Logger {
-public:
-    template <typename T>
-    void logSize(const std::string& name, const T& var) {
-        sizes[name] = sizeof(var);
-        types[name] = typeid(var).name();
-    }
-
-    void printSizes() const {
-        for (const auto& entry : sizes) {
-            std::cout << "Size of " << entry.first << " (" << types.at(entry.first) << "): " << entry.second << " bytes" << std::endl;
-        }
-    }
-
-private:
-    std::unordered_map<std::string, size_t> sizes;
-    std::unordered_map<std::string, std::string> types;
-};
 
 
 void get_sensible_port_combos(
@@ -80,8 +29,7 @@ void get_sensible_port_combos(
     const std::unordered_map<std::string, std::vector<int>>& node_types,
     const std::unordered_map<std::string, std::string>& nodeTypeToSmiles,
     const std::unordered_map<std::string, std::unordered_map<int, int>>& nodeTypePortToIndex,
-    thrust::host_vector<unsigned long>& host_hash_vector, 
-    std::unordered_map<unsigned long, std::string>& hash_to_smiles,
+    std::unordered_set<std::string>& smiles_set, 
     const bool verbose = false) {
         
     if (v.empty()) {
@@ -89,15 +37,13 @@ void get_sensible_port_combos(
     }
 
     GroupGraph temp_gG(node_types);
-    std::hash<std::string> hasher;
-    unsigned long hash_value;
     std::string smiles;
 
     // Calculate the total size of the Cartesian product
     auto size = std::accumulate(v.begin(), v.end(), 1,
                                 [](size_t s, const std::vector<std::pair<int, int>>& sub) { return s * sub.size(); });
 
-    std::cout << "Size of Cartesian product: " << size << std::endl;
+    std::cout << "\nSize of Cartesian product: " << size << std::endl;
 
     // Initialize counters for each vector of pairs
     std::vector<size_t> counters(v.size(), 0);
@@ -118,13 +64,12 @@ void get_sensible_port_combos(
                     );
             }
 
-            // convert to molecular graph
-            std::string smiles = temp_gG.toSmiles(nodeTypeToSmiles, nodeTypePortToIndex);
+            // convert to smiles
+            smiles = temp_gG.toSmiles(nodeTypeToSmiles, nodeTypePortToIndex);
             // smiles = "CO"; // For testing purposes
 
             // Convert to hash
-            hash_value = static_cast<unsigned long>(hasher(smiles));
-            host_hash_vector.push_back(hash_value);
+            smiles_set.insert(smiles);
         } 
         catch (const std::exception& e) {
             if (verbose) {
@@ -143,7 +88,7 @@ void get_sensible_port_combos(
 }
 
 
-std::pair<std::unordered_map<unsigned long, std::string>, thrust::host_vector<unsigned long>> process_nauty_graph_vcolg_output(
+std::unordered_set<std::string> process_nauty_graph_vcolg_output(
         const std::string& line, 
         const std::unordered_map<std::string, std::vector<int>>& node_types,
         const std::unordered_map<int, std::string>& int_to_node_type,
@@ -151,8 +96,6 @@ std::pair<std::unordered_map<unsigned long, std::string>, thrust::host_vector<un
         const std::unordered_map<std::string, std::unordered_map<int, int>>& nodeTypePortToIndex,
         bool verbose = false) {
 
-    // logMemoryUsage("Before processing");
-    std::cout<<"Before processing"<<std::endl;
 
     std::vector<GroupGraph> group_graphs_list;
     std::unordered_set<std::string> graph_basis;
@@ -173,8 +116,6 @@ std::pair<std::unordered_map<unsigned long, std::string>, thrust::host_vector<un
     std::istringstream edge_desc_iss(edge_description_str);
     std::vector<std::string> edge_description(std::istream_iterator<std::string>{edge_desc_iss},
                                               std::istream_iterator<std::string>());
-
-    // logMemoryUsage("After splitting input");
 
     std::vector<std::pair<int, int>> edge_list;
     for (size_t i = 0; i < edge_description.size(); i += 2) {
@@ -211,8 +152,6 @@ std::pair<std::unordered_map<unsigned long, std::string>, thrust::host_vector<un
         edge_index_to_edge_color[i] = port_combinations;
     }
 
-    // logMemoryUsage("After processing edges");
-
     // Use a graph library to create a graph from non_colored_edge_list and check degrees
     std::map<int, int> node_degrees; // Placeholder for node degrees
     for (const auto& edge : non_colored_edge_list) {
@@ -230,11 +169,6 @@ std::pair<std::unordered_map<unsigned long, std::string>, thrust::host_vector<un
         edge_colors.push_back(port_combinations);
     }
 
-    // logMemoryUsage("After checking degrees");
-    thrust::host_vector<unsigned long> host_hash_vector; //unsigned long because hash is 64 bit on our system
-    std::unordered_map<unsigned long, std::string> hash_to_smiles;
-
-
     // Generate and filter port combinations
     get_sensible_port_combos(
         edge_colors, 
@@ -243,24 +177,12 @@ std::pair<std::unordered_map<unsigned long, std::string>, thrust::host_vector<un
         node_types, 
         nodeTypeToSmiles,
         nodeTypePortToIndex,
-        host_hash_vector, 
-        hash_to_smiles,
+        graph_basis,
         verbose
     );
 
-    logMemoryUsage("After processing port combinations");
 
-
-    thrust::device_vector<unsigned long> device_hash_vector = host_hash_vector;
-    removeDuplicatesGPU(device_hash_vector);
-    cudaDeviceSynchronize();
-    host_hash_vector.resize(device_hash_vector.size());
-    thrust::copy(device_hash_vector.begin(), device_hash_vector.end(), host_hash_vector.begin());
-
-
-
-
-    return {hash_to_smiles, host_hash_vector};
+    return graph_basis;
 }
 
 

@@ -1,6 +1,6 @@
 from mbuild.tests.base_test import BaseTest
-from molGrouper.group_graph import GroupGraph
-from molGrouper.generate import generate_group_graph_space
+from molGrouper import GroupGraph
+from molGrouper import generate_group_graph_space
 import pytest
 
 class TestGroupGraph(BaseTest):

@@ -1,7 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "GroupGraph.cpp" 
-#include "process_colored_graphs.cpp"
+#include "GroupGraph.h" 
 
 namespace py = pybind11;
 
@@ -22,6 +21,10 @@ PYBIND11_MODULE(molGrouper, m) {
         .def("n_nodes", &GroupGraph::numNodes)
         .def("n_free_ports", &GroupGraph::n_free_ports)
         .def("print", &GroupGraph::printGraph);
+    // m.def("to_smiles", &GroupGraph::toSmiles, "Convert GroupGraph to SMILES",
+    //     py::arg("node_type_to_smiles"), py::arg("node_type_port_to_index"));
+    // m.def("proprocess_nauty_graph_vcolg_output", &process_nauty_graph_vcolg_output, "Process nauty graph vcolg output",
+    //     py::arg("line"), py::arg("node_types"), py::arg("int_to_node_type"), py::arg("node_type_to_smiles"), py::arg("node_type_port_to_index"), py::arg("verbose") = false);
 
     // // Bind the MultigConverter class
     // py::class_<MultigConverter>(m, "MultigConverter")

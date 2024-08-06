@@ -1,7 +1,8 @@
 from mbuild.tests.base_test import BaseTest
-from molGrouper.group_graph import GroupGraph
 from group_selfies import Group
 from molGrouper.io import has_mbuild, has_torch
+import molGrouper
+# import molGrouper.GroupGraph
 import pytest
 
 class TestGroupGraph(BaseTest):
@@ -15,7 +16,7 @@ class TestGroupGraph(BaseTest):
         }
 
         # Create an instance of GroupGraph for testing
-        self.graph = GroupGraph(node_types)
+        self.graph = molGrouper.GroupGraph(node_types)
 
     def test_add_node(self):
         self.graph.add_node('node1', 'type1')
