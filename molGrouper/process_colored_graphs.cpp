@@ -14,7 +14,7 @@
 #include <functional>
 #include <unordered_map>
 
-#include "GroupGraph.h"
+#include "dataStructures.h"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -27,8 +27,6 @@ void get_sensible_port_combos(
     const GroupGraph& gG, 
     const std::vector<std::pair<int, int>>& edge_list, 
     const std::unordered_map<std::string, std::vector<int>>& node_types,
-    const std::unordered_map<std::string, std::string>& nodeTypeToSmiles,
-    const std::unordered_map<std::string, std::unordered_map<int, int>>& nodeTypePortToIndex,
     std::unordered_set<std::string>& smiles_set, 
     const bool verbose = false) {
         
@@ -36,7 +34,7 @@ void get_sensible_port_combos(
         return;
     }
 
-    GroupGraph temp_gG(node_types);
+    GroupGraph temp_gG;
     std::string smiles;
 
     // Calculate the total size of the Cartesian product
@@ -59,13 +57,13 @@ void get_sensible_port_combos(
             temp_gG = gG;
             for (size_t j = 0; j < edge_list.size(); ++j) {
                 temp_gG.addEdge(
-                    edge_list[j].first, combination[j].first,
-                    edge_list[j].second, combination[j].second
+                    std::make_tuple(edge_list[j].first, combination[j].first),
+                    std::make_tuple(edge_list[j].second, combination[j].second)
                     );
             }
 
             // convert to smiles
-            smiles = temp_gG.toSmiles(nodeTypeToSmiles, nodeTypePortToIndex);
+            smiles = temp_gG.toSmiles();
             // smiles = "CO"; // For testing purposes
 
             // Convert to hash
@@ -88,12 +86,10 @@ void get_sensible_port_combos(
 }
 
 
-std::unordered_set<std::string> process_nauty_graph_vcolg_output(
+std::unordered_set<std::string> process_nauty_output(
         const std::string& line, 
         const std::unordered_map<std::string, std::vector<int>>& node_types,
-        const std::unordered_map<int, std::string>& int_to_node_type,
-        const std::unordered_map<std::string, std::string>& nodeTypeToSmiles,
-        const std::unordered_map<std::string, std::unordered_map<int, int>>& nodeTypePortToIndex,
+        const std::unordered_map<std::string, std::vector<int>>& node_int_to_port,
         bool verbose = false) {
 
 
@@ -129,11 +125,19 @@ std::unordered_set<std::string> process_nauty_graph_vcolg_output(
         colors.push_back(std::stoi(node_description[i]));
     }
 
-    std::vector<std::pair<int, int>> non_colored_edge_list;
+    // Actual function starts
 
-    GroupGraph gG(node_types);
+    std::vector<std::pair<int, int>> non_colored_edge_list;
+    std::unordered_map<int, std::string> int_to_node_type;
+    int i = 0;
+    for (const auto& [node_type, ports] : node_types) {
+        int_to_node_type[i] = node_type;
+        i++;
+    }
+
+    GroupGraph gG;
     for (int i = 0; i < n_vertices; ++i) {
-        gG.addNode(i, int_to_node_type.at(colors[i]));
+        gG.addNode(std::to_string(i), "", node_types.at(int_to_node_type.at(colors[i])), node_int_to_port.at(int_to_node_type.at(colors[i])));
     }
 
     std::map<int, std::vector<std::pair<int, int>>> edge_index_to_edge_color;
@@ -175,8 +179,6 @@ std::unordered_set<std::string> process_nauty_graph_vcolg_output(
         gG, 
         non_colored_edge_list, 
         node_types, 
-        nodeTypeToSmiles,
-        nodeTypePortToIndex,
         graph_basis,
         verbose
     );
@@ -185,36 +187,3 @@ std::unordered_set<std::string> process_nauty_graph_vcolg_output(
     return graph_basis;
 }
 
-
-
-// int main() {
-
-//     std::unordered_map<std::string, std::vector<int>> node_types = {
-//         {"N", {0}},
-//         {"CO", {0, 1}},
-//         {"CC", {0, 1, 2, 3}}
-//     };
-//     std::unordered_map<int, std::string> int_to_node_type = {
-//         {0, "N"},
-//         {1, "CO"},
-//         {2, "CC"},
-//         {3, "CC"},
-//         {4, "CC"}
-//     };
-//     std::ifstream input_file("/Users/kieran/projects/molGrouper/molGrouper/cpp_code/vcolg_out.txt");
-//     if (!input_file.is_open()) {
-//         std::cerr << "Error opening input file." << std::endl;
-//         return 1;
-//     }
-//     std::string line;
-//     while (std::getline(input_file, line)) {
-//         if (line.empty()) {
-//             continue; // Skip empty lines
-//         }
-//         auto result = process_nauty_graph_vcolg_output(line, node_types, int_to_node_type, true);
-//         std::cout << "Processed line. Result size: " << result.size() << std::endl;
-//     }
-//     input_file.close();
-
-//     return 0;
-// }

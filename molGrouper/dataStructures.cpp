@@ -44,18 +44,18 @@ void GroupGraph::addNode(
     }
     if (ports.size() == 0) {
         if (nodetypes.find(ntype) == nodetypes.end() && smiles == "") {
-            throw std::invalid_argument("Node type or smiles haven't been defined");
+            throw std::invalid_argument("Node type haven't been defined");
         }
         if (nodetypes.find(smiles) == nodetypes.end() && ntype == "") {
-            throw std::invalid_argument("Node type or smiles haven't been defined");
+            throw std::invalid_argument("Smiles haven't been defined");
         }
     }
     if (hubs.size() == 0) {
         if (nodetypes.find(ntype) == nodetypes.end() && smiles == "") {
-            throw std::invalid_argument("Node type or smiles haven't been defined");
+            throw std::invalid_argument("Node type haven't been defined");
         }
         if (nodetypes.find(smiles) == nodetypes.end() && ntype == "") {
-            throw std::invalid_argument("Node type or smiles haven't been defined");
+            throw std::invalid_argument("Smiles haven't been defined");
         }
     }
     if (smiles == "") {

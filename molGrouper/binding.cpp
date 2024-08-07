@@ -1,6 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include "dataStructures.h" 
+#include "process_colored_graphs.cpp"
 
 namespace py = pybind11;
 
@@ -32,14 +33,6 @@ PYBIND11_MODULE(molGrouper, m) {
         .def("print", &GroupGraph::printGraph);
     // m.def("to_smiles", &GroupGraph::toSmiles, "Convert GroupGraph to SMILES",
     //     py::arg("node_type_to_smiles"), py::arg("node_type_port_to_index"));
-    // m.def("proprocess_nauty_graph_vcolg_output", &process_nauty_graph_vcolg_output, "Process nauty graph vcolg output",
-    //     py::arg("line"), py::arg("node_types"), py::arg("int_to_node_type"), py::arg("node_type_to_smiles"), py::arg("node_type_port_to_index"), py::arg("verbose") = false);
-
-    // // Bind the MultigConverter class
-    // py::class_<MultigConverter>(m, "MultigConverter")
-    //     .def(py::init<>())
-    //     .def_static("multi_to_pair", &MultigConverter::multi_to_pair, "Convert multi to pair")
-    //     .def_static("parse_multig_file", &MultigConverter::parse_multig_file, "return group graphs from multig text file")
-    //     .def_static("multig_line_to_graph", &MultigConverter::multig_line_to_graph, "Convert multig output to GroupGraph",
-    //         py::arg("line"), py::arg("int_to_node_type"), py::arg("node_int_to_port"), py::arg("node_types"), py::arg("verbose") = false);
+    m.def("process_nauty_output", &process_nauty_output, 
+        py::arg("line"), py::arg("node_types"), py::arg("node_int_to_port"), py::arg("verbose") = false);
 }
