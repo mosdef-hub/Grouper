@@ -1,7 +1,7 @@
 from molGrouper.group_graph import GroupGraph
 from molGrouper.io import has_mbuild, has_torch
 from molGrouper.post_process import substitute_chiral_smiles
-from mbuild.tests.base_test import BaseTest
+from molGrouper.tests.base_test import BaseTest
 from group_selfies import Group
 import networkx as nx
 from pysmiles import write_smiles
@@ -60,13 +60,13 @@ class TestGroupGraph(BaseTest):
     def test_add_edge_with_invalid_nodes(self):
         with pytest.raises(KeyError):
             self.graph.add_edge(('node1', 'port1'), ('node2', 'port1'))
-    
+
     def test_add_edge_with_invalid_ports(self):
         self.graph.add_node('node1', 'type1')
         self.graph.add_node('node2', 'type1')
         with pytest.raises(AttributeError):
             self.graph.add_edge(('node1', 'port1'), ('node2', 'port3'))
-            
+
     def test_add_edge_with_too_many_ports(self):
         self.graph.add_node('node1', 'type1')
         self.graph.add_node('node2', 'type1')
@@ -116,7 +116,7 @@ class TestGroupGraph(BaseTest):
 
         graph2.add_edge(('node1', 'port1'), ('node2', 'port3'))
         assert graph1 == graph2
-        
+
     def test_in(self):
         graph1 = GroupGraph(self.node_types)
         graph2 = GroupGraph(self.node_types)
@@ -262,7 +262,7 @@ class TestGroupGraph(BaseTest):
         chiral_smiles = substitute_chiral_smiles(smiles, '[C]=[C]', node_type_to_chiral_subs['CC']['[C]=[C]'])
         #cis
         assert '[O]/[C]=[C]\\[O]' in chiral_smiles
-        #trans 
+        #trans
         assert '[O]/[C]=[C]/[O]' in chiral_smiles
 
     @pytest.mark.skipif(not has_mbuild, reason="mBuild package not installed")
@@ -297,14 +297,16 @@ class TestGroupGraph(BaseTest):
             assert group_vector[i] == ground_truth[i]
 
     @pytest.mark.skipif(not has_torch, reason="torch package not installed")
-    def test_group_graph_to_pyG(self):
+    def test_group_graph_to_pyG(self, basic_graph):
         import torch
-        self.graph.add_node('node1', 'type1')
-        self.graph.add_node('node2', 'type2')
-        self.graph.add_edge(('node1', 'port1'), ('node2', 'port3'))
         group_featurizer = lambda node: torch.tensor([1, 0])
 
-        data = self.graph.to_PyG_Data(group_featurizer)
+        data = basic_graph.to_PyG_Data(group_featurizer)
         assert torch.equal(data.x, torch.tensor([ [1,0], [1,0] ], dtype=torch.float32)) # node features should just be identity
         assert torch.equal(data.edge_index, torch.tensor([ [0], [1] ], dtype=torch.float32)) # graph is directed, node1 -> node2
-        assert torch.equal(data.edge_attr, torch.tensor([ [1,0,1,0] ], dtype=torch.float32)) # edge features are one-hot encoded port
+        assert torch.equal(data.edge_attr, torch.tensor([ [1.,0.,0.,1.] ], dtype=torch.float32)) # edge features are one-hot encoded port
+
+    def test_group_graph_repr(self, basic_graph):
+        outStr = "C.1-C.2"
+        assert basic_graph.__repr__() == outStr
+
