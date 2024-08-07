@@ -4,7 +4,7 @@ import rdkit.Chem
 import group_selfies
 from pysmiles import read_smiles, write_smiles
 import mbuild
-import networkx 
+import networkx
 import torch_geometric
 from typing import List, Dict, Tuple, Union, Any, Callable, Sequence
 #   taken from a good answer by Gambit1614 on StackOverflow https://stackoverflow.com/questions/57095809/networkx-connecting-nodes-using-ports
@@ -40,7 +40,7 @@ class GroupGraph(nx.Graph):
         for k, v in node_types.items(): # check if ports are unique
             if len(v) != len(set(v)):
                 raise ValueError("All ports in node_types must be unique")
-            
+
         self.node_types = node_types
 
     def __str__(self) -> str:
@@ -60,7 +60,7 @@ class GroupGraph(nx.Graph):
         - str: Representation of the GroupGraph.
         """
         return f"GroupGraph({','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))})"
-    
+
     def __eq__(self, other) -> bool:
         """
         Check if two GroupGraph objects are equal.
@@ -73,7 +73,7 @@ class GroupGraph(nx.Graph):
         """
         # return self.nodes(data=True) == other.nodes(data=True) and self.edges(data=True) == other.edges(data=True)
         return nx.utils.misc.graphs_equal(self, other)
-    
+
     def __ne__(self, other) -> bool:
         """
         Check if two GroupGraph objects are not equal.
@@ -85,7 +85,7 @@ class GroupGraph(nx.Graph):
         - bool: True if not equal, False otherwise.
         """
         return not self.__eq__(other)
-    
+
     def __bool__(self) -> bool:
         """
         Check if the GroupGraph is non-empty.
@@ -112,7 +112,7 @@ class GroupGraph(nx.Graph):
         super(GroupGraph, self).add_node(nodeID)
         self.nodes[nodeID]['type'] = node_type
         self.nodes[nodeID]['ports'] = self.node_types[self.nodes[nodeID]['type']]
-    
+
     def add_edge(self, node_port_1: Tuple[Any, Any], node_port_2: Tuple[Any, Any]) -> None:
         """
         Add an edge between two nodes in the GroupGraph.
@@ -145,7 +145,7 @@ class GroupGraph(nx.Graph):
                 if dst_node == node_port_2[0]:
                     if dst_port == node_port_2[1]:
                         raise AttributeError(f"Node: {node_port_2[0]}.{node_port_2[1]} is already occupied!")
-                
+
 
         edge_ports = []
 
@@ -163,7 +163,7 @@ class GroupGraph(nx.Graph):
             self.edges[node_port_1[0], node_port_2[0]]['ports'].append(edge_ports)
         else:
             super(GroupGraph, self).add_edge(node_port_1[0], node_port_2[0], ports=[edge_ports])
-        
+
         # remove ports from portsList
 
     def make_undirected(self):
@@ -178,7 +178,7 @@ class GroupGraph(nx.Graph):
             port_s, port_t = edge['ports'][0], edge['ports'][1]
             self.add_bond(node_t, port_t, node_s, port_s)
             self.edges[edge]['ports'].append(f'{node_port[1]}.{node_port[0]}')
-        
+
     def n_free_ports(self, nodeID: Any) -> int:
         """
         Get the number of free ports on a node.
@@ -198,7 +198,7 @@ class GroupGraph(nx.Graph):
                 if node_port[0].split('.')[0] == nodeID or node_port[1].split('.')[0] == nodeID:
                     occupied_ports += 1
         return len(self.nodes[nodeID]['ports']) - occupied_ports # total number of ports - number of ports with edges
-    
+
     def group_graph_from_smiles(self, smiles: str, groups: List[group_selfies.Group]) -> 'GroupGraph':
         """
         Generate a GroupGraph from a SMILES string and a list of group_selfies.Groups.
@@ -225,7 +225,7 @@ class GroupGraph(nx.Graph):
                             group_graph.add_edge((f'node{i}', port[1]), (f'node{j+i+1}', port2[1]))
 
         return group_graph
-    
+
     def from_mbuild(self, compound: mbuild.Compound, groups: List[group_selfies.Group]) -> 'GroupGraph':
         """
         Create a GroupGraph from an mbuild.Compound and a list of group_selfies.Groups.
@@ -239,7 +239,7 @@ class GroupGraph(nx.Graph):
         """
         smiles = compound.get_smiles()
         return self.group_graph_from_smiles(smiles, groups)
-    
+
     def to_vector(self) -> List[int]:
         """
         Convert the GroupGraph to a vector representation.
@@ -253,10 +253,10 @@ class GroupGraph(nx.Graph):
         for n in self.nodes(data=True):
             histogram[type_to_idx[n[1]['type']]] += 1
         return histogram, node_order
-    
+
     def to_molecular_graph(
-            self, 
-            node_type_to_smiles: Dict[str, str], 
+            self,
+            node_type_to_smiles: Dict[str, str],
             node_type_port_to_index: Dict[str , Dict[str, int]]
     ) -> networkx.Graph:
         """
@@ -284,9 +284,9 @@ class GroupGraph(nx.Graph):
             node_port_to_atom_index[str(node)] = {}
             for i, port in enumerate(ports):
                 node_port_to_atom_index[str(node)][str(port)] = atom_count + node_type_port_to_index[node_type][port]
-            
+
             atom_count += len(mole_graph.nodes)
-        
+
         # Need conversion from node and subgraph indices to molecular graph indices
         atom_id = -1
         node_sub_graph_indices_to_molecular_graph_indices = {}
@@ -314,29 +314,29 @@ class GroupGraph(nx.Graph):
                 atom_id += 1
                 if 'element' in atom[1]:
                     molecular_graph.add_node(
-                        atom_id, 
-                        element=atom[1]['element'], 
-                        charge=atom[1]['charge'], 
-                        aromatic=atom[1]['aromatic'], 
+                        atom_id,
+                        element=atom[1]['element'],
+                        charge=atom[1]['charge'],
+                        aromatic=atom[1]['aromatic'],
                         # hcount=atom[1]['hcount']
                         hcount=0
                     )
                 else:
                     molecular_graph.add_node(
-                        atom_id, 
-                        charge=atom[1]['charge'], 
-                        aromatic=atom[1]['aromatic'], 
+                        atom_id,
+                        charge=atom[1]['charge'],
+                        aromatic=atom[1]['aromatic'],
                         # hcount=atom[1]['hcount']
                         hcount=0
                     )
-            
+
             # Add bonds from the subgraph to the molecular graph
             for bond in mole_graph.edges(data=True):
                 sub_atom1, sub_atom2, data = bond
                 atom1 = node_sub_graph_indices_to_molecular_graph_indices[node][sub_atom1]
                 atom2 = node_sub_graph_indices_to_molecular_graph_indices[node][sub_atom2]
                 molecular_graph.add_edge(atom1, atom2, order=data['order'])
-                
+
 
         # Add bonds from the group graph to the molecular graph
         for edge in self.edges(data=True):
@@ -354,7 +354,7 @@ class GroupGraph(nx.Graph):
                 molecular_graph.add_edge(atom1, atom2, order=1)
 
         return molecular_graph
-    
+
     def to_smiles(self, node_type_to_smiles: Dict[str, str], node_type_port_to_index: Dict[str, Dict[any, int]]) -> str:
         """
         Convert the GroupGraph to a SMILES notation.
@@ -368,7 +368,7 @@ class GroupGraph(nx.Graph):
         """
         molecular_graph = self.to_molecular_graph(node_type_to_smiles, node_type_port_to_index)
         return write_smiles(molecular_graph)
-    
+
     def to_PyG_Data(self, node_descriptor_generater: Callable[[str], Sequence[float]]) -> torch_geometric.data.Data:
         """
         Convert the GroupGraph to a PyG Data representation.
@@ -389,28 +389,33 @@ class GroupGraph(nx.Graph):
         node_features = torch.zeros(len(self.nodes), len(dummy_feature))
         for i, n in enumerate(self.nodes(data=True)):
             node_features[i] = node_descriptor_generater(n[1]['type'])
-        
+
         # Create the edge index
         edge_index = torch.zeros(2, len(self.edges))
         for i, e in enumerate(self.edges):
             edge_index[0, i] = list(self.nodes).index(e[0])
             edge_index[1, i] = list(self.nodes).index(e[1])
-        
+
         # Create the edge features
         edge_features = torch.zeros(len(self.edges), max_n_attachments*2)
 
         for i, e in enumerate(self.edges(data=True)):
-            
+
             # get nodes and ports
             node_ports = [node_port.split('.') for node_port in e[2]['ports'][0]]
             # convert the ports to one-hot vectors
             port_index_s = list(map(str, self.nodes(data=True)[node_ports[0][0]]['ports'])).index(node_ports[0][1])
             port_index_t = list(map(str, self.nodes(data=True)[node_ports[1][0]]['ports'])).index(node_ports[1][1])
             edge_features[i] = torch.cat([
-                one_hot_vector(port_index_s, max_n_attachments), 
+                one_hot_vector(port_index_s, max_n_attachments),
                 one_hot_vector(port_index_t, max_n_attachments)
             ])
 
         return Data(x=node_features, edge_index=edge_index, edge_attr=edge_features)
-    
-            
+
+
+    def visualize(self, **kwargs):
+        from molGrouper.visualization import nx_visualize
+        return nx_visualize(self, **kwargs)
+
+

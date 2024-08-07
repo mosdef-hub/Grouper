@@ -7,28 +7,28 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 
 def nx_visualize(group_graph, layout=nx.spring_layout, **kwargs):
-    """Draw on a networkx canvas the current GroupGraph structure.
+	"""Draw on a networkx canvas the current GroupGraph structure.
 
-    Parameters
-    ---------
-    group_graph : molGrouper.GroupGraph
-        The group graph to plot. Will size the canvas based on the size of the group graph.
-        Labels will be placed on each node based on the "type" of the node.
-    layout : function, optional, default nx.spring_layout
-        Function to apply to the group_graph in order to determine position of nodes on canvas.
-    kwargs : dict, optional, default None
-        Extra parameters passed to layout function. Default kwargs are passed to nx.spring_layout.
+	Parameters
+	---------
+	group_graph : molGrouper.GroupGraph
+		The group graph to plot. Will size the canvas based on the size of the group graph.
+		Labels will be placed on each node based on the "type" of the node.
+	layout : function, optional, default nx.spring_layout
+		Function to apply to the group_graph in order to determine position of nodes on canvas.
+	kwargs : dict, optional, default None
+		Extra parameters passed to layout function. Default kwargs are passed to nx.spring_layout.
 
-    Returns
-    -------
-    fig : matplotlib.pyplot.Figure
-        Drawn canvas of group_graph
+	Returns
+	-------
+	fig : matplotlib.pyplot.Figure
+		Drawn canvas of group_graph
 
-    """
-    if not kwargs:
-        kwargs = dict(
-            seed=1, k=0.5
-    )
+	"""
+	if not kwargs:
+		kwargs = dict(
+			seed=1, k=0.5
+		)
 
     components = nx.connected_components(group_graph)
     offset = 0
