@@ -1,29 +1,45 @@
-from setuptools import setup, find_packages
+from setuptools import setup, Extension, find_packages
+from setuptools.command.build_ext import build_ext
+import os
+import sys
+import pybind11
+
+condabase = os.environ['CONDA_PREFIX']
+
+# Define the extension module
+molgrouper_module = Extension(
+    'molGrouper',
+    sources=[
+        'molGrouper/dataStructures.cpp',
+        'molGrouper/binding.cpp',
+    ],
+    include_dirs = [
+            os.path.join(condabase, 'include'),
+            os.path.join(condabase, "include/cairo"),
+            os.path.join(condabase, "include/boost"),
+            os.path.join(condabase, "include/rdkit"),
+            #os.path.join(condabase, "include/omp")
+            pybind11.get_include(),
+            pybind11.get_include(user=True),
+            'molGrouper',
+    ],
+    library_dirs = [
+            os.path.join(condabase, 'lib'),
+            os.path.join(condabase, "lib/cairo")
+    ],
+    libraries = ['RDKitFileParsers', 'RDKitSmilesParse', 'RDKitGraphMol', 'RDKitRDGeneral', 'omp'],
+    extra_compile_args = ['-Xpreprocessor', '-fopenmp', '-std=c++17', '-mmacosx-version-min=10.13'],
+    language='c++',
+    extra_link_args=['-Wl'])
 
 setup(
     name='molGrouper',
-    version='0.1.0',
-    packages=find_packages(),  # Automatically discover and include all packages in the project
-
-    # Project metadata
+    version='0.1',
+    packages=find_packages('molGrouper'),
     author='Kieran Nehil-Puleo',
-    author_email='nehilkieran@gmail.com',
-    description='A project for molecular group graphs',
-    url='https://github.com/kierannp/molGrouper',
-    license='MIT',
-
-    # Additional classifiers
-    classifiers=[
-        'Development Status :: 3 - Alpha',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-    ],
-
-    # Other configurations
-    zip_safe=False,
+    description='A Python package with C++ extensions',
+    ext_modules=[molgrouper_module],
+    cmdclass={
+        build_ext: build_ext
+    }
 )
-

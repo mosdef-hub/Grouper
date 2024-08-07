@@ -5,6 +5,7 @@
 foo.ipynb
 packages/nauty2_8_8
 .DS_Store
+*.pkl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
