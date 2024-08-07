@@ -59,7 +59,21 @@ class GroupGraph(nx.Graph):
         Returns:
         - str: Representation of the GroupGraph.
         """
-        return f"GroupGraph({','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))})"
+        outStr = ""
+        for edge in self.edges():
+            ports = self.edges[edge]["ports"][0]
+            port0 = ports[0].split(".")[-1]
+            port1 = ports[1].split(".")[-1]
+            outStr += self.nodes[edge[0]]["type"]
+            outStr += "."
+            outStr += port0
+            outStr += "-"
+            outStr += self.nodes[edge[1]]["type"]
+            outStr += "."
+            outStr += port1
+            outStr += " "
+        outStr = outStr[:-1] # remove last space
+        return outStr
 
     def __eq__(self, other) -> bool:
         """
