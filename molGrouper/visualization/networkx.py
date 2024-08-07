@@ -45,9 +45,9 @@ def nx_visualize(group_graph, layout=nx.spring_layout, **kwargs):
 
     n_nodes = group_graph.number_of_nodes()
     dimensions = int(np.sqrt(n_nodes)) * 2 + 1 + largest_label // 3
-    plt.figure(figsize=(dimensions, dimensions))
+    fig = plt.figure(figsize=(dimensions, dimensions))
 
-    # edge_colors = range(len(group_graph.edges())) # TODO: Add colors based on node edges
+    # edge_colors = range(len(group_graph.edges())) # TODO: Add colors based on node ports
     node_types = set(dict(group_graph.nodes.data("type")).values())
     cmap = sns.color_palette("colorblind", as_cmap=True)
     cmap = colors.ListedColormap(cmap)
@@ -67,7 +67,7 @@ def nx_visualize(group_graph, layout=nx.spring_layout, **kwargs):
         "font_weight":"bold",
         "edgecolors":"black"
     }
-    fig = nx.draw(group_graph, pos, **options)
+    nx.draw(group_graph, pos, **options)
     x_values, y_values = zip(*pos.values())
     x_margin = (max(x_values) - min(x_values)) * 0.1 + 0.1
     y_margin = (max(y_values) - min(y_values)) * 0.1 + 0.1

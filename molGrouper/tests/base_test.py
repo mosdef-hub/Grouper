@@ -11,8 +11,12 @@ class BaseTest:
         tmpdir.chdir()
 
     @pytest.fixture(autouse=True)
+    def empty_graph(self):
+        return GroupGraph()
+
+    @pytest.fixture(autouse=True)
     def basic_graph(self):
-        group_graph = GroupGraph("C":["1", "2"])
+        group_graph = GroupGraph({"C": ["1", "2"]})
         group_graph.add_node("node0", "C")
         group_graph.add_node("node1", "C")
         group_graph.add_edge(("node0", "1"), ("node1", "2"))
@@ -20,7 +24,7 @@ class BaseTest:
 
     @pytest.fixture(autouse=True)
     def single_node_graph(self):
-        group_graph = GroupGraph("C":["1", "2"])
+        group_graph = GroupGraph({"C":["1", "2"]})
         group_graph.add_node("node0", "C")
         return group_graph
 
@@ -44,9 +48,9 @@ class BaseTest:
 
     @pytest.fixture(autouse=True)
     def two_molecule_graph(self, branchy_graph):
-        copy_graph = deepcopy(group_graph)
+        copy_graph = deepcopy(branchy_graph)
         union = nx.operators.union(
-            copy_graph, group_graph, rename=("1", "2")
+            copy_graph, branchy_graph, rename=("1", "2")
         )
         return union
 
