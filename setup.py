@@ -8,17 +8,19 @@ condabase = os.environ['CONDA_PREFIX']
 
 # Define the extension module
 molgrouper_module = Extension(
-    'molGrouper',
+    'molGrouper._molGrouper',
     sources=[
         'molGrouper/dataStructures.cpp',
         'molGrouper/binding.cpp',
+        'molGrouper/processColoredGraphs.cpp',
+        'molGrouper/generate.cpp',
     ],
     include_dirs = [
             os.path.join(condabase, 'include'),
             os.path.join(condabase, "include/cairo"),
             os.path.join(condabase, "include/boost"),
             os.path.join(condabase, "include/rdkit"),
-            #os.path.join(condabase, "include/omp")
+            os.path.join(condabase, "include/omp"),
             pybind11.get_include(),
             pybind11.get_include(user=True),
             'molGrouper',
@@ -35,7 +37,7 @@ molgrouper_module = Extension(
 setup(
     name='molGrouper',
     version='0.1',
-    packages=find_packages('molGrouper'),
+    packages=find_packages(),
     author='Kieran Nehil-Puleo',
     description='A Python package with C++ extensions',
     ext_modules=[molgrouper_module],

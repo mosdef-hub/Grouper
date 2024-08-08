@@ -1,4 +1,4 @@
-from molGrouper.group_graph import GroupGraph
+from molGrouper import GroupGraph
 from itertools import product
 from rdkit import Chem
 from pysmiles import write_smiles

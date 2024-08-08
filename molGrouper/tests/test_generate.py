@@ -1,33 +1,10 @@
 from mbuild.tests.base_test import BaseTest
-from molGrouper.group_graph import GroupGraph
+from molGrouper import GroupGraph
 from molGrouper.generate import generate_group_graph_space
 from pysmiles import write_smiles
 import pytest
 
 class TestGroupGraph(BaseTest):
-
-    @pytest.fixture(autouse=True)
-    def test_creation(self):
-        # Define node types with ports
-        self.node_types = {
-            'NH2': ['N1'], # amine
-            'CO': ['C1', 'C2'], # carbonyl
-            'CC': ['C11', 'C12', 'C21', 'C22'], # alkene
-        }
-        self.node_type_to_smiles = {
-            'NH2': 'N',
-            'CO': 'C=O',
-            'CC': 'C=C',
-        }
-        self.node_port_to_atom_index = {
-            'NH2': {'N1': 0},
-            'CO': {'C1': 0, 'C2': 0},
-            'CC': {'C11': 0, 'C12': 0, 'C21': 1, 'C22': 1},
-        }
-
-        # Create an instance of GroupGraph for testing
-        self.graph = GroupGraph(self.node_types)
-
     def test_chiral_group_graph_generation(self):
         # Define node types with ports
         node_types = {
@@ -42,7 +19,7 @@ class TestGroupGraph(BaseTest):
             'CC': {'C11': 0, 'C12': 0, 'C21': 1, 'C22': 1},
             'OH': {'O1': 0},
         }
-        out = generate_group_graph_space(3, node_types)
+        out = generate_group_graph_space(3, node_types, node_port_to_atom_index)
 
         def check_if_graph_has_ports(graph, ports):
             all_ports = set()

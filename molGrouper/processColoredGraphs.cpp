@@ -14,7 +14,7 @@
 #include <functional>
 #include <unordered_map>
 
-#include "dataStructures.h"
+#include "dataStructures.hpp"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -28,7 +28,7 @@ void get_sensible_port_combos(
     const std::vector<std::pair<int, int>>& edge_list, 
     const std::unordered_map<std::string, std::vector<int>>& node_types,
     std::unordered_set<std::string>& smiles_set, 
-    const bool verbose = false) {
+    const bool verbose) {
         
     if (v.empty()) {
         return;
@@ -87,12 +87,10 @@ void get_sensible_port_combos(
 
 
 std::unordered_set<std::string> process_nauty_output(
-        const std::string& line, 
-        const std::unordered_map<std::string, std::vector<int>>& node_types,
-        const std::unordered_map<std::string, std::vector<int>>& node_int_to_port,
-        bool verbose = false) {
-
-
+    const std::string& line, 
+    const std::unordered_set<GroupGraph::Node>& node_defs,
+    bool verbose
+) {
     std::vector<GroupGraph> group_graphs_list;
     std::unordered_set<std::string> graph_basis;
 
@@ -125,14 +123,23 @@ std::unordered_set<std::string> process_nauty_output(
         colors.push_back(std::stoi(node_description[i]));
     }
 
-    // Actual function starts
-
+    // Actual function starts here
     std::vector<std::pair<int, int>> non_colored_edge_list;
     std::unordered_map<int, std::string> int_to_node_type;
+    std::unordered_map<std::string, std::vector<int>> node_types;
+    std::unordered_map<std::string, std::vector<int>> node_int_to_port;
+    for (const auto& node : node_defs) {
+        node_types[node.ntype] = node.ports;
+    }
     int i = 0;
     for (const auto& [node_type, ports] : node_types) {
         int_to_node_type[i] = node_type;
         i++;
+    }
+    for (const auto& [node_type, ports] : node_types) {
+        for (size_t i = 0; i < ports.size(); ++i) {
+            node_int_to_port[node_type].push_back(i);
+        }
     }
 
     GroupGraph gG;

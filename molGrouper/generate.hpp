@@ -1,0 +1,15 @@
+#pragma once
+
+#include <unordered_set>
+#include <string>
+#include "dataStructures.hpp"
+
+void update_progress(int current, int total);
+
+std::unordered_set<std::string> exhaustiveGenerate(
+    int n_nodes, 
+    std::unordered_set<GroupGraph::Node> node_defs, 
+    std::string input_file_path,
+    int num_procs = 32,
+    bool verbose = false
+);

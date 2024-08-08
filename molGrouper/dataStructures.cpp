@@ -2,8 +2,9 @@
 #include <unordered_map>
 #include <vector>
 #include <stdexcept>
+#include <sstream>
 
-#include "dataStructures.h"
+#include "dataStructures.hpp"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -30,6 +31,48 @@ GroupGraph& GroupGraph::operator=(const GroupGraph& other) {
     return *this;
 }
 
+// Implementation of Node equality operator
+bool GroupGraph::Node::operator==(const Node& other) const {
+    return id == other.id &&
+           ntype == other.ntype &&
+           smiles == other.smiles &&
+           ports == other.ports &&
+           hubs == other.hubs;
+}
+
+bool GroupGraph::operator==(const GroupGraph& other) const {
+    if (nodes.size() != other.nodes.size() || edges.size() != other.edges.size() || nodetypes.size() != other.nodetypes.size()) {
+        return false;
+    }
+
+    // Compare nodes
+    if (nodes != other.nodes) {
+        return false;
+    }
+
+    // Compare edges (order might not matter, so we sort them before comparison)
+    auto sorted_edges = edges;
+    auto sorted_other_edges = other.edges;
+    std::sort(sorted_edges.begin(), sorted_edges.end());
+    std::sort(sorted_other_edges.begin(), sorted_other_edges.end());
+    if (sorted_edges != sorted_other_edges) {
+        return false;
+    }
+
+    // Compare nodetypes
+    if (nodetypes != other.nodetypes) {
+        return false;
+    }
+
+    return true;
+}
+
+// Non-member function to compare tuples (used for sorting edges)
+inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& lhs,
+                      const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& rhs) {
+    return lhs < rhs;
+}
+
 void GroupGraph::addNode( 
     std::string ntype = "", 
     std::string smiles = "", 
@@ -42,47 +85,59 @@ void GroupGraph::addNode(
     if (ntype == "" && smiles == "") {
         throw std::invalid_argument("Either smiles or type must be provided");
     }
-    if (ports.size() == 0) {
-        if (nodetypes.find(ntype) == nodetypes.end() && smiles == "") {
-            throw std::invalid_argument("Node type haven't been defined");
-        }
-        if (nodetypes.find(smiles) == nodetypes.end() && ntype == "") {
-            throw std::invalid_argument("Smiles haven't been defined");
-        }
-    }
-    if (hubs.size() == 0) {
-        if (nodetypes.find(ntype) == nodetypes.end() && smiles == "") {
-            throw std::invalid_argument("Node type haven't been defined");
-        }
-        if (nodetypes.find(smiles) == nodetypes.end() && ntype == "") {
-            throw std::invalid_argument("Smiles haven't been defined");
-        }
-    }
-    if (smiles == "") {
+    else if (ntype != "" && smiles == "") {
         if (nodetypes.find(ntype) != nodetypes.end()) {
+            if (ports.size() == 0) {
+                ports = nodetypes[ntype];
+            }
             if (nodetypes[ntype] != ports) {
                 throw std::invalid_argument("Node type already exists with different ports");
             }
+            id = nodes.size();
         } 
-        if (nodetypes.find(ntype) == nodetypes.end()) {
-            id = nodetypes.size();
+       else {
+            if (ports.size() == 0) {
+                throw std::invalid_argument("Ports and hubs must be provided for new node type");
+            };
+            id = nodes.size();
             nodetypes[ntype] = ports;
         } 
     }
-    if (ntype == "") {
+    else if (ntype == "" && smiles != "") {
         if (nodetypes.find(smiles) != nodetypes.end()) {
             if (nodetypes[smiles] != ports) {
                 throw std::invalid_argument("Smiles already exists with different ports");
             }
+            if (nodetypes[ntype] != ports) {
+                throw std::invalid_argument("Smiles already exists with different ports");
+            }
         }
         else {
-            nodetypes[smiles] = ports;
+            if (ports.size() == 0) {
+                throw std::invalid_argument("Ports and hubs must be provided for new node type");
+            };
             ntype = smiles;
+            nodetypes[ntype] = ports;
         }
         
     }
+    else {
+        if (nodetypes.find(ntype) != nodetypes.end()) {
+            if (ports.size() == 0) {
+                ports = nodetypes[ntype];
+            }
+            if (nodetypes[ntype] != ports) {
+                throw std::invalid_argument("Node type already exists with different ports");
+            }
+        }
+        else {
+            nodetypes[ntype] = ports;
+        }
+        
+    }
+    
     id = nodes.size();
-    nodes[id] = Node{id, ntype, smiles, ports, hubs};
+    nodes[id] = Node(id, ntype, smiles, ports, hubs);
     
 }
 
@@ -93,16 +148,22 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
     PortType toPort = std::get<1>(toNodePort);
 
     if (n_free_ports(from) <= 0) {
-        if (verbose) {
-            std::cout << "Source node doesn't have enough ports!" << std::endl;
-        }
-        return false;
+        throw std::invalid_argument("Source node doesn't have enough ports!");
     }
     if (n_free_ports(to) <= 0) {
-        if (verbose) {
-            std::cout << "Destination node doesn't have enough ports!" << std::endl;
+        throw std::invalid_argument("Destination node doesn't have enough ports!");
+    }
+    const std::tuple<NodeIDType, PortType, NodeIDType, PortType> edge = std::make_tuple(from, fromPort, to, toPort);
+    if (std::find(edges.begin(), edges.end(), edge) != edges.end()) {
+            throw std::invalid_argument("Edge already exists");
+    }
+    for (const auto& existingEdge : edges) {
+        if (std::get<0>(existingEdge) == from && std::get<1>(existingEdge) == fromPort) {
+            throw std::invalid_argument("Source port already in use");
         }
-        return false;
+        if (std::get<2>(existingEdge) == to && std::get<3>(existingEdge) == toPort) {
+            throw std::invalid_argument("Destination port already in use");
+        }
     }
     if (nodes.find(from) == nodes.end() || nodes.find(to) == nodes.end()) {
         throw std::invalid_argument("Node does not exist");
@@ -121,7 +182,7 @@ int GroupGraph::n_free_ports(NodeIDType nodeID) const {
     const Node& node = nodes.at(nodeID);
     int occupied_ports = 0;
     for (const auto& edge : edges) {
-        if (std::get<0>(edge) == nodeID) {
+        if (std::get<0>(edge) == nodeID || std::get<2>(edge) == nodeID) {
             occupied_ports++;
         }
     }
@@ -132,20 +193,22 @@ int GroupGraph::numNodes() const {
     return nodes.size();
 }
 
-void GroupGraph::printGraph() const {
-    std::cout << "Nodes:\n";
+std::string GroupGraph::printGraph() const {
+    std::ostringstream output;
+    output << "Nodes:\n";
     for (const auto& entry : nodes) {
-        std::cout << "NodeType " << entry.first << " (" << entry.second.ntype << ") : Ports ";
+        output << "Node " << entry.first << " (" << entry.second.ntype << ") : Ports ";
         for (PortType port : entry.second.ports) {
-            std::cout << port << " ";
+            output << port << " ";
         }
-        std::cout << "\n";
+        output << "\n";
     }
-
-    std::cout << "Edges:\n";
+    output << "Edges:\n";
     for (const auto& edge : edges) {
-        std::cout << "Edge: " << std::get<0>(edge) << "(" << std::get<1>(edge) << ") -> " << std::get<2>(edge) << "(" << std::get<3>(edge) << ")\n";
+        output << "Edge: " << std::get<0>(edge) << "(" << std::get<1>(edge) << ") -> " 
+               << std::get<2>(edge) << "(" << std::get<3>(edge) << ")";
     }
+    return output.str();
 }
 
 std::string GroupGraph::toSmiles() const {
@@ -211,6 +274,17 @@ std::string GroupGraph::toSmiles() const {
     std::string smiles = RDKit::MolToSmiles(*molecularGraph);
     
     return smiles;
+}
+
+std::unordered_map<std::string, int> GroupGraph::toVector() const {
+    std::unordered_map<std::string, int> hist(nodetypes.size());
+    for (const auto& entry : nodes) {
+        NodeIDType nodeID = entry.first;
+        const Node& node = entry.second;
+        std::string ntype = node.ntype;
+        hist[ntype] += 1;
+    }
+    return hist;
 }
 
 

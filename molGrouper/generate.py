@@ -2,7 +2,7 @@ import typing as t
 import pathlib
 import os
 import subprocess
-from molGrouper.group_graph import GroupGraph
+from molGrouper import GroupGraph
 import rdkit.Chem
 from tqdm import tqdm
 from molGrouper.utils import multi_to_pair

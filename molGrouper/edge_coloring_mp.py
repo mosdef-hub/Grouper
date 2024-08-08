@@ -10,8 +10,8 @@ import pathlib
 from glob import glob
 import os
 
-from molGrouper.group_graph import GroupGraph
-from molGrouper.utils import convert_edges_to_nodetype
+from molGrouper import GroupGraph
+# from molGrouper.utils import convert_edges_to_nodetype
 
 
 # def worker(line, node_types, int_to_node_type, node_int_to_port, verbose):
