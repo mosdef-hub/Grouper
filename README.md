@@ -106,9 +106,11 @@ group_graph.add_node('nitrogen') # Once the type of the node has been specified 
 group_graph.add_node(type = '', smiles = 'N', ports = [0,1,2], hubs = [0,0,0]) # Alternatively we can just use the smiles
 
 # Adding edges
-group_graph.add_edge(src = (0,0), dst = (1,0))
+group_graph.add_edge(src = (0,0), dst = (1,0)) # In the format ((nodeID, srcPort), (nodeID, dstPort))
 group_graph.add_edge(src = (1,1), dst = (2,0))
 group_graph.add_edge(src = (2,1), dst = (0,1))
+
+print(group_graph)
 """
 Will make 
       N
@@ -162,11 +164,20 @@ mol_G = g.to_molecular_graph(
 )
 ```
 
-### Molecular graph to SMILES
+### Group graph to SMILES
 ```python
-from pysmiles import write_smiles
+from genGrouper import GroupGraph
 
-write_smiles(mol_G)
+group_graph = GroupGraph()
+
+group_graph.add_node(type = 'nitrogen', smiles = 'N', ports = [0,1,2], hubs = [0,0,0])
+group_graph.add_node('nitrogen') 
+group_graph.add_node(type = '', smiles = 'N', ports = [0,1,2], hubs = [0,0,0])
+group_graph.add_edge(src = (0,0), dst = (1,0))
+group_graph.add_edge(src = (1,1), dst = (2,0))
+group_graph.add_edge(src = (2,1), dst = (0,1))
+
+smiles = group_graph.to_smiles()
 ```
 
 
