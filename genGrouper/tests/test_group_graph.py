@@ -164,6 +164,20 @@ class TestGroupGraph(BaseTest):
         assert graph.n_free_ports(0) == 1
         assert graph.n_free_ports(1) == 2
 
+    @pytest.mark.parametrize("graph_fixture", ["empty_graph", "basic_graph", "single_node_graph", "single_edge_graph", "five_member_ring_graph"])
+    def test_to_smiles(self, request, graph_fixture):
+        graph = request.getfixturevalue(graph_fixture)
+        if graph_fixture == "empty_graph":
+            assert graph.to_smiles() == ''
+        if graph_fixture == "basic_graph":
+            assert graph.to_smiles() == 'CN'
+        if graph_fixture == "single_node_graph":
+            assert graph.to_smiles() == 'C'
+        if graph_fixture == "single_edge_graph":
+            assert graph.to_smiles() == 'CC'
+        if graph_fixture == "five_member_ring_graph":
+            assert graph.to_smiles() == 'C1CCCC1'
+        
     def test_chiral_smiles_conversion(self):
         # Define node types with ports
         node_types = {

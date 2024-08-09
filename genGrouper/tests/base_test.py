@@ -27,6 +27,29 @@ class BaseTest:
         group_graph = GroupGraph()
         group_graph.add_node("node0", "C", [0,1,2,3], [0,0,0,0])
         return group_graph
+    
+    @pytest.fixture(autouse=True)
+    def single_edge_graph(self):
+        group_graph = GroupGraph()
+        group_graph.add_node("node0", "C", [0,1,2,3], [0,0,0,0])
+        group_graph.add_node("node1", "C", [0,1,2,3], [0,0,0,0])
+        group_graph.add_edge((0, 0), (1, 0))
+        return group_graph
+    
+    @pytest.fixture(autouse=True)
+    def five_member_ring_graph(self):
+        group_graph = GroupGraph()
+        group_graph.add_node("node0", "C", [0,1,2,3], [0,0,0,0])
+        group_graph.add_node("node1", "C", [0,1,2,3], [0,0,0,0])
+        group_graph.add_node("node2", "C", [0,1,2,3], [0,0,0,0])
+        group_graph.add_node("node3", "C", [0,1,2,3], [0,0,0,0])
+        group_graph.add_node("node4", "C", [0,1,2,3], [0,0,0,0])
+        group_graph.add_edge((0, 0), (1, 1))
+        group_graph.add_edge((1, 0), (2, 1))
+        group_graph.add_edge((2, 0), (3, 1))
+        group_graph.add_edge((3, 0), (4, 1))
+        group_graph.add_edge((4, 0), (0, 1))
+        return group_graph
 
     # @pytest.fixture(autouse=True)
     # def long_graph(self):
