@@ -8,7 +8,7 @@ condabase = os.environ['CONDA_PREFIX']
 
 # Define the extension module
 molgrouper_module = Extension(
-    'genGrouper._molGrouper',
+    'genGrouper._genGrouper',
     sources=[
         'genGrouper/dataStructures.cpp',
         'genGrouper/binding.cpp',

@@ -6,7 +6,7 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(_molGrouper, m) {
+PYBIND11_MODULE(_genGrouper, m) {
     m.doc() = "genGrouper bindings for Python";
 
     // Bind the GroupGraph::Node class
