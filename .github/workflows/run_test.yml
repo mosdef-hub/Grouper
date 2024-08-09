@@ -23,17 +23,15 @@ jobs:
     - name: Setup micromamba
       uses: mamba-org/setup-micromamba@v1
       with:
-        create-args: >- # beware the >- instead of |, we don't split on newlines but on spaces
+        create-args: >- 
           -n test-env
           python=3.9
 
     - name: Install dependencies
-      run: micromamba install librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11
+      run: micromamba install -n test-env librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 pytest
 
     - name: Install package
-      run: pip install .
-      shell: micromamba-shell {0}
+      run: micromamba run -n test-env pip install .
 
     - name: Run tests with pytest
-      run: pytest genGrouper/tests
-      shell: micromamba-shell {0}
+      run: micromamba run -n test-env pytest genGrouper/tests
