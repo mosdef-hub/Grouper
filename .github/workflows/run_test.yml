@@ -24,7 +24,7 @@ jobs:
       uses: mamba-org/setup-micromamba@v1
       with:
         create-args: >- 
-          -n test-env
+          --name test-env
           python=3.9
 
     - name: Install dependencies
