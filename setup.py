@@ -31,8 +31,8 @@ molgrouper_module = Extension(
     ],
     libraries = ['RDKitFileParsers', 'RDKitSmilesParse', 'RDKitGraphMol', 'RDKitRDGeneral', 'omp'],
     extra_compile_args = ['-Xpreprocessor', '-fopenmp', '-std=c++17' ], # '-mmacosx-version-min=10.13'
-    language='c++',
-    extra_link_args=['-Wl'])
+    language='c++')
+    # extra_link_args=['-Wl'])
 
 setup(
     name='genGrouper',
