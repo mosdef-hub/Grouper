@@ -40,6 +40,32 @@ std::unordered_set<std::string> exhaustiveGenerate(
     int num_procs = 32,
     bool verbose = false
 ) {
+    // Error handling
+
+    if (n_nodes < 1) {
+        throw std::invalid_argument("Number of nodes must be greater than 0...");
+    }
+    if (node_defs.size() < 1) {
+        throw std::invalid_argument("Node definitions must not be empty...");
+    }
+    if (input_file_path.empty()) {
+        throw std::invalid_argument("Input file path must not be empty...");
+    }
+    if (num_procs < 1) {
+        throw std::invalid_argument("Number of processors must be greater than 0...");
+    }
+    if (num_procs > omp_get_max_threads()) {
+        throw std::invalid_argument("Number of processors must not exceed the maximum number of threads...");
+    }
+    if (verbose) {
+        std::cout << "Number of nodes: " << n_nodes << std::endl;
+        std::cout << "Number of node definitions: " << node_defs.size() << std::endl;
+        std::cout << "Input file path: " << input_file_path << std::endl;
+        std::cout << "Number of processors: " << num_procs << std::endl;
+    }
+
+
+    // Read the input file
     std::ifstream input_file(input_file_path);
     if (!input_file.is_open()) {
         throw std::runtime_error("Error opening input file...");
@@ -60,6 +86,10 @@ std::unordered_set<std::string> exhaustiveGenerate(
     std::cout << "Processing " << total_lines << " lines..." << std::endl;
 
     input_file.close(); // Close the input file as it's no longer needed
+
+    if (total_lines == 0) {
+        throw std::runtime_error("No lines found in input file...");
+    }
 
     std::unordered_set<std::string> smiles_basis;
 

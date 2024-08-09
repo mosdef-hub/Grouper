@@ -40,8 +40,9 @@ void get_sensible_port_combos(
     // Calculate the total size of the Cartesian product
     auto size = std::accumulate(v.begin(), v.end(), 1,
                                 [](size_t s, const std::vector<std::pair<int, int>>& sub) { return s * sub.size(); });
-
-    std::cout << "\nSize of Cartesian product: " << size << std::endl;
+    if (verbose) {
+        std::cout << "\nSize of Cartesian product: " << size << std::endl;
+    }
 
     // Initialize counters for each vector of pairs
     std::vector<size_t> counters(v.size(), 0);
@@ -68,6 +69,7 @@ void get_sensible_port_combos(
 
             // Convert to hash
             smiles_set.insert(smiles);
+            std::cout << smiles << std::endl;
         } 
         catch (const std::exception& e) {
             if (verbose) {
@@ -116,12 +118,23 @@ std::unordered_set<std::string> process_nauty_output(
         edge_list.emplace_back(std::stoi(edge_description[i]), std::stoi(edge_description[i + 1]));
     }
 
+    
+
     int n_vertices = std::stoi(node_description[0]);
     int n_edges = std::stoi(node_description[1]);
     std::vector<int> colors;
     for (size_t i = 2; i < node_description.size(); ++i) {
         colors.push_back(std::stoi(node_description[i]));
     }
+
+    // Error checking
+    for (const auto& color : colors) {
+        std::cout << color << " ";
+    }
+    if (node_defs.size() < static_cast<size_t>(*std::max_element(colors.begin(), colors.end()) + 1)) {
+        throw std::runtime_error("Number of nodes in node_defs does not match the number of nodes in the nauty_output_file...");
+    }
+
 
     // Actual function starts here
     std::vector<std::pair<int, int>> non_colored_edge_list;
@@ -141,6 +154,7 @@ std::unordered_set<std::string> process_nauty_output(
             node_int_to_port[node_type].push_back(i);
         }
     }
+
 
     GroupGraph gG;
     for (int i = 0; i < n_vertices; ++i) {
@@ -182,8 +196,8 @@ std::unordered_set<std::string> process_nauty_output(
 
     // Generate and filter port combinations
     get_sensible_port_combos(
-        edge_colors, 
-        gG, 
+        edge_colors,
+        gG,
         non_colored_edge_list, 
         node_types, 
         graph_basis,
