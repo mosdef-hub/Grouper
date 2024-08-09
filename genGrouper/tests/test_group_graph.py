@@ -177,6 +177,18 @@ class TestGroupGraph(BaseTest):
             assert graph.to_smiles() == 'CC'
         if graph_fixture == "five_member_ring_graph":
             assert graph.to_smiles() == 'C1CCCC1'
+
+        graph = GroupGraph()
+        print(graph)
+        graph.add_node('benzene', 'c1ccccc1', [0,1,2,3,4,5], [0,1,2,3,4,5])
+        assert graph.to_smiles() == 'C1=CC=CC=C1' or graph.to_smiles() == 'c1ccccc1'
+        graph.add_node('benzene', 'C1=CC=CC=C1', [0,1,2,3,4,5], [0,1,2,3,4,5])
+        graph.add_node('benzene', 'C1=CC=CC=C1', [0,1,2,3,4,5], [0,1,2,3,4,5])
+        graph.add_node('benzene', 'C1=CC=CC=C1', [0,1,2,3,4,5], [0,1,2,3,4,5])
+        graph.add_edge((0, 2), (3, 5))
+        graph.add_edge((1, 0), (3, 0))
+        graph.add_edge((2, 1), (3, 3))
+        assert graph.to_smiles() == 'c1ccc(-c2ccc(-c3ccccc3)c(-c3ccccc3)c2)cc1'
         
     def test_chiral_smiles_conversion(self):
         # Define node types with ports

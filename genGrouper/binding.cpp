@@ -53,7 +53,8 @@ PYBIND11_MODULE(_genGrouper, m) {
     m.def("exhaustive_generate", &exhaustiveGenerate, 
         py::arg("n_nodes"), 
         py::arg("node_defs"), 
-        py::arg("input_file_path"), 
+        py::arg("nauty_path"),
+        py::arg("input_file_path") = "", 
         py::arg("num_procs") = 32, 
         py::arg("verbose") = false);
 }

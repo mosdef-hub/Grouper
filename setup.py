@@ -39,7 +39,7 @@ setup(
     version='0.1',
     packages=find_packages(),
     author='Kieran Nehil-Puleo',
-    description='A Python package with C++ extensions',
+    description='A package for working with group graphs',
     ext_modules=[molgrouper_module],
     cmdclass={
         build_ext: build_ext

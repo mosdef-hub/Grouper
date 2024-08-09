@@ -17,8 +17,8 @@ class BaseTest:
     @pytest.fixture(autouse=True)
     def basic_graph(self):
         group_graph = GroupGraph()
-        group_graph.add_node( "C", ports = [0,1], hubs = [0,0])
-        group_graph.add_node( "N", ports = [0,1], hubs = [0,0])
+        group_graph.add_node('', "C", ports = [0,1,2,3], hubs = [0,0,0,0])
+        group_graph.add_node('', "N", ports = [0,1,2], hubs = [0,0,0])
         group_graph.add_edge((0, 0), (1, 0))
         return group_graph
 

@@ -3,6 +3,7 @@
 #include <vector>
 #include <stdexcept>
 #include <sstream>
+#include <cstring>
 
 #include "dataStructures.hpp"
 
@@ -116,7 +117,7 @@ void GroupGraph::addNode(
             if (ports.size() == 0) {
                 throw std::invalid_argument("Ports and hubs must be provided for new node type");
             };
-            ntype = smiles;
+            ntype = smiles.c_str();
             nodetypes[ntype] = ports;
         }
         
@@ -197,16 +198,21 @@ std::string GroupGraph::printGraph() const {
     std::ostringstream output;
     output << "Nodes:\n";
     for (const auto& entry : nodes) {
-        output << "Node " << entry.first << " (" << entry.second.ntype << ") : Ports ";
+        output << "    Node " << entry.first << " (" << entry.second.ntype << ") (" << entry.second.smiles << ") ";
+        output<< ": \n        Ports ";
         for (PortType port : entry.second.ports) {
             output << port << " ";
+        }
+        output << "\n        Hubs  ";
+        for (NodeIDType hub : entry.second.hubs) {
+            output << hub << " ";
         }
         output << "\n";
     }
     output << "Edges:\n";
     for (const auto& edge : edges) {
-        output << "Edge: " << std::get<0>(edge) << "(" << std::get<1>(edge) << ") -> " 
-               << std::get<2>(edge) << "(" << std::get<3>(edge) << ")";
+        output << "    Edge: " << std::get<0>(edge) << "(" << std::get<1>(edge) << ") -> " 
+               << std::get<2>(edge) << "(" << std::get<3>(edge) << ")\n";
     }
     return output.str();
 }
@@ -220,13 +226,14 @@ std::string GroupGraph::toSmiles() const {
         NodeIDType nodeID = entry.first;
         const Node& node = entry.second;
         std::string smiles = entry.second.smiles;
-        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmilesToMol(smiles));
+        std::unique_ptr<RDKit::RWMol> subGraph(RDKit::SmilesToMol(smiles));
         nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
         for (size_t i = 0; i < node.ports.size(); ++i) {
             nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
         }
         atomCount += subGraph->getNumAtoms();
     }
+
 
     int atomId = -1;
     std::unordered_map<std::string, std::unordered_map<int, int>> nodeSubGraphIndicesToMolecularGraphIndices;
@@ -241,6 +248,7 @@ std::string GroupGraph::toSmiles() const {
             nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
         }
     }
+
 
     atomId = -1;
     for (const auto& entry : nodes) {
@@ -261,6 +269,7 @@ std::string GroupGraph::toSmiles() const {
         }
     }
 
+
     for (const auto& edge : edges) {
         NodeIDType from = std::get<0>(edge);
         PortType fromPort = std::get<1>(edge);
@@ -268,12 +277,11 @@ std::string GroupGraph::toSmiles() const {
         PortType toPort = std::get<3>(edge);
         int fromAtom = nodePortToAtomIndex[std::to_string(from)][fromPort];
         int toAtom = nodePortToAtomIndex[std::to_string(to)][toPort];
+
         molecularGraph->addBond(fromAtom, toAtom, RDKit::Bond::SINGLE);
     }
-
-    std::string smiles = RDKit::MolToSmiles(*molecularGraph);
     
-    return smiles;
+    return RDKit::MolToSmiles(*molecularGraph);
 }
 
 std::unordered_map<std::string, int> GroupGraph::toVector() const {

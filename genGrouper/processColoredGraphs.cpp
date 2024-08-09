@@ -29,6 +29,7 @@ void get_sensible_port_combos(
     const std::unordered_map<std::string, std::vector<int>>& node_types,
     std::unordered_set<std::string>& smiles_set, 
     const bool verbose) {
+
         
     if (v.empty()) {
         return;
@@ -65,11 +66,8 @@ void get_sensible_port_combos(
 
             // convert to smiles
             smiles = temp_gG.toSmiles();
-            // smiles = "CO"; // For testing purposes
-
             // Convert to hash
             smiles_set.insert(smiles);
-            std::cout << smiles << std::endl;
         } 
         catch (const std::exception& e) {
             if (verbose) {
@@ -93,6 +91,7 @@ std::unordered_set<std::string> process_nauty_output(
     const std::unordered_set<GroupGraph::Node>& node_defs,
     bool verbose
 ) {
+
     std::vector<GroupGraph> group_graphs_list;
     std::unordered_set<std::string> graph_basis;
 
@@ -128,9 +127,9 @@ std::unordered_set<std::string> process_nauty_output(
     }
 
     // Error checking
-    for (const auto& color : colors) {
-        std::cout << color << " ";
-    }
+    // for (const auto& color : colors) {
+    //     std::cout << color << " ";
+    // }
     if (node_defs.size() < static_cast<size_t>(*std::max_element(colors.begin(), colors.end()) + 1)) {
         throw std::runtime_error("Number of nodes in node_defs does not match the number of nodes in the nauty_output_file...");
     }
@@ -140,25 +139,36 @@ std::unordered_set<std::string> process_nauty_output(
     std::vector<std::pair<int, int>> non_colored_edge_list;
     std::unordered_map<int, std::string> int_to_node_type;
     std::unordered_map<std::string, std::vector<int>> node_types;
-    std::unordered_map<std::string, std::vector<int>> node_int_to_port;
+    std::unordered_map<std::string, std::vector<int>> node_type_to_hub;
+    std::unordered_map<int, std::string> int_to_smiles;
+    std::unordered_map<std::string, std::string> type_to_smiles;
+
     for (const auto& node : node_defs) {
         node_types[node.ntype] = node.ports;
+        type_to_smiles[node.ntype] = node.smiles;
     }
+
+    for (const auto& node: node_defs) {
+
+    }
+    for (const auto& node: node_defs) {
+        for (const auto& h : node.hubs) {
+            node_type_to_hub[node.ntype].push_back(h);
+        }
+    }
+
     int i = 0;
     for (const auto& [node_type, ports] : node_types) {
         int_to_node_type[i] = node_type;
+        int_to_smiles[i] = type_to_smiles[node_type];
         i++;
     }
-    for (const auto& [node_type, ports] : node_types) {
-        for (size_t i = 0; i < ports.size(); ++i) {
-            node_int_to_port[node_type].push_back(i);
-        }
-    }
+
 
 
     GroupGraph gG;
     for (int i = 0; i < n_vertices; ++i) {
-        gG.addNode(std::to_string(i), "", node_types.at(int_to_node_type.at(colors[i])), node_int_to_port.at(int_to_node_type.at(colors[i])));
+        gG.addNode(int_to_node_type.at(colors[i]), int_to_smiles.at(colors[i]), node_types.at(int_to_node_type.at(colors[i])), node_type_to_hub.at(int_to_node_type.at(colors[i])));
     }
 
     std::map<int, std::vector<std::pair<int, int>>> edge_index_to_edge_color;
@@ -193,6 +203,7 @@ std::unordered_set<std::string> process_nauty_output(
     for (const auto& [index, port_combinations] : edge_index_to_edge_color) {
         edge_colors.push_back(port_combinations);
     }
+
 
     // Generate and filter port combinations
     get_sensible_port_combos(

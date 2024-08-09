@@ -36,7 +36,8 @@ void update_progress(int current, int total) {
 std::unordered_set<std::string> exhaustiveGenerate(
     int n_nodes, 
     std::unordered_set<GroupGraph::Node> node_defs, 
-    std::string input_file_path,
+    std::string nauty_path,
+    std::string input_file_path = "",
     int num_procs = 32,
     bool verbose = false
 ) {
@@ -47,9 +48,6 @@ std::unordered_set<std::string> exhaustiveGenerate(
     }
     if (node_defs.size() < 1) {
         throw std::invalid_argument("Node definitions must not be empty...");
-    }
-    if (input_file_path.empty()) {
-        throw std::invalid_argument("Input file path must not be empty...");
     }
     if (num_procs < 1) {
         throw std::invalid_argument("Number of processors must be greater than 0...");
@@ -64,6 +62,19 @@ std::unordered_set<std::string> exhaustiveGenerate(
         std::cout << "Number of processors: " << num_procs << std::endl;
     }
 
+    if (input_file_path.empty()) {
+        // Call nauty
+        std::string geng_command = nauty_path + "/geng " + std::to_string(n_nodes) + " -ctf > geng_out.txt";
+        std::string vcolg_command = nauty_path + "/vcolg geng_out.txt -T -m" + std::to_string(node_defs.size()) + " > vcolg_out.txt";
+
+        if (verbose) {
+            std::cout << "Calling geng..." << std::endl;
+        }
+        system(geng_command.c_str());
+        system(vcolg_command.c_str());
+    }
+
+    input_file_path = input_file_path.empty() ? "vcolg_out.txt" : input_file_path;
 
     // Read the input file
     std::ifstream input_file(input_file_path);
