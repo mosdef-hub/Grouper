@@ -10,7 +10,7 @@ on:
 
 jobs:
   test:
-    runs-on: macOS
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
