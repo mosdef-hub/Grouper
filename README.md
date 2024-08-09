@@ -131,7 +131,7 @@ node_defs.add(Node(2, 'oxygen', 'O', [0,1], [0,0]))
 node_defs.add(Node(3, 'benzene', 'c1ccccc1', [0,1,2,3,4,5], [0,1,2,3,4,5]))
 
 # Call method to enumerate possibilities
-exhaustive_generate(
+exhausted_space = exhaustive_generate(
     n_nodes = 4, 
     node_defs = node_defs, 
     input_file_path = '',
