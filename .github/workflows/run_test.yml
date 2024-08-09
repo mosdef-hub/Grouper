@@ -28,12 +28,12 @@ jobs:
           python=3.9
 
     - name: Install dependencies
-      run: micromamba install --file environment.yml --yes
+      run: micromamba install librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11
 
     - name: Install package
-      run: pip install -e .
+      run: pip install .
       shell: micromamba-shell {0}
 
     - name: Run tests with pytest
-      run: pytest
+      run: pytest genGrouper/tests
       shell: micromamba-shell {0}
