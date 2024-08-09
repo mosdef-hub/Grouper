@@ -27,7 +27,10 @@ jobs:
         create-args: python=3.9
 
     - name: Install dependencies
-      run: micromamba install -n test-env librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 pytest libgomp -y
+      run: micromamba install -n test-env librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 pytest lllvm-openmp -y
+  
+    - name: List libraries in test-env
+      run: ls $CONDA_PREFIX/envs/test-env/lib
 
     - name: Install package
       run: micromamba run -n test-env pip install .
