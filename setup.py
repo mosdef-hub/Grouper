@@ -30,7 +30,7 @@ molgrouper_module = Extension(
             os.path.join(condabase, "lib/cairo")
     ],
     libraries = ['RDKitFileParsers', 'RDKitSmilesParse', 'RDKitGraphMol', 'RDKitRDGeneral', 'omp'],
-    extra_compile_args = ['-Xpreprocessor', '-fopenmp', '-std=c++17', '-mmacosx-version-min=10.13'],
+    extra_compile_args = ['-Xpreprocessor', '-fopenmp', '-std=c++17' ], # '-mmacosx-version-min=10.13'
     language='c++',
     extra_link_args=['-Wl'])
 

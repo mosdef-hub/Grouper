@@ -27,7 +27,7 @@ jobs:
         create-args: python=3.9
 
     - name: Install dependencies
-      run: micromamba install -n test-env librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 pytest
+      run: micromamba install -n test-env librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 pytest -y
 
     - name: Install package
       run: micromamba run -n test-env pip install .
