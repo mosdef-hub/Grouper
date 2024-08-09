@@ -82,7 +82,8 @@ cd genGrouper
 ```
 2. Install with `pip`
 ```python
-pip install .
+python setup.py build_ext --inplace
+python setup.py install
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -93,33 +94,50 @@ pip install .
 
 ### Group graph initalization
 ```python
-node_types = {
-    'N': ['N1'], # amine
-    'CO': ['C1', 'C2'], # carbonyl
-    'CC': ['C11', 'C12', 'C21', 'C22'], # alkene
-    'C': ['C1'], # alkane
-}
+from genGrouper import GroupGraph
 
+group_graph = GroupGraph()
 
-groupG = GroupGraph(node_types)
-groupG.add_node('node1', 'N')
-groupG.add_node('node2', 'CC')
+# Adding nodes
+group_graph.add_node(type = 'nitrogen', smiles = 'N', ports = [0,1,2], hubs = [0,0,0])
 
-groupG.add_edge('node1', 'N1', 'node2', 'C12')
+group_graph.add_node('nitrogen') # Once the type of the node has been specified we can use it again
+
+group_graph.add_node(type = '', smiles = 'N', ports = [0,1,2], hubs = [0,0,0]) # Alternatively we can just use the smiles
+
+# Adding edges
+group_graph.add_edge(src = (0,0), dst = (1,0))
+group_graph.add_edge(src = (1,1), dst = (2,0))
+group_graph.add_edge(src = (2,1), dst = (0,1))
+"""
+Will make 
+      N
+     / \
+    N - N
+"""
+
 ```
 
-### Exhaustive molecular space generation
+### Exhaustive chemical space generation
 ```python
-node_types = {
-    'N': ['N1'], # amine
-    'CO': ['C1', 'C2'], # carbonyl
-    'CC': ['C11', 'C12', 'C21', 'C22'], # alkene
-    'C': ['C1', "C2", "C3", "C4"], # alkane
-}
+import genGrouper
+from genGrouper import Node, GroupGraph, exhaustive_generate
 
-group_graph_space = generate_group_graph_space(
-  n_nodes = 4, # number of groups to combine
-  node_types = node_types
+node_defs = set()
+# Define out node types that we will use to built our chemistries
+node_defs.add(Node(0, 'nitrogen', 'N', [0,1,2], [0,0,0]))
+node_defs.add(Node(1, 'carbon', 'C', [0,1,2,3], [0,0,0,0]))
+node_defs.add(Node(2, 'oxygen', 'O', [0,1], [0,0]))
+node_defs.add(Node(3, 'benzene', 'c1ccccc1', [0,1,2,3,4,5], [0,1,2,3,4,5]))
+
+# Call method to enumerate possibilities
+exhaustive_generate(
+    n_nodes = 4, 
+    node_defs = node_defs, 
+    input_file_path = '',
+    nauty_path = '/path/to/nauty_X_X_X',
+    num_procs = 4, 
+    verbose = False
 )
 ```
 
