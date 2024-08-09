@@ -33,7 +33,7 @@ jobs:
       run: ls /home/runner/micromamba/envs/test-env/lib | grep omp
 
     - name: Install package
-      run: micromamba run -n test-env pip install .
+      run: micromamba run -n test-env python setup.py build_ext --inplace;micromamba run -n test-env pip install .
 
     - name: Run tests with pytest
       run: micromamba run -n test-env pytest genGrouper/tests
