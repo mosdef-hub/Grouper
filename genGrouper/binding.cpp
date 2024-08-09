@@ -35,8 +35,8 @@ PYBIND11_MODULE(_genGrouper, m) {
              py::arg("ports") = std::vector<int>{}, 
              py::arg("hubs") = std::vector<int>{})
         .def("add_edge", &GroupGraph::addEdge, 
-             py::arg("from") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0}, 
-             py::arg("to") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
+             py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0}, 
+             py::arg("dst") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
              py::arg("verbose") = false)
         .def("n_nodes", &GroupGraph::numNodes)
         .def("n_free_ports", &GroupGraph::n_free_ports)
