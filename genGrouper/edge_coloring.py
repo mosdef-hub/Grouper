@@ -1,4 +1,4 @@
-from molGrouper import GroupGraph
+from genGrouper import GroupGraph
 from itertools import product
 from rdkit import Chem
 from pysmiles import write_smiles
@@ -108,7 +108,7 @@ if __name__ == "__main__":
         'amine3': {'N1': 1},
     }
 
-    out = process_nauty_vcolg_output('/Users/kieran/projects/molGrouper/molGrouper/vcolg_foo.txt', node_types, verbose=False)
+    out = process_nauty_vcolg_output('/Users/kieran/projects/genGrouper/genGrouper/vcolg_foo.txt', node_types, verbose=False)
 
     unique_mols = set()
     groupGraphs = []

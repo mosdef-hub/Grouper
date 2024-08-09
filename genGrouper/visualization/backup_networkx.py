@@ -11,7 +11,7 @@ def nx_visualize(group_graph, layout=nx.spring_layout, **kwargs):
 
 	Parameters
 	---------
-	group_graph : molGrouper.GroupGraph
+	group_graph : genGrouper.GroupGraph
 		The group graph to plot. Will size the canvas based on the size of the group graph.
 		Labels will be placed on each node based on the "type" of the node.
 	layout : function, optional, default nx.spring_layout

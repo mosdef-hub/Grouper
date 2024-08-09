@@ -1,6 +1,6 @@
 from mbuild.tests.base_test import BaseTest
-from molGrouper import GroupGraph
-from molGrouper.generate import generate_group_graph_space
+from genGrouper import GroupGraph
+from genGrouper.generate import generate_group_graph_space
 from pysmiles import write_smiles
 import pytest
 

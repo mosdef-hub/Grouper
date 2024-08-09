@@ -25,7 +25,7 @@ def multi_to_pair(multi: int, max_multi: int) -> t.Tuple[int, int]:
     
 
 def run_performance_eval(
-        nauty_path: str = "/Users/kieran/projects/molGrouper/packages/nauty2_8_8", 
+        nauty_path: str = "/Users/kieran/projects/genGrouper/packages/nauty2_8_8", 
         n_runs: int = 3, 
         max_nodes: int = 6,
         max_ports: int = 4,
@@ -33,11 +33,11 @@ def run_performance_eval(
         verbose: bool = False
 ):
     """
-    Run performance evaluation of the molGrouper generation featrure with growing sized graphs.
+    Run performance evaluation of the genGrouper generation featrure with growing sized graphs.
     """
     import os
     import time
-    from molGrouper.edge_coloring import process_nauty_vcolg_output
+    from genGrouper.edge_coloring import process_nauty_vcolg_output
     import random
 
     max_nodes = list(range(2, max_nodes))
@@ -47,11 +47,11 @@ def run_performance_eval(
     for n in max_nodes:
         total_time = 0
         for i in range(n_runs):
-            os.system(f"{nauty_path}/geng {n} -ctf > /Users/kieran/projects/molGrouper/geng_out.txt")
-            os.system(f"{nauty_path}/vcolg /Users/kieran/projects/molGrouper/geng_out.txt -T -m{n_colors} > vcolg_out.txt")
+            os.system(f"{nauty_path}/geng {n} -ctf > /Users/kieran/projects/genGrouper/geng_out.txt")
+            os.system(f"{nauty_path}/vcolg /Users/kieran/projects/genGrouper/geng_out.txt -T -m{n_colors} > vcolg_out.txt")
             # time the edge_coloring.py
             start = time.time()
-            out = process_nauty_vcolg_output('/Users/kieran/projects/molGrouper/vcolg_out.txt', node_types, verbose=False)
+            out = process_nauty_vcolg_output('/Users/kieran/projects/genGrouper/vcolg_out.txt', node_types, verbose=False)
             end = time.time()
             total_time += end - start
         print(f"Average time for {n} nodes: {total_time/n_runs}")

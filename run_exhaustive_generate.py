@@ -1,5 +1,5 @@
-from molGrouper.edge_coloring_mp import process_nauty_vcolg_mp
-from molGrouper.generate import _call_geng, _call_vcolg
+from genGrouper.edge_coloring_mp import process_nauty_vcolg_mp
+from genGrouper.generate import _call_geng, _call_vcolg
 import time
 from rdkit import Chem
 from pysmiles import write_smiles

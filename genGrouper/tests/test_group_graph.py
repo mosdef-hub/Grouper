@@ -1,7 +1,7 @@
-from molGrouper import GroupGraph
-from molGrouper.io import has_mbuild, has_torch
-from molGrouper.post_process import substitute_chiral_smiles
-from molGrouper.tests.base_test import BaseTest
+from genGrouper import GroupGraph
+from genGrouper.io import has_mbuild, has_torch
+from genGrouper.post_process import substitute_chiral_smiles
+from genGrouper.tests.base_test import BaseTest
 from group_selfies import Group
 import networkx as nx
 from pysmiles import write_smiles

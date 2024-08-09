@@ -1,4 +1,4 @@
-name: molGrouper
+name: genGrouper
 channels:
   - pytorch
   - conda-forge
@@ -165,4 +165,4 @@ dependencies:
       - torch-geometric
       - tqdm==4.66.1
       - pysmiles
-prefix: /Users/kieran/miniconda3/envs/molGrouper
+prefix: /Users/kieran/miniconda3/envs/genGrouper

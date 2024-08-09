@@ -2,8 +2,8 @@ import pytest
 
 import networkx as nx
 import numpy as np
-from molGrouper import GroupGraph
-from molGrouper.tests.base_test import BaseTest
+from genGrouper import GroupGraph
+from genGrouper.tests.base_test import BaseTest
 from group_selfies import Group
 
 class TestGroupGraph(BaseTest):

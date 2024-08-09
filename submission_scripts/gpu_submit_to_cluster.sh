@@ -17,7 +17,7 @@ source /raid6/homes/kierannp/.bashrc
 module load anaconda/3.9
 conda activate molGPU
 
-cd /raid6/homes/kierannp/foo/gpufoo/molGrouper/molGrouper/cpp_code/rdkit_gpu
+cd /raid6/homes/kierannp/foo/gpufoo/genGrouper/genGrouper/cpp_code/rdkit_gpu
 
 rm -rf build
 mkdir build

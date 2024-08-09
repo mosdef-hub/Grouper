@@ -55,7 +55,7 @@ int main() {
         {"CC", "C=C"}
     };
 
-    std::ifstream input_file("/raid6/homes/kierannp/foo/gpufoo/molGrouper/molGrouper/cpp_code/rdkit_cpu/vcolg_out.txt");
+    std::ifstream input_file("/raid6/homes/kierannp/foo/gpufoo/genGrouper/genGrouper/cpp_code/rdkit_cpu/vcolg_out.txt");
     if (!input_file.is_open()) {
         std::cerr << "Error opening input file." << std::endl;
         return 1;

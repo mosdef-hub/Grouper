@@ -1,7 +1,7 @@
 import pytest
 from copy import deepcopy
 
-from molGrouper import GroupGraph
+from genGrouper import GroupGraph
 from group_selfies import Group
 import networkx as nx
 
