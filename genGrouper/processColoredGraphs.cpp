@@ -48,7 +48,7 @@ void get_sensible_port_combos(
     // Initialize counters for each vector of pairs
     std::vector<size_t> counters(v.size(), 0);
 
-    for (size_t i = 0; i < size; ++i) {
+    for (auto i = 0; i < size; ++i) {
         std::vector<std::pair<int, int>> combination;
 
         for (size_t j = 0; j < v.size(); ++j) {
@@ -120,7 +120,7 @@ std::unordered_set<std::string> process_nauty_output(
     
 
     int n_vertices = std::stoi(node_description[0]);
-    int n_edges = std::stoi(node_description[1]);
+    // int n_edges = std::stoi(node_description[1]);
     std::vector<int> colors;
     for (size_t i = 2; i < node_description.size(); ++i) {
         colors.push_back(std::stoi(node_description[i]));
@@ -148,9 +148,6 @@ std::unordered_set<std::string> process_nauty_output(
         type_to_smiles[node.ntype] = node.smiles;
     }
 
-    for (const auto& node: node_defs) {
-
-    }
     for (const auto& node: node_defs) {
         for (const auto& h : node.hubs) {
             node_type_to_hub[node.ntype].push_back(h);

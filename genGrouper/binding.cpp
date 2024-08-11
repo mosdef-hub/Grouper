@@ -43,7 +43,20 @@ PYBIND11_MODULE(_genGrouper, m) {
         .def("__str__", &GroupGraph::printGraph)
         .def("to_smiles", &GroupGraph::toSmiles, "Convert GroupGraph to SMILES")
         .def("to_vector", &GroupGraph::toVector, "Convert GroupGraph to group vector")
+        .def("to_atom_graph", &GroupGraph::toAtomicGraph, "Convert GroupGraph to AtomGraph")
         .def("__eq__", &GroupGraph::operator==);
+
+    py::class_<AtomGraph>(m, "AtomGraph")
+        .def(py::init<>())
+        .def("add_node", &AtomGraph::addNode, 
+             py::arg("type"), 
+             py::arg("valency") = 0)
+        .def("add_edge", &AtomGraph::addEdge, 
+             py::arg("src"), 
+             py::arg("dst"))
+        .def("free_valency", &AtomGraph::getFreeValency)
+        .def("__str__", &AtomGraph::printGraph)
+        .def("__eq__", &AtomGraph::operator==);
 
     m.def("process_nauty_output", &process_nauty_output, 
         py::arg("line"), 

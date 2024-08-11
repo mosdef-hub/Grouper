@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <memory>
 #include <tuple>
+
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
 #include <GraphMol/SmilesParse/SmilesParse.h>
@@ -15,6 +16,55 @@
 #include <GraphMol/Bond.h>
 #include <GraphMol/AtomIterators.h>
 #include <GraphMol/BondIterators.h>
+
+
+class AtomGraph {
+public:
+    using NodeIDType = int;
+
+    struct Node {
+        NodeIDType id;
+        std::string ntype;
+        unsigned int valency;
+
+        // Need to define comparison operators for Node to be used in unordered_map
+        bool operator==(const Node& other) const {
+            return id == other.id && ntype == other.ntype && valency == other.valency;
+        }
+        bool operator!=(const Node& other) const {
+            return !(*this == other);
+        }
+        Node() : id(0), ntype(""), valency(0) {}
+
+        Node(int id, const std::string& ntype, const unsigned int valency)
+            : id(id), ntype(ntype), valency(valency) {}
+
+    };
+
+    // Custom hash function for the Node struct
+    struct NodeHasher {
+        std::size_t operator()(const Node& node) const {
+            return std::hash<NodeIDType>()(node.id) ^ std::hash<std::string>()(node.ntype) ^ std::hash<unsigned int>()(node.valency);
+        }
+    };
+
+    std::unordered_map<NodeIDType, Node> nodes; ///< Map of node IDs to their respective nodes.
+    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> edges; ///< Map of node IDs to sets of connected node IDs.
+
+    AtomGraph();
+    AtomGraph(const AtomGraph& other);
+    AtomGraph& operator=(const AtomGraph& other);
+    bool operator==(const AtomGraph& other) const;
+
+    void addNode(const std::string& ntype = "", unsigned int valency = 0);
+    void addEdge(NodeIDType src, NodeIDType dst);
+    int getFreeValency(NodeIDType nid) const;
+    std::string printGraph() const;
+
+private:
+    // Helper methods or additional private members can be declared here if needed
+};
+
 
 class GroupGraph {
 public:
@@ -60,6 +110,7 @@ public:
     std::string printGraph() const;
     std::unordered_map<std::string, int> toVector() const;
     std::string toSmiles() const;
+    std::unique_ptr<AtomGraph> toAtomicGraph() const;
 
 private:
     // Helper methods or additional private members can be declared here if needed
@@ -88,40 +139,5 @@ namespace std {
         }
     };
 }
-// class AtomGraph {
-// public:
-//     using NodeIDType = int;
-
-//     struct Node {
-//         NodeIDType id;
-//         std::string ntype;
-//     };
-
-//     std::unordered_map<NodeIDType, Node> nodes; ///< Map of node IDs to their respective nodes.
-//     std::vector<std::tuple<NodeIDType, NodeIDType>> edges; ///< List of edges connecting nodes.
-
-//     AtomGraph();
-//     AtomGraph(const AtomGraph& other);
-//     AtomGraph& operator=(const AtomGraph& other);
-
-//     void addNode(
-//         const std::string& ntype = ""
-//     );
-//     bool addEdge(
-//         NodeIDType fromNode,
-//         NodeIDType toNode,
-//         bool verbose = false
-//     );
-//     int n_free_ports(NodeIDType nid) const;
-//     int numNodes() const;
-//     void printGraph() const;
-
-//     std::string toSmiles(
-//         const std::unordered_map<std::string, std::unordered_map<int, int>>& nodeTypePortToIndex
-//     ) const;
-
-// private:
-//     // Helper methods or additional private members can be declared here if needed
-// };
 
 #endif // DATASTRUCTURES_H
