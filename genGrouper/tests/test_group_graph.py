@@ -2,9 +2,9 @@ from genGrouper import GroupGraph, AtomGraph
 from genGrouper.io import has_mbuild, has_torch
 from genGrouper.post_process import substitute_chiral_smiles
 from genGrouper.tests.base_test import BaseTest
-from group_selfies import Group
+# from group_selfies import Group
 import networkx as nx
-from pysmiles import write_smiles
+# from pysmiles import write_smiles
 import pytest
 import numpy as np
 
