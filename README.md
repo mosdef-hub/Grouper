@@ -100,9 +100,7 @@ group_graph = GroupGraph()
 
 # Adding nodes
 group_graph.add_node(type = 'nitrogen', smiles = 'N', ports = [0,1,2], hubs = [0,0,0])
-
 group_graph.add_node('nitrogen') # Once the type of the node has been specified we can use it again
-
 group_graph.add_node(type = '', smiles = 'N', ports = [0,1,2], hubs = [0,0,0]) # Alternatively we can just use the smiles
 
 # Adding edges
