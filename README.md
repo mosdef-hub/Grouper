@@ -77,6 +77,10 @@ The fundamental data structure behind this package is based on a port graph, loo
 
 1. Clone the repo
 ```sh
+conda create -n genGrouper python=3.9
+conda activate genGrouper
+conda install librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11
+
 git clone https://github.com/kierannp/genGrouper
 cd genGrouper
 ```
