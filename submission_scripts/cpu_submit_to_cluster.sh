@@ -3,7 +3,7 @@
 #SBATCH --mail-type=end
 #SBATCH --error=error-%J.err
 #SBATCH --output=output-%J.out
-#SBATCH --job-name=cpu_gen
+#SBATCH --job-name=genGrouper
 #SBATCH --nodes=1
 #SBATCH --time=24:00:00
 #SBATCH --partition=day-long-std
@@ -13,14 +13,8 @@
 
 source /raid6/homes/kierannp/.bashrc
 module load anaconda/3.9
-conda activate molGPU
+conda activate pureGrouper
 
-cd /raid6/homes/kierannp/foo/gpufoo/genGrouper/genGrouper/cpp_code/rdkit_cpu
+RUN_DIR=
 
-rm -rf build
-mkdir build
-cd build
-cmake ..
-make
-./lineProcessor
-
+python run_exhaustive_generation.py
