@@ -1,25 +1,14 @@
 from mbuild.tests.base_test import BaseTest
-from genGrouper import GroupGraph
-from genGrouper.generate import generate_group_graph_space
+from genGrouper import GroupGraph, exhaustive_generate 
 # from pysmiles import write_smiles
 # import pytest
 
 class TestGroupGraph(BaseTest):
     def test_chiral_group_graph_generation(self):
-        # Define node types with ports
-        node_types = {
-            'CC': ['C11', 'C12', 'C21', 'C22',],
-            'OH': ['O1'],
-        }
-        node_types_to_smiles = {
-            'CC': 'CC',
-            'OH': 'O',
-        }
-        node_port_to_atom_index = {
-            'CC': {'C11': 0, 'C12': 0, 'C21': 1, 'C22': 1},
-            'OH': {'O1': 0},
-        }
-        out = generate_group_graph_space(3, node_types, node_port_to_atom_index)
+        node_defs = set()
+        node_defs.add(('OH', 'O', ['C11', 'C12'], ['O1']))
+        node_defs.add(('CC', 'C', ['C11', 'C12'], ['C21', 'C22']))
+        out = exhaustive_generate(3, node_defs)
 
         def check_if_graph_has_ports(graph, ports):
             all_ports = set()
