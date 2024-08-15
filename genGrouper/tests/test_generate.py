@@ -1,4 +1,4 @@
-from mbuild.tests.base_test import BaseTest
+from genGrouper.tests.base_test import BaseTest
 from genGrouper import GroupGraph, exhaustive_generate 
 # from pysmiles import write_smiles
 # import pytest

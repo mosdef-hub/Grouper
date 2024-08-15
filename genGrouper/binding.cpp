@@ -3,13 +3,12 @@
 #include "dataStructures.hpp" 
 #include "processColoredGraphs.hpp"
 #include "generate.hpp"  
+#include "fragmentation.hpp"
 
 namespace py = pybind11;
 
 PYBIND11_MODULE(_genGrouper, m) {
     m.doc() = "genGrouper bindings for Python";
-
-    // Bind the GroupGraph::Node class
     py::class_<GroupGraph::Node>(m, "Node")
         .def(py::init<>())
         .def(py::init<int, const std::string&, const std::string&, const std::vector<int>&, const std::vector<int>&>())
@@ -22,8 +21,6 @@ PYBIND11_MODULE(_genGrouper, m) {
         .def("__hash__", [](const GroupGraph::Node& node) {
             return std::hash<GroupGraph::Node>{}(node);
         });;
-
-    // Bind the GroupGraph class
     py::class_<GroupGraph>(m, "GroupGraph")
         .def(py::init<>())
         .def_readwrite("nodes", &GroupGraph::nodes)
@@ -45,7 +42,6 @@ PYBIND11_MODULE(_genGrouper, m) {
         .def("to_vector", &GroupGraph::toVector, "Convert GroupGraph to group vector")
         .def("to_atom_graph", &GroupGraph::toAtomicGraph, "Convert GroupGraph to AtomGraph")
         .def("__eq__", &GroupGraph::operator==);
-
     py::class_<AtomGraph>(m, "AtomGraph")
         .def(py::init<>())
         .def("add_node", &AtomGraph::addNode, 
@@ -57,12 +53,10 @@ PYBIND11_MODULE(_genGrouper, m) {
         .def("free_valency", &AtomGraph::getFreeValency)
         .def("__str__", &AtomGraph::printGraph)
         .def("__eq__", &AtomGraph::operator==);
-
     m.def("process_nauty_output", &process_nauty_output, 
         py::arg("line"), 
         py::arg("node_defs"), 
         py::arg("verbose") = false);
-
     m.def("exhaustive_generate", &exhaustiveGenerate, 
         py::arg("n_nodes"), 
         py::arg("node_defs"), 
@@ -70,4 +64,7 @@ PYBIND11_MODULE(_genGrouper, m) {
         py::arg("input_file_path") = "", 
         py::arg("num_procs") = 32, 
         py::arg("verbose") = false);
+    m.def("fragment", &fragment, 
+        py::arg("smiles"), 
+        py::arg("node_defs"));
 }
