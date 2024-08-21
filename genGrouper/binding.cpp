@@ -68,6 +68,6 @@ PYBIND11_MODULE(_genGrouper, m) {
         py::arg("node_defs"), 
         py::arg("nauty_path"),
         py::arg("input_file_path") = "", 
-        py::arg("num_procs") = 32, 
+        py::arg("num_procs") = -1, 
         py::arg("verbose") = false);
 }

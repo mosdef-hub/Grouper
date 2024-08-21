@@ -38,7 +38,7 @@ std::unordered_set<std::string> exhaustiveGenerate(
     std::unordered_set<GroupGraph::Node> node_defs, 
     std::string nauty_path,
     std::string input_file_path = "",
-    int num_procs = 32,
+    int num_procs = -1,
     bool verbose = false
 ) {
     // Error handling
@@ -49,11 +49,8 @@ std::unordered_set<std::string> exhaustiveGenerate(
     if (node_defs.size() < 1) {
         throw std::invalid_argument("Node definitions must not be empty...");
     }
-    if (num_procs < 1) {
-        throw std::invalid_argument("Number of processors must be greater than 0...");
-    }
-    if (num_procs > omp_get_max_threads()) {
-        throw std::invalid_argument("Number of processors must not exceed the maximum number of threads...");
+    if (num_procs <= -1){
+        num_procs = omp_get_max_threads();
     }
     if (verbose) {
         std::cout << "Number of nodes: " << n_nodes << std::endl;
