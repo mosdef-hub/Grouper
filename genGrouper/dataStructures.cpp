@@ -44,31 +44,84 @@ bool GroupGraph::Node::operator==(const Node& other) const {
 }
 
 bool GroupGraph::operator==(const GroupGraph& other) const {
-    if (nodes.size() != other.nodes.size() || edges.size() != other.edges.size() || nodetypes.size() != other.nodetypes.size()) {
+    // Check if both graphs have the same number of nodes and edges
+    if (nodes.size() != other.nodes.size() || edges.size() != other.edges.size()) {
         return false;
     }
 
-    // Compare nodes
-    if (nodes != other.nodes) {
-        return false;
+    // Create adjacency lists for comparison using unordered_map and unordered_set
+    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> adjacency_list_1;
+    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> adjacency_list_2;
+
+    // Populate adjacency lists for the current graph
+    for (const auto& edge : edges) {
+        NodeIDType node1 = std::get<0>(edge);
+        NodeIDType node2 = std::get<2>(edge);
+        adjacency_list_1[node1].insert(node2);
+        adjacency_list_1[node2].insert(node1);
     }
 
-    // Compare edges (order might not matter, so we sort them before comparison)
-    auto sorted_edges = edges;
-    auto sorted_other_edges = other.edges;
-    std::sort(sorted_edges.begin(), sorted_edges.end());
-    std::sort(sorted_other_edges.begin(), sorted_other_edges.end());
-    if (sorted_edges != sorted_other_edges) {
-        return false;
+    // Populate adjacency lists for the other graph
+    for (const auto& edge : other.edges) {
+        NodeIDType node1 = std::get<0>(edge);
+        NodeIDType node2 = std::get<2>(edge);
+        adjacency_list_2[node1].insert(node2);
+        adjacency_list_2[node2].insert(node1);
     }
 
-    // Compare nodetypes
-    if (nodetypes != other.nodetypes) {
-        return false;
+    // Create a vector of node IDs for the current graph and the other graph
+    std::vector<NodeIDType> nodes_1;
+    std::vector<NodeIDType> nodes_2;
+    
+    for (const auto& node : nodes) {
+        nodes_1.push_back(node.first);
     }
 
-    return true;
+    for (const auto& node : other.nodes) {
+        nodes_2.push_back(node.first);
+    }
+
+    // Sort nodes to ensure consistent permutation checks
+    std::sort(nodes_1.begin(), nodes_1.end());
+    std::sort(nodes_2.begin(), nodes_2.end());
+
+    // Try all permutations of node mappings
+    do {
+        std::unordered_map<NodeIDType, NodeIDType> node_mapping;
+
+        for (size_t i = 0; i < nodes_1.size(); ++i) {
+            node_mapping[nodes_1[i]] = nodes_2[i];
+        }
+
+        bool is_match = true;
+        
+        for (const auto& entry : adjacency_list_1) {
+            NodeIDType node_id_1 = entry.first;
+            const auto& neighbors_1 = entry.second;
+
+            NodeIDType node_id_2 = node_mapping[node_id_1];
+            const auto& neighbors_2 = adjacency_list_2[node_id_2];
+
+            std::unordered_set<NodeIDType> mapped_neighbors_1;
+            for (NodeIDType neighbor : neighbors_1) {
+                mapped_neighbors_1.insert(node_mapping[neighbor]);
+            }
+
+            if (mapped_neighbors_1 != neighbors_2) {
+                is_match = false;
+                break;
+            }
+        }
+
+        if (is_match) {
+            return true;
+        }
+
+    } while (std::next_permutation(nodes_2.begin(), nodes_2.end()));
+
+    return false;
 }
+
 
 // Non-member function to compare tuples (used for sorting edges)
 inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& lhs,
