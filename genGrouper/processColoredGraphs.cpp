@@ -115,12 +115,12 @@ std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
 
     // Compute the edge automorphisms of the graph
     std::vector<std::vector<std::pair<int, int>>> automorphisms = gG.edgeAut(edge_list);
-    for (const auto& automorphism : automorphisms) {
-        for (const auto& edge : automorphism) {
-            std::cout << edge.first << " " << edge.second << " | ";
-        }
-        std::cout << std::endl;
-    }
+    // for (const auto& automorphism : automorphisms) {
+    //     for (const auto& edge : automorphism) {
+    //         std::cout << edge.first << " " << edge.second << " | ";
+    //     }
+    //     std::cout << std::endl;
+    // }
 
     // Apply automorphisms to filter out redundant colorings
     std::vector<std::vector<int>> unique_colorings = apply_edge_automorphisms(all_colorings, automorphisms);

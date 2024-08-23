@@ -15,7 +15,6 @@ struct pair_hash {
 
 // Helper function to create adjacency matrix
 void createAdjMatrix(const std::vector<std::pair<int, int>>& edge_list, std::vector<std::vector<int>>& adj_matrix) {
-    int n = adj_matrix.size();
     for (const auto& edge : edge_list) {
         int u = edge.first;
         int v = edge.second;
