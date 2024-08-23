@@ -2,7 +2,8 @@
 #include <pybind11/stl.h>
 #include "dataStructures.hpp" 
 #include "processColoredGraphs.hpp"
-#include "generate.hpp"  
+#include "generate.hpp"
+#include "autUtils.hpp"
 #include "fragmentation.hpp"
 
 namespace py = pybind11;

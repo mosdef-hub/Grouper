@@ -3,9 +3,11 @@
 #include <vector>
 #include <stdexcept>
 #include <sstream>
+#include <algorithm>
 #include <cstring>
 
 #include "dataStructures.hpp"
+#include "autUtils.hpp"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -17,6 +19,11 @@
 #include <GraphMol/BondIterators.h>
 #include <GraphMol/PeriodicTable.h>
 #include <RDGeneral/types.h>
+
+#include <nauty/nauty.h>
+#include <nauty/naututil.h>
+
+
 
 
 GroupGraph::GroupGraph()
@@ -337,6 +344,102 @@ std::string GroupGraph::toSmiles() const {
     }
     
     return RDKit::MolToSmiles(*molecularGraph);
+}
+
+void GroupGraph::toNautyFormat(int *n, int *m, int *adj) const {
+    // Set number of vertices
+    *n = nodes.size();
+
+    // Initialize adjacency matrix
+    std::fill(adj, adj + (*n) * (*n), 0);
+    
+    // Fill adjacency matrix from edges
+    for (const auto& edge : edges) {
+        NodeIDType from = std::get<0>(edge);
+        NodeIDType to = std::get<2>(edge);
+        adj[from * (*n) + to] = 1;
+        adj[to * (*n) + from] = 1; // Assuming undirected graph
+    }
+
+    *m = edges.size();
+}
+
+std::vector<std::vector<int>> GroupGraph::nodeAut() const {
+    int n = nodes.size();  // Number of vertices
+    int m = SETWORDSNEEDED(n);  // Size of set words for NAUTY
+    
+    // Dynamically allocate NAUTY structures
+    DYNALLSTAT(graph, g, g_sz);
+    DYNALLOC2(graph, g, g_sz, n, m, "malloc");
+    
+    // Initialize the NAUTY graph to be empty
+    EMPTYGRAPH(g, m, n);
+
+    // Convert the adjacency matrix to the NAUTY graph representation
+    for (const auto& edge : edges) {
+        int u = std::get<0>(edge);
+        int v = std::get<2>(edge);
+        ADDELEMENT(GRAPHROW(g, u, m), v);
+        ADDELEMENT(GRAPHROW(g, v, m), u);
+    }
+
+    // NAUTY variables
+    int lab[MAXN], ptn[MAXN], orbits[MAXN];
+    optionblk options_struct;  // Define options structure
+    statsblk stats;
+
+    // Initialize options manually
+    options_struct.getcanon = FALSE;  // We only need automorphisms, not a canonical form
+    options_struct.defaultptn = TRUE;
+
+    // Workspace array for nauty
+    static set workspace[160 * MAXN];
+
+    // Active set (can be nullptr if not needed)
+    set *active = nullptr;
+
+    // Canonical form (not needed, so we set it to nullptr)
+    graph *canong = nullptr;
+
+    // Call NAUTY to compute automorphisms
+    nauty(g, lab, ptn, active, orbits, &options_struct, &stats, workspace, 160 * MAXN, m, n, canong);
+
+    // Collect results
+    std::vector<std::vector<int>> automorphisms;
+    for (int i = 0; i < stats.numorbits; ++i) {
+        std::vector<int> perm(n);
+        for (int j = 0; j < n; ++j) {
+            perm[j] = lab[j];
+        }
+        automorphisms.push_back(perm);
+    }
+
+    // Free dynamically allocated memory
+    DYNFREE(g, g_sz);
+
+    return automorphisms;
+}
+
+
+
+std::vector<std::vector<std::pair<int, int>>> GroupGraph::edgeAut(const std::vector<std::pair<int, int>>& edge_list) const {
+    int n = nodes.size();
+    std::vector<std::vector<int>> adj_matrix(n, std::vector<int>(n, 0));
+    
+    createAdjMatrix(edge_list, adj_matrix);
+
+    std::vector<std::pair<int, int>> edge_list_copy = edge_list;
+    std::sort(edge_list_copy.begin(), edge_list_copy.end());
+
+    std::vector<std::vector<std::pair<int, int>>> automorphisms;
+    
+    do {
+        if (areEdgePermutationsEquivalent(edge_list, edge_list_copy)) {
+            automorphisms.push_back(edge_list_copy);
+        }
+    } while (std::next_permutation(edge_list_copy.begin(), edge_list_copy.end()));
+
+    return automorphisms;
 }
 
 std::unordered_map<std::string, int> GroupGraph::toVector() const {
