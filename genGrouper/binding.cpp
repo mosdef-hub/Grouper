@@ -56,6 +56,8 @@ PYBIND11_MODULE(_genGrouper, m) {
     m.def("process_nauty_output", &process_nauty_output, 
         py::arg("line"), 
         py::arg("node_defs"), 
+        py::arg("positive_constraints"),
+        py::arg("negative_constraints"),
         py::arg("verbose") = false);
     m.def("exhaustive_generate", &exhaustiveGenerate, 
         py::arg("n_nodes"), 
@@ -63,6 +65,8 @@ PYBIND11_MODULE(_genGrouper, m) {
         py::arg("nauty_path"),
         py::arg("input_file_path") = "", 
         py::arg("num_procs") = -1, 
+        py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
+        py::arg("negative_constraints") = std::unordered_set<std::string>{},
         py::arg("verbose") = false);
     m.def("fragment", &fragment, 
         py::arg("smiles"), 

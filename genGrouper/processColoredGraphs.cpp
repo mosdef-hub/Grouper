@@ -19,6 +19,7 @@
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
 #include <GraphMol/SmilesParse/SmilesParse.h>
+#include <GraphMol/Substruct/SubstructMatch.h>
 #include <GraphMol/GraphMol.h>
 
 
@@ -28,9 +29,9 @@ void get_sensible_port_combos(
     const std::vector<std::pair<int, int>>& edge_list, 
     const std::unordered_map<std::string, std::vector<int>>& node_types,
     std::unordered_set<std::string>& smiles_set, 
+    const std::unordered_set<std::string>& negativeConstraints,
     const bool verbose) {
 
-        
     if (v.empty()) {
         return;
     }
@@ -48,7 +49,7 @@ void get_sensible_port_combos(
     // Initialize counters for each vector of pairs
     std::vector<size_t> counters(v.size(), 0);
 
-    for (auto i = 0; i < size; ++i) {
+    for (size_t i = 0; i < size; ++i) {
         std::vector<std::pair<int, int>> combination;
 
         for (size_t j = 0; j < v.size(); ++j) {
@@ -61,15 +62,42 @@ void get_sensible_port_combos(
                 temp_gG.addEdge(
                     std::make_tuple(edge_list[j].first, combination[j].first),
                     std::make_tuple(edge_list[j].second, combination[j].second)
-                    );
+                );
             }
 
-            // convert to smiles
+            // Convert the graph to a SMILES string
             smiles = temp_gG.toSmiles();
-            // Convert to hash
-            smiles_set.insert(smiles);
-        } 
-        catch (const std::exception& e) {
+
+            // Convert the SMILES string to a molecule
+            std::unique_ptr<RDKit::ROMol> mol(RDKit::SmilesToMol(smiles));
+            if (!mol) {
+                std::cerr << "Error: Could not convert SMILES to molecule." << std::endl;
+                continue;
+            }
+
+            // Check against the negative constraints using SMARTS patterns
+            bool matchesNegativeConstraint = false;
+            for (const auto& smarts : negativeConstraints) {
+                std::unique_ptr<RDKit::ROMol> query(RDKit::SmartsToMol(smarts));
+                if (!query) {
+                    std::cerr << "Error: Could not parse SMARTS string: " << smarts << std::endl;
+                    continue;
+                }
+
+                // Check if the molecule matches the SMARTS pattern using SubstructMatch
+                std::vector<RDKit::MatchVectType> matches;
+                if (RDKit::SubstructMatch(*mol, *query, matches)) {
+                    matchesNegativeConstraint = true;
+                    break;
+                }
+            }
+
+            // If the molecule does not match any negative constraint, add it to the set
+            if (!matchesNegativeConstraint) {
+                smiles_set.insert(smiles);
+            }
+
+        } catch (const std::exception& e) {
             if (verbose) {
                 std::cerr << "Couldn't produce graph from vcolg output: " << e.what() << std::endl;
             }
@@ -86,9 +114,12 @@ void get_sensible_port_combos(
 }
 
 
+
 std::unordered_set<std::string> process_nauty_output(
     const std::string& line, 
     const std::unordered_set<GroupGraph::Node>& node_defs,
+    const std::unordered_map<std::string, int> positiveConstraints,
+    const std::unordered_set<std::string> negativeConstraints,
     bool verbose
 ) {
 
@@ -127,9 +158,6 @@ std::unordered_set<std::string> process_nauty_output(
     }
 
     // Error checking
-    // for (const auto& color : colors) {
-    //     std::cout << color << " ";
-    // }
     if (node_defs.size() < static_cast<size_t>(*std::max_element(colors.begin(), colors.end()) + 1)) {
         throw std::runtime_error("Number of nodes in node_defs does not match the number of nodes in the nauty_output_file...");
     }
@@ -159,6 +187,24 @@ std::unordered_set<std::string> process_nauty_output(
         int_to_node_type[i] = node_type;
         int_to_smiles[i] = type_to_smiles[node_type];
         i++;
+    }
+    
+    // Create a histogram of node types for positive constraints
+    std::unordered_map<std::string, int> node_hist;
+    for (const auto& node : node_defs) {
+        node_hist[node.ntype] = 0;
+    }
+    for (const auto& c : colors) {
+        node_hist[int_to_node_type.at(c)] += 1;
+    }
+    // Check if the number of nodes of each type is less than the number listed in the positive constraints
+    for (const auto& [node_type, count] : node_hist) {
+        if (positiveConstraints.find(node_type) == positiveConstraints.end()) {
+            continue;
+        }
+        if (count < positiveConstraints.at(node_type)) {
+            return {};
+        }
     }
 
 
@@ -190,6 +236,7 @@ std::unordered_set<std::string> process_nauty_output(
         node_degrees[edge.first]++;
         node_degrees[edge.second]++;
     }
+
     for (const auto& [node, degree] : node_degrees) {
         if (degree > node_types.at(int_to_node_type.at(colors[node])).size()) {
             return {};
@@ -209,6 +256,7 @@ std::unordered_set<std::string> process_nauty_output(
         non_colored_edge_list, 
         node_types, 
         graph_basis,
+        negativeConstraints,
         verbose
     );
 

@@ -12,5 +12,7 @@ std::unordered_set<std::string> exhaustiveGenerate(
     std::string nauty_path,
     std::string input_file_path,
     int num_procs = 32,
+    std::unordered_map<std::string, int> positiveConstraints = {},
+    std::unordered_set<std::string> negativeConstraints = {},
     bool verbose = false
 );

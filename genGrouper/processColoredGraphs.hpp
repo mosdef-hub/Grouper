@@ -32,6 +32,8 @@ void get_sensible_port_combos(
 std::unordered_set<std::string> process_nauty_output(
     const std::string& line, 
     const std::unordered_set<GroupGraph::Node>& node_defs,
+    const std::unordered_map<std::string, int> positiveConstraints,
+    const std::unordered_set<std::string> negativeConstraints,
     bool verbose
 );
 

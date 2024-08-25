@@ -39,6 +39,8 @@ std::unordered_set<std::string> exhaustiveGenerate(
     std::string nauty_path,
     std::string input_file_path = "",
     int num_procs = -1,
+    std::unordered_map<std::string, int> positiveConstraints = {},
+    std::unordered_set<std::string> negativeConstraints = {},
     bool verbose = false
 ) {
     // Error handling
@@ -117,8 +119,14 @@ std::unordered_set<std::string> exhaustiveGenerate(
 
         #pragma omp for schedule(dynamic) nowait
         for (int i = 0; i < total_lines; ++i) {
-            // std::cout<< "Thread " << thread_id << " processing line " << i << std::endl;
-            std::unordered_set<std::string> result = process_nauty_output(lines[i], node_defs, verbose);
+
+            std::unordered_set<std::string> result = process_nauty_output(
+                lines[i], 
+                node_defs,
+                positiveConstraints, 
+                negativeConstraints, 
+                verbose
+            );
 
             for (auto it : result) {
                 local_smiles_basis.insert(it);
