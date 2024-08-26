@@ -13,6 +13,7 @@
 #include <tuple>
 #include <functional>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "dataStructures.hpp"
 
@@ -23,94 +24,146 @@
 #include <GraphMol/GraphMol.h>
 
 
-void get_sensible_port_combos(
-    const std::vector<std::vector<std::pair<int, int>>>& v, 
-    const GroupGraph& gG, 
-    const std::vector<std::pair<int, int>>& edge_list, 
-    const std::unordered_map<std::string, std::vector<int>>& node_types,
-    std::unordered_set<std::string>& smiles_set, 
-    const std::unordered_set<std::string>& negativeConstraints,
-    const bool verbose) {
-
-    if (v.empty()) {
+void generate_all_colorings(
+    const std::unordered_map<std::pair<int, int>, int>& possible_edge_colors, 
+    std::vector<std::vector<int>>& all_colorings, 
+    std::vector<int>& current_coloring, 
+    size_t edge_index) 
+{
+    if (edge_index == possible_edge_colors.size()) {
+        all_colorings.push_back(current_coloring);
         return;
     }
 
-    GroupGraph temp_gG;
-    std::string smiles;
+    auto it = possible_edge_colors.begin();
+    std::advance(it, edge_index);
+    int num_colors = it->second;
 
-    // Calculate the total size of the Cartesian product
-    auto size = std::accumulate(v.begin(), v.end(), 1,
-                                [](size_t s, const std::vector<std::pair<int, int>>& sub) { return s * sub.size(); });
-    if (verbose) {
-        std::cout << "\nSize of Cartesian product: " << size << std::endl;
+    for (int color = 0; color < num_colors; ++color) {
+        current_coloring[edge_index] = color;
+        generate_all_colorings(possible_edge_colors, all_colorings, current_coloring, edge_index + 1);
+    }
+}
+
+// Helper function to apply automorphisms to colorings
+std::vector<std::vector<int>> apply_edge_automorphisms(
+    const std::vector<std::vector<int>>& colorings, 
+    const std::vector<std::vector<std::pair<int, int>>>& automorphisms) 
+{
+    std::unordered_set<std::vector<int>> unique_colorings;
+
+    for (const auto& coloring : colorings) {
+        for (const auto& automorphism : automorphisms) {
+            std::vector<int> permuted_coloring(coloring.size());
+            for (size_t i = 0; i < automorphism.size(); ++i) {
+                // Apply the edge automorphism to the coloring
+                int src_index = automorphism[i].first;
+                int dst_index = automorphism[i].second;
+                permuted_coloring[i] = coloring[src_index];
+            }
+            unique_colorings.insert(permuted_coloring);
+        }
     }
 
-    // Initialize counters for each vector of pairs
-    std::vector<size_t> counters(v.size(), 0);
+    return std::vector<std::vector<int>>(unique_colorings.begin(), unique_colorings.end());
+}
 
-    for (size_t i = 0; i < size; ++i) {
-        std::vector<std::pair<int, int>> combination;
 
-        for (size_t j = 0; j < v.size(); ++j) {
-            combination.push_back(v[j][counters[j]]);
+std::pair<int, int> color_to_ports(int color, const std::vector<int>& src_ports, const std::vector<int>& dst_ports) {
+    int src_port = src_ports[color / dst_ports.size()];
+    int dst_port = dst_ports[color % dst_ports.size()];
+    return {src_port, dst_port};
+}
+
+// Function to generate all non-isomorphic colored graphs
+std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::unordered_map<int, std::string>& int_to_node_type,
+    const std::unordered_map<int, std::string>& int_to_smiles,
+    const std::unordered_map<std::string, std::vector<int>>& node_types,
+    const std::unordered_map<std::string, std::vector<int>>& node_type_to_hub,
+    const std::vector<int> node_colors
+) {
+    std::unordered_set<GroupGraph> unique_graphs;
+    std::unordered_map<std::pair<int, int>, int> possible_edge_colors;
+
+    // Calculate the possible edge colors for each edge
+    for (const auto& edge : edge_list) {
+        int src = edge.first;
+        int dst = edge.second;
+        int n_src_ports = node_types.at(int_to_node_type.at(node_colors[src])).size();
+        int n_dst_ports = node_types.at(int_to_node_type.at(node_colors[dst])).size();
+        int n_colors = n_src_ports * n_dst_ports;
+        possible_edge_colors[{src, dst}] = n_colors;
+    }
+
+    // Prepare to generate all possible colorings
+    std::vector<std::vector<int>> all_colorings;
+    std::vector<int> current_coloring(possible_edge_colors.size(), 0);
+    generate_all_colorings(possible_edge_colors, all_colorings, current_coloring, 0);
+
+    // Create a graph object to compute automorphisms
+    GroupGraph gG;
+    // Add nodes to the graph
+    for (int i = 0; i < node_colors.size(); ++i) {
+        gG.addNode(
+            int_to_node_type.at(node_colors[i]), 
+            int_to_smiles.at(node_colors[i]), 
+            node_types.at(int_to_node_type.at(node_colors[i])), 
+            node_type_to_hub.at(int_to_node_type.at(node_colors[i]))
+        );
+    }
+
+    // Compute the edge automorphisms of the graph
+    std::vector<std::vector<std::pair<int, int>>> automorphisms = gG.edgeAut(edge_list);
+    // for (const auto& automorphism : automorphisms) {
+    //     for (const auto& edge : automorphism) {
+    //         std::cout << edge.first << " " << edge.second << " | ";
+    //     }
+    //     std::cout << std::endl;
+    // }
+
+    // Apply automorphisms to filter out redundant colorings
+    std::vector<std::vector<int>> unique_colorings = apply_edge_automorphisms(all_colorings, automorphisms);
+    // Iterate over unique colorings
+    std::vector<GroupGraph> result;
+    for (const auto& coloring : unique_colorings) {
+        GroupGraph gG;
+
+        // Add nodes to the graph
+        for (int i = 0; i < node_colors.size(); ++i) {
+            gG.addNode(
+                int_to_node_type.at(node_colors[i]), 
+                int_to_smiles.at(node_colors[i]), 
+                node_types.at(int_to_node_type.at(node_colors[i])), 
+                node_type_to_hub.at(int_to_node_type.at(node_colors[i]))
+            );
         }
-
+        // Add edges with the current coloring
+        size_t edge_index = 0;
         try {
-            temp_gG = gG;
-            for (size_t j = 0; j < edge_list.size(); ++j) {
-                temp_gG.addEdge(
-                    std::make_tuple(edge_list[j].first, combination[j].first),
-                    std::make_tuple(edge_list[j].second, combination[j].second)
-                );
+            for (const auto& edge : edge_list) {
+                int src = edge.first;
+                int dst = edge.second;
+                int color = coloring[edge_index++];
+                std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(node_colors[src])), node_types.at(int_to_node_type.at(node_colors[dst])));
+                int srcPort = colorPort.first;
+                int dstPort = colorPort.second;
+
+                gG.addEdge({src, srcPort}, {dst, dstPort});
             }
-
-            // Convert the graph to a SMILES string
-            smiles = temp_gG.toSmiles();
-
-            // Convert the SMILES string to a molecule
-            std::unique_ptr<RDKit::ROMol> mol(RDKit::SmilesToMol(smiles));
-            if (!mol) {
-                std::cerr << "Error: Could not convert SMILES to molecule." << std::endl;
-                continue;
-            }
-
-            // Check against the negative constraints using SMARTS patterns
-            bool matchesNegativeConstraint = false;
-            for (const auto& smarts : negativeConstraints) {
-                std::unique_ptr<RDKit::ROMol> query(RDKit::SmartsToMol(smarts));
-                if (!query) {
-                    std::cerr << "Error: Could not parse SMARTS string: " << smarts << std::endl;
-                    continue;
-                }
-
-                // Check if the molecule matches the SMARTS pattern using SubstructMatch
-                std::vector<RDKit::MatchVectType> matches;
-                if (RDKit::SubstructMatch(*mol, *query, matches)) {
-                    matchesNegativeConstraint = true;
-                    break;
-                }
-            }
-
-            // If the molecule does not match any negative constraint, add it to the set
-            if (!matchesNegativeConstraint) {
-                smiles_set.insert(smiles);
-            }
-
         } catch (const std::exception& e) {
-            if (verbose) {
-                std::cerr << "Couldn't produce graph from vcolg output: " << e.what() << std::endl;
-            }
+            continue;
         }
 
-        // Update counters for the next combination
-        for (size_t j = v.size(); j-- > 0;) {
-            if (++counters[j] < v[j].size()) {
-                break;
-            }
-            counters[j] = 0;
+        // Check if the graph is unique considering permutations
+        if (unique_graphs.find(gG) == unique_graphs.end()) {
+            unique_graphs.insert(gG);
+            result.push_back(gG);
         }
     }
+
+    return result;
 }
 
 
@@ -158,6 +211,9 @@ std::unordered_set<std::string> process_nauty_output(
     }
 
     // Error checking
+    // for (const auto& color : colors) {
+    //     std::cout << "colors: " << color << " ";
+    // }
     if (node_defs.size() < static_cast<size_t>(*std::max_element(colors.begin(), colors.end()) + 1)) {
         throw std::runtime_error("Number of nodes in node_defs does not match the number of nodes in the nauty_output_file...");
     }
@@ -208,57 +264,32 @@ std::unordered_set<std::string> process_nauty_output(
     }
 
 
-
+    // Add nodes to the graph
     GroupGraph gG;
     for (int i = 0; i < n_vertices; ++i) {
-        gG.addNode(int_to_node_type.at(colors[i]), int_to_smiles.at(colors[i]), node_types.at(int_to_node_type.at(colors[i])), node_type_to_hub.at(int_to_node_type.at(colors[i])));
-    }
-
-    std::map<int, std::vector<std::pair<int, int>>> edge_index_to_edge_color;
-    for (size_t i = 0; i < edge_list.size(); ++i) {
-        int src = edge_list[i].first;
-        int dst = edge_list[i].second;
-        std::vector<int> src_ports = node_types.at(int_to_node_type.at(colors[src]));
-        std::vector<int> dst_ports = node_types.at(int_to_node_type.at(colors[dst]));
-        non_colored_edge_list.push_back({src, dst});
-        std::vector<std::pair<int, int>> port_combinations;
-        for (int sp : src_ports) {
-            for (int dp : dst_ports) {
-                port_combinations.push_back({sp, dp});
-            }
-        }
-        edge_index_to_edge_color[i] = port_combinations;
-    }
-
-    // Use a graph library to create a graph from non_colored_edge_list and check degrees
-    std::map<int, int> node_degrees; // Placeholder for node degrees
-    for (const auto& edge : non_colored_edge_list) {
-        node_degrees[edge.first]++;
-        node_degrees[edge.second]++;
-    }
-
-    for (const auto& [node, degree] : node_degrees) {
-        if (degree > node_types.at(int_to_node_type.at(colors[node])).size()) {
-            return {};
-        }
-    }
-
-    std::vector<std::vector<std::pair<int, int>>> edge_colors;
-    for (const auto& [index, port_combinations] : edge_index_to_edge_color) {
-        edge_colors.push_back(port_combinations);
+        gG.addNode(
+            int_to_node_type.at(colors[i]), 
+            int_to_smiles.at(colors[i]), 
+            node_types.at(int_to_node_type.at(colors[i])), 
+            node_type_to_hub.at(int_to_node_type.at(colors[i]))
+        );
     }
 
 
-    // Generate and filter port combinations
-    get_sensible_port_combos(
-        edge_colors,
-        gG,
-        non_colored_edge_list, 
+
+    std::vector<GroupGraph> graphs = generate_non_isomorphic_colored_graphs(
+        edge_list, 
+        int_to_node_type, 
+        int_to_smiles, 
         node_types, 
-        graph_basis,
-        negativeConstraints,
-        verbose
+        node_type_to_hub,
+        colors
     );
+
+    // Convert the graphs to smiles
+    for (const auto& graph : graphs) {
+        graph_basis.insert(graph.toSmiles());
+    }
 
 
     return graph_basis;

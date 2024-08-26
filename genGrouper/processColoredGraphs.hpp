@@ -1,5 +1,4 @@
-#ifndef GENERATE_H
-#define GENERATE_H
+
 
 #include <vector>
 #include <string>
@@ -18,14 +17,24 @@
 
 class GroupGraph; // Forward declaration of GroupGraph
 
-// Function to get sensible port combinations
-void get_sensible_port_combos(
-    const std::vector<std::vector<std::pair<int, int>>>& v, 
-    const GroupGraph& gG, 
-    const std::vector<std::pair<int, int>>& edge_list, 
-    const std::unordered_map<std::string, std::vector<int>>& node_types,
-    std::unordered_set<std::string>& smiles_set, 
-    const bool verbose
+void generate_all_colorings(
+    const std::unordered_map<std::pair<int, int>, int>& possible_edge_colors, 
+    std::vector<std::vector<int>>& all_colorings, 
+    std::vector<int>& current_coloring, 
+    size_t edge_index
+);
+
+std::vector<std::vector<int>> apply_automorphisms(
+    const std::vector<std::vector<int>>& colorings, 
+    const std::vector<std::vector<int>>& automorphisms
+);
+
+std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::unordered_map<int, std::string>& int_to_node_type,
+    const std::unordered_map<std::string, std::string>& int_to_smiles,
+    const std::unordered_map<std::string, std::vector<std::string>>& node_types,
+    const std::unordered_map<std::string, std::string>& node_type_to_hub
 );
 
 // Function to process nauty output
@@ -37,4 +46,3 @@ std::unordered_set<std::string> process_nauty_output(
     bool verbose
 );
 
-#endif // GENERATE_H

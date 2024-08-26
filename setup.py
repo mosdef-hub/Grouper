@@ -15,6 +15,7 @@ molgrouper_module = Extension(
         'genGrouper/processColoredGraphs.cpp',
         'genGrouper/generate.cpp',
         'genGrouper/fragmentation.cpp',
+        'genGrouper/autUtils.cpp',
     ],
     include_dirs = [
             os.path.join(condabase, 'include'),
@@ -22,15 +23,16 @@ molgrouper_module = Extension(
             os.path.join(condabase, "include/boost"),
             os.path.join(condabase, "include/rdkit"),
             os.path.join(condabase, "include/omp"),
+            os.path.join(condabase, "include/nauty"),
             pybind11.get_include(),
             pybind11.get_include(user=True),
             'genGrouper',
     ],
     library_dirs = [
             os.path.join(condabase, 'lib'),
-            os.path.join(condabase, "lib/cairo")
+            os.path.join(condabase, "lib/cairo"),
     ],
-    libraries = ['RDKitFileParsers', 'RDKitSmilesParse', 'RDKitGraphMol', 'RDKitRDGeneral', 'omp'],
+    libraries = ['RDKitFileParsers', 'RDKitSmilesParse', 'RDKitGraphMol', 'RDKitRDGeneral', 'omp', 'nauty'],
     extra_compile_args = ['-Xpreprocessor', '-fopenmp', '-std=c++17' ], # '-mmacosx-version-min=10.13'
     language='c++')
     # extra_link_args=['-Wl'])

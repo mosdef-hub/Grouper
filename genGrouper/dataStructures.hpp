@@ -17,6 +17,11 @@
 #include <GraphMol/AtomIterators.h>
 #include <GraphMol/BondIterators.h>
 
+#include <nauty/nauty.h>
+#include <nauty/naututil.h>
+
+#include "autUtils.hpp"
+
 
 class AtomGraph {
 public:
@@ -60,6 +65,8 @@ public:
     void addEdge(NodeIDType src, NodeIDType dst);
     int getFreeValency(NodeIDType nid) const;
     std::string printGraph() const;
+    std::vector<std::vector<int>> Aut() const; // Returns the automorphism group of the graph
+    void toNautyFormat(int *n, int *m, int *adj) const;
 
 private:
     // Helper methods or additional private members can be declared here if needed
@@ -110,6 +117,9 @@ public:
     std::string printGraph() const;
     std::unordered_map<std::string, int> toVector() const;
     std::string toSmiles() const;
+    void toNautyFormat(int *n, int *m, int *adj) const;
+    std::vector<std::vector<int>> nodeAut() const;
+    std::vector<std::vector<std::pair<int, int>>> edgeAut(const std::vector<std::pair<int, int>>& edge_list) const;
     std::unique_ptr<AtomGraph> toAtomicGraph() const;
 
 private:
@@ -136,6 +146,48 @@ namespace std {
                 h5 ^= std::hash<int>{}(hub) + 0x9e3779b9 + (h5 << 6) + (h5 >> 2);
             }
             return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
+        }
+    };
+    template <>
+    struct hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>> {
+        std::size_t operator()(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& t) const {
+            std::size_t h1 = std::hash<GroupGraph::NodeIDType>{}(std::get<0>(t));
+            std::size_t h2 = std::hash<GroupGraph::PortType>{}(std::get<1>(t));
+            std::size_t h3 = std::hash<GroupGraph::NodeIDType>{}(std::get<2>(t));
+            std::size_t h4 = std::hash<GroupGraph::PortType>{}(std::get<3>(t));
+            return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3);
+        }
+    };
+    template <>
+    struct hash<GroupGraph> {
+        std::size_t operator()(const GroupGraph& graph) const {
+            std::size_t h = 0;
+            for (const auto& node_pair : graph.nodes) {
+                const auto& node = node_pair.second;
+                h ^= std::hash<GroupGraph::Node>{}(node) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            }
+            for (const auto& edge : graph.edges) {
+                h ^= std::hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>>{}(edge) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            }
+            return h;
+        }
+    };
+    template <>
+    struct hash<std::pair<int, int>> {
+        std::size_t operator()(const std::pair<int, int>& p) const {
+            std::size_t h1 = std::hash<int>{}(p.first);
+            std::size_t h2 = std::hash<int>{}(p.second);
+            return h1 ^ (h2 << 1); // or use another combination method
+        }
+    };
+    template <>
+    struct hash<std::vector<int>> {
+        std::size_t operator()(const std::vector<int>& vec) const {
+            std::size_t h = 0;
+            for (const auto& elem : vec) {
+                h ^= std::hash<int>{}(elem) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            }
+            return h;
         }
     };
 }
