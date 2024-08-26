@@ -7,6 +7,7 @@ def run_performance_eval(
         node_defs = None,
         n_runs: int = 3, 
         max_nodes: int = 6,
+        n_cpus: int = 30,
         verbose: bool = False
 ):
     """
@@ -25,7 +26,6 @@ def run_performance_eval(
     performance = {combo : { n:[] for n in range(1, max_nodes + 1)} for combo in itertools.combinations(node_defs, len(node_defs) - 1)}
     for def_combo in performance:
         for n_nodes in range(1, max_nodes + 1):
-            total_time = 0
             for i in range(n_runs):
                 random.seed(0)
                 start_time = time.time()
@@ -34,11 +34,10 @@ def run_performance_eval(
                     set(def_combo), 
                     nauty_path=nauty_path,
                     input_file_path="",
-                    num_procs=16,
+                    num_procs=n_cpus,
                     verbose=verbose)
                 end_time = time.time()
-                total_time += end_time - start_time
-                performance[def_combo][n_nodes].append(total_time)
+                performance[def_combo][n_nodes].append(end_time - start_time)
             print(f"Number of generated graphs: {len(space)}")
             print("")
     # plot_performance(performance, max_nodes)
@@ -61,7 +60,7 @@ def plot_performance(performance, max_nodes):
         for n_nodes in performance[combo]:
             times = performance[combo][n_nodes]
             mean_time = np.mean(times)
-            color = cmap(norm(mean_time))
+            color = cmap(mean_time)
 
             ax.scatter(
                 n_nodes, 
@@ -77,7 +76,7 @@ def plot_performance(performance, max_nodes):
     ax.set_yticklabels([str(combo) for combo in performance])
 
     # Add the color bar
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm = plt.cm.ScalarMappable(cmap=cmap)
     sm.set_array([])  # Only needed for the color bar
     plt.colorbar(sm, ax=ax, label='Mean Time (s)')
 

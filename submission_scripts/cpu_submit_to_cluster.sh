@@ -5,16 +5,19 @@
 #SBATCH --output=output-%J.out
 #SBATCH --job-name=genGrouper
 #SBATCH --nodes=1
-#SBATCH --time=24:00:00
-#SBATCH --partition=day-long-std
+#SBATCH --time=72:00:00
+#SBATCH --partition=week-long-std
 #SBATCH --mem=31G
 
 
 
 source /raid6/homes/kierannp/.bashrc
 module load anaconda/3.9
-conda activate pureGrouper
+micromamba activate /raid6/homes/kierannp/y/envs/pureGrouper
 
-RUN_DIR=
+cd /raid6/homes/kierannp/projects/genGrouper
+python setup.py build_ext --inplace
+python setup.py install
 
-python run_exhaustive_generation.py
+python run_exhaustive_generate.py --n 7 --n_cpus 30
+

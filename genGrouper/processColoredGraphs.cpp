@@ -20,6 +20,7 @@
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
 #include <GraphMol/SmilesParse/SmilesParse.h>
+#include <GraphMol/Substruct/SubstructMatch.h>
 #include <GraphMol/GraphMol.h>
 
 
@@ -166,9 +167,12 @@ std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
 }
 
 
+
 std::unordered_set<std::string> process_nauty_output(
     const std::string& line, 
     const std::unordered_set<GroupGraph::Node>& node_defs,
+    const std::unordered_map<std::string, int> positiveConstraints,
+    const std::unordered_set<std::string> negativeConstraints,
     bool verbose
 ) {
 
@@ -239,6 +243,24 @@ std::unordered_set<std::string> process_nauty_output(
         int_to_node_type[i] = node_type;
         int_to_smiles[i] = type_to_smiles[node_type];
         i++;
+    }
+    
+    // Create a histogram of node types for positive constraints
+    std::unordered_map<std::string, int> node_hist;
+    for (const auto& node : node_defs) {
+        node_hist[node.ntype] = 0;
+    }
+    for (const auto& c : colors) {
+        node_hist[int_to_node_type.at(c)] += 1;
+    }
+    // Check if the number of nodes of each type is less than the number listed in the positive constraints
+    for (const auto& [node_type, count] : node_hist) {
+        if (positiveConstraints.find(node_type) == positiveConstraints.end()) {
+            continue;
+        }
+        if (count < positiveConstraints.at(node_type)) {
+            return {};
+        }
     }
 
 

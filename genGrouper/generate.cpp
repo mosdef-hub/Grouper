@@ -38,7 +38,9 @@ std::unordered_set<std::string> exhaustiveGenerate(
     std::unordered_set<GroupGraph::Node> node_defs, 
     std::string nauty_path,
     std::string input_file_path = "",
-    int num_procs = 32,
+    int num_procs = -1,
+    std::unordered_map<std::string, int> positiveConstraints = {},
+    std::unordered_set<std::string> negativeConstraints = {},
     bool verbose = false
 ) {
     // Error handling
@@ -49,11 +51,8 @@ std::unordered_set<std::string> exhaustiveGenerate(
     if (node_defs.size() < 1) {
         throw std::invalid_argument("Node definitions must not be empty...");
     }
-    if (num_procs < 1) {
-        throw std::invalid_argument("Number of processors must be greater than 0...");
-    }
-    if (num_procs > omp_get_max_threads()) {
-        throw std::invalid_argument("Number of processors must not exceed the maximum number of threads...");
+    if (num_procs <= -1){
+        num_procs = omp_get_max_threads();
     }
     if (verbose) {
         std::cout << "Number of nodes: " << n_nodes << std::endl;
@@ -120,8 +119,14 @@ std::unordered_set<std::string> exhaustiveGenerate(
 
         #pragma omp for schedule(dynamic) nowait
         for (int i = 0; i < total_lines; ++i) {
-            // std::cout<< "Thread " << thread_id << " processing line " << i << std::endl;
-            std::unordered_set<std::string> result = process_nauty_output(lines[i], node_defs, verbose);
+
+            std::unordered_set<std::string> result = process_nauty_output(
+                lines[i], 
+                node_defs,
+                positiveConstraints, 
+                negativeConstraints, 
+                verbose
+            );
 
             for (auto it : result) {
                 local_smiles_basis.insert(it);

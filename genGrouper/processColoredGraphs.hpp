@@ -41,6 +41,8 @@ std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
 std::unordered_set<std::string> process_nauty_output(
     const std::string& line, 
     const std::unordered_set<GroupGraph::Node>& node_defs,
+    const std::unordered_map<std::string, int> positiveConstraints,
+    const std::unordered_set<std::string> negativeConstraints,
     bool verbose
 );
 
