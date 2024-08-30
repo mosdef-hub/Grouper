@@ -120,17 +120,14 @@ std::unordered_set<std::string> exhaustiveGenerate(
         #pragma omp for schedule(dynamic) nowait
         for (int i = 0; i < total_lines; ++i) {
 
-            std::unordered_set<std::string> result = process_nauty_output(
+            process_nauty_output(
                 lines[i], 
                 node_defs,
+                &local_smiles_basis,
                 positiveConstraints, 
                 negativeConstraints, 
                 verbose
             );
-
-            for (auto it : result) {
-                local_smiles_basis.insert(it);
-            }
 
             #pragma omp critical
             {

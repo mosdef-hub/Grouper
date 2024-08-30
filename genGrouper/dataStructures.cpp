@@ -133,7 +133,8 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
 // Non-member function to compare tuples (used for sorting edges)
 inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& lhs,
                       const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& rhs) {
-    return lhs < rhs;
+    // Use the built-in tuple comparison operator
+    return std::tie(lhs) < std::tie(rhs);
 }
 
 void GroupGraph::addNode( 

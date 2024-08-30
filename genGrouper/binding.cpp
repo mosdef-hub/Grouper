@@ -57,6 +57,7 @@ PYBIND11_MODULE(_genGrouper, m) {
     m.def("process_nauty_output", &process_nauty_output, 
         py::arg("line"), 
         py::arg("node_defs"), 
+        py::arg("graph_basis"),
         py::arg("positive_constraints"),
         py::arg("negative_constraints"),
         py::arg("verbose") = false);

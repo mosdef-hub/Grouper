@@ -14,6 +14,7 @@
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
+// #include <nlohmann/json.hpp>
 
 #include "dataStructures.hpp"
 
@@ -58,7 +59,7 @@ std::vector<std::vector<int>> apply_edge_automorphisms(
             for (size_t i = 0; i < automorphism.size(); ++i) {
                 // Apply the edge automorphism to the coloring
                 int src_index = automorphism[i].first;
-                int dst_index = automorphism[i].second;
+                // int dst_index = automorphism[i].second;
                 permuted_coloring[i] = coloring[src_index];
             }
             unique_colorings.insert(permuted_coloring);
@@ -105,7 +106,7 @@ std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
     // Create a graph object to compute automorphisms
     GroupGraph gG;
     // Add nodes to the graph
-    for (int i = 0; i < node_colors.size(); ++i) {
+    for (std::vector<int>::size_type i = 0; i < node_colors.size(); ++i) {
         gG.addNode(
             int_to_node_type.at(node_colors[i]), 
             int_to_smiles.at(node_colors[i]), 
@@ -131,7 +132,7 @@ std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
         GroupGraph gG;
 
         // Add nodes to the graph
-        for (int i = 0; i < node_colors.size(); ++i) {
+        for (std::vector<int>::size_type i = 0; i < node_colors.size(); ++i) {
             gG.addNode(
                 int_to_node_type.at(node_colors[i]), 
                 int_to_smiles.at(node_colors[i]), 
@@ -168,21 +169,21 @@ std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
 
 
 
-std::unordered_set<std::string> process_nauty_output(
+void process_nauty_output(
     const std::string& line, 
     const std::unordered_set<GroupGraph::Node>& node_defs,
+    std::unordered_set<std::string>* graph_basis,
     const std::unordered_map<std::string, int> positiveConstraints,
     const std::unordered_set<std::string> negativeConstraints,
     bool verbose
 ) {
 
     std::vector<GroupGraph> group_graphs_list;
-    std::unordered_set<std::string> graph_basis;
 
     // Split the line into node_description and edge_description
     size_t split_pos = line.find("  ");
     if (split_pos == std::string::npos) {
-        return {};
+        return;
     }
 
     std::string node_description_str = line.substr(0, split_pos);
@@ -259,7 +260,7 @@ std::unordered_set<std::string> process_nauty_output(
             continue;
         }
         if (count < positiveConstraints.at(node_type)) {
-            return {};
+            return;
         }
     }
 
@@ -288,10 +289,7 @@ std::unordered_set<std::string> process_nauty_output(
 
     // Convert the graphs to smiles
     for (const auto& graph : graphs) {
-        graph_basis.insert(graph.toSmiles());
+        graph_basis->insert(graph.toSmiles());
     }
-
-
-    return graph_basis;
 }
 
