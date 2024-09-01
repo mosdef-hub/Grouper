@@ -13,6 +13,8 @@
 #include <iterator>
 #include <tuple>
 
+#include <libpq-fe.h>
+
 #include "dataStructures.hpp"
 
 class GroupGraph; // Forward declaration of GroupGraph
@@ -41,7 +43,7 @@ std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
 void process_nauty_output(
     const std::string& line, 
     const std::unordered_set<GroupGraph::Node>& node_defs,
-    std::unordered_set<std::string>* graph_basis,
+    std::unordered_set<GroupGraph>* graph_basis,
     const std::unordered_map<std::string, int> positiveConstraints,
     const std::unordered_set<std::string> negativeConstraints,
     bool verbose

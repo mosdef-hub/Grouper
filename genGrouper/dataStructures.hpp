@@ -121,6 +121,8 @@ public:
     std::vector<std::vector<int>> nodeAut() const;
     std::vector<std::vector<std::pair<int, int>>> edgeAut(const std::vector<std::pair<int, int>>& edge_list) const;
     std::unique_ptr<AtomGraph> toAtomicGraph() const;
+    std::string serialize() const;
+    std::string Canon() const;
 
 private:
     // Helper methods or additional private members can be declared here if needed

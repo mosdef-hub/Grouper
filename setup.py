@@ -24,6 +24,7 @@ molgrouper_module = Extension(
             os.path.join(condabase, "include/rdkit"),
             os.path.join(condabase, "include/omp"),
             os.path.join(condabase, "include/nauty"),
+            os.path.join(condabase, "include/libpq"),
             pybind11.get_include(),
             pybind11.get_include(user=True),
             'genGrouper',
@@ -32,10 +33,17 @@ molgrouper_module = Extension(
             os.path.join(condabase, 'lib'),
             os.path.join(condabase, "lib/cairo"),
     ],
-    libraries = ['RDKitFileParsers', 'RDKitSmilesParse', 'RDKitGraphMol', 'RDKitRDGeneral', 'omp', 'nauty'],
-    extra_compile_args = ['-Xpreprocessor', '-fopenmp', '-std=c++17' ], # '-mmacosx-version-min=10.13'
+    libraries = [
+        'RDKitFileParsers', 
+        'RDKitSmilesParse', 
+        'RDKitGraphMol', 
+        'RDKitRDGeneral', 
+        'omp', 
+        'nauty', 
+        'pq'
+    ],
+    extra_compile_args = ['-Xpreprocessor', '-fopenmp', '-std=c++17'], # '-mmacosx-version-min=10.13'
     language='c++')
-    # extra_link_args=['-Wl'])
 
 setup(
     name='genGrouper',

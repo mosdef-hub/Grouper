@@ -6,7 +6,7 @@
 
 void update_progress(int current, int total);
 
-std::unordered_set<std::string> exhaustiveGenerate(
+std::unordered_set<GroupGraph> exhaustiveGenerate(
     int n_nodes, 
     std::unordered_set<GroupGraph::Node> node_defs, 
     std::string nauty_path,
@@ -14,5 +14,6 @@ std::unordered_set<std::string> exhaustiveGenerate(
     int num_procs = 32,
     std::unordered_map<std::string, int> positiveConstraints = {},
     std::unordered_set<std::string> negativeConstraints = {},
+    bool writeToDatabase = false,
     bool verbose = false
 );
