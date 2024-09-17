@@ -1,40 +1,46 @@
+import time
+import pytest
+from genGrouper import GroupGraph, exhaustive_generate, Node
 from genGrouper.tests.base_test import BaseTest
-from genGrouper import GroupGraph, exhaustive_generate 
-# from pysmiles import write_smiles
-# import pytest
+import logging
 
-class TestGroupGraph(BaseTest):
-    def test_chiral_group_graph_generation(self):
-        node_defs = set()
-        node_defs.add(('OH', 'O', ['C11', 'C12'], ['O1']))
-        node_defs.add(('CC', 'C', ['C11', 'C12'], ['C21', 'C22']))
-        out = exhaustive_generate(3, node_defs)
+class TestGeneration(BaseTest):
 
-        def check_if_graph_has_ports(graph, ports):
-            all_ports = set()
-            for e in graph.edges(data=True):
-                for p in e[2]['ports']:
-                    all_ports.add(p[0].split('.')[1])
-                    all_ports.add(p[1].split('.')[1])
-            return all_ports == ports
+    @pytest.mark.parametrize("n_nodes", [2,3, 4])
+    @pytest.mark.parametrize("num_procs", [1, 2, 4, 8])
+    @pytest.mark.parametrize("node_defs", [[
+            {"type": "t1", "smiles": "C", "ports": [0,1,2,3], "hubs": [0,0,0,0]},
+            {"type": "t2", "smiles": "N", "ports": [0,1,2], "hubs": [0,0,0]},
+            {"type": "Methyl", "smiles": "C", "ports": [0,1,2], "hubs": [0,0,0]},
+            {"type": "Benzene", "smiles": "C1=CC=CC=C1", "ports": [0,1,2,3,4,5], "hubs": [0,1,2,3,4,5]},
+            {"type": "ester", "smiles": "C(=O)O", "ports": [0,1], "hubs": [0,2]},
+            {"type": "extra1", "smiles": "O", "ports": [0,1], "hubs": [0,0]}
+        ]]
+    )
+    def test_exhaustive_generate_performance(self, benchmark, n_nodes, num_procs, node_defs):
+        # Convert node_defs to the expected format
+        node_defs = set(Node(0, n["type"], n["smiles"], n["ports"], n["hubs"]) for n in node_defs)
 
-        cc_2_oh = []
-        for g in out:
-            n_OH, n_CC = 0, 0
-            for name, info in g.nodes(data=True):
-                if info['type'] == 'OH':
-                    n_OH += 1
-                if info['type'] == 'CC':
-                    n_CC += 1
-            if n_OH == 2 and n_CC == 1:
-                cc_2_oh.append(g)
+        write_to_db = False
+        verbose = False
+        nauty_path = "/Users/kieran/projects/genGrouper/packages/nauty2_8_8"
+        input_file_path = ""
+        positive_constraints = {}
+        negative_constraints = set()
 
-        # cis TODO verifiy actually cis 
-        assert any([True if check_if_graph_has_ports(g, ports={'C11', 'C22', 'O1'}) else False for g in cc_2_oh])
+        logging.info("Starting benchmark")
 
-        # trans
-        assert any([True if check_if_graph_has_ports(g, ports={'C11', 'C21', 'O1'}) else False for g in cc_2_oh])
-
-        # terminal alkene
-        assert any([True if check_if_graph_has_ports(g, ports={'C11', 'C12', 'O1'}) else False for g in cc_2_oh])
+        benchmark(
+            exhaustive_generate, 
+            n_nodes, 
+            node_defs, 
+            nauty_path, 
+            input_file_path, 
+            num_procs, 
+            positive_constraints, 
+            negative_constraints, 
+            write_to_db, 
+            verbose
+        )
+        logging.info("Benchmark complete")
 

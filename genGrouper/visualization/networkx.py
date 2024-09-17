@@ -49,6 +49,10 @@ def nx_visualize(group_graph, layout=nx.spring_layout, **kwargs):
     if not kwargs:
         kwargs = dict(seed=1, k=0.5)
 
+    if not isinstance(group_graph, nxGroupGraph):
+        raise ValueError("Input must be an nxGroupGraph object.")
+    if len(group_graph.nodes) == 0:
+        raise ValueError("Input nxGroupGraph must have nodes to visualize.")
     components = nx.connected_components(group_graph)
     offset = 0
     pos = {}

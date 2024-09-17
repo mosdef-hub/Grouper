@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Tuple, Union, Callable, Sequence
 from copy import deepcopy
 from genGrouper import GroupGraph
 import networkx as nx
-import torch
 import torch_geometric
 
 def run_performance_eval(
@@ -349,6 +348,10 @@ def convert_to_nx(G: GroupGraph) -> nxGroupGraph:
     Returns:
     - nxGroupGraph: The networkx representation of the GroupGraph.
     """
+    if not isinstance(G, GroupGraph):
+        raise TypeError("G must be a GroupGraph")
+    if G.nodes == {}:
+        return nxGroupGraph()
     nxG = nxGroupGraph(G.node_types)
     for node_id, node in G.nodes.items():
         nxG.add_node(
