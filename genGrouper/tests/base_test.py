@@ -1,7 +1,7 @@
 import pytest
 from copy import deepcopy
 
-from genGrouper import GroupGraph
+from genGrouper import GroupGraph, Node
 # from group_selfies import Group
 import networkx as nx
 
@@ -50,6 +50,7 @@ class BaseTest:
         group_graph.add_edge((3, 0), (4, 1))
         group_graph.add_edge((4, 0), (0, 1))
         return group_graph
+    
 
     # @pytest.fixture(autouse=True)
     # def long_graph(self):

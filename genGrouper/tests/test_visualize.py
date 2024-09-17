@@ -4,13 +4,17 @@ import networkx as nx
 import numpy as np
 from genGrouper import GroupGraph
 from genGrouper.tests.base_test import BaseTest
-from group_selfies import Group
+from genGrouper.visualization import nx_visualize
+from genGrouper.utils import convert_to_nx
 
 class TestGroupGraph(BaseTest):
-    def test_nx_visualize_large(self, two_molecule_graph):
-        fig = two_molecule_graph.visualize()
-        assert fig
-
-    def test_nx_visualize_small(self, single_node_graph):
-        fig = single_node_graph.visualize()
-        assert fig
+    @pytest.mark.parametrize("graph_fixture", ["empty_graph", "basic_graph", "single_node_graph"])
+    def test_nx_visualize(self, request, graph_fixture):
+        graph = request.getfixturevalue(graph_fixture)
+        conversion = convert_to_nx(graph)
+        if graph_fixture == "empty_graph":
+            with pytest.raises(ValueError):
+                fig = nx_visualize(conversion)
+        else:
+            fig = nx_visualize(conversion)
+            assert fig

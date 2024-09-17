@@ -6,7 +6,19 @@
 #include "autUtils.hpp"
 #include "fragmentation.hpp"
 
+
+
 namespace py = pybind11;
+
+
+// Function to convert std::set<GroupGraph> to py::set
+py::set convert_unordered_set(const std::unordered_set<GroupGraph>& cpp_set) {
+    py::set py_set;
+    for (const auto& item : cpp_set) {
+        py_set.add(item);
+    }
+    return py_set;
+}
 
 PYBIND11_MODULE(_genGrouper, m) {
     m.doc() = "genGrouper bindings for Python";
@@ -42,6 +54,9 @@ PYBIND11_MODULE(_genGrouper, m) {
         .def("to_smiles", &GroupGraph::toSmiles, "Convert GroupGraph to SMILES")
         .def("to_vector", &GroupGraph::toVector, "Convert GroupGraph to group vector")
         .def("to_atom_graph", &GroupGraph::toAtomicGraph, "Convert GroupGraph to AtomGraph")
+        .def("__hash__", [](const GroupGraph& g) {
+            return std::hash<GroupGraph>{}(g);  // Using your defined hash function
+        })
         .def("__eq__", &GroupGraph::operator==);
     py::class_<AtomGraph>(m, "AtomGraph")
         .def(py::init<>())
@@ -61,7 +76,18 @@ PYBIND11_MODULE(_genGrouper, m) {
         py::arg("positive_constraints"),
         py::arg("negative_constraints"),
         py::arg("verbose") = false);
-    m.def("exhaustive_generate", &exhaustiveGenerate, 
+    m.def("exhaustive_generate", [](int n_nodes, 
+                                    const std::unordered_set<GroupGraph::Node>& node_defs, 
+                                    const std::string& nauty_path, 
+                                    const std::string& input_file_path, 
+                                    int num_procs, 
+                                    const std::unordered_map<std::string, int>& positive_constraints, 
+                                    const std::unordered_set<std::string>& negative_constraints, 
+                                    bool write_to_db,
+                                    bool verbose) {
+        std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, nauty_path, input_file_path, num_procs, positive_constraints, negative_constraints, write_to_db, verbose);
+        return convert_unordered_set(result);
+    },
         py::arg("n_nodes"), 
         py::arg("node_defs"), 
         py::arg("nauty_path"),
@@ -69,6 +95,7 @@ PYBIND11_MODULE(_genGrouper, m) {
         py::arg("num_procs") = -1, 
         py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
         py::arg("negative_constraints") = std::unordered_set<std::string>{},
+        py::arg("write_to_db") = false,
         py::arg("verbose") = false);
     m.def("fragment", &fragment, 
         py::arg("smiles"), 

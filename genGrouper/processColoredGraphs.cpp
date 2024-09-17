@@ -14,7 +14,6 @@
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
-// #include <nlohmann/json.hpp>
 
 #include "dataStructures.hpp"
 
@@ -172,13 +171,14 @@ std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
 void process_nauty_output(
     const std::string& line, 
     const std::unordered_set<GroupGraph::Node>& node_defs,
-    std::unordered_set<std::string>* graph_basis,
+    std::unordered_set<GroupGraph>* graph_basis,
     const std::unordered_map<std::string, int> positiveConstraints,
     const std::unordered_set<std::string> negativeConstraints,
     bool verbose
 ) {
 
     std::vector<GroupGraph> group_graphs_list;
+    std::unordered_set<std::string> canon_set;
 
     // Split the line into node_description and edge_description
     size_t split_pos = line.find("  ");
@@ -287,9 +287,11 @@ void process_nauty_output(
         colors
     );
 
-    // Convert the graphs to smiles
     for (const auto& graph : graphs) {
-        graph_basis->insert(graph.toSmiles());
+        if (canon_set.find(graph.toSmiles()) == canon_set.end()) {
+            canon_set.insert(graph.toSmiles());
+            graph_basis->insert(graph);
+        }
     }
 }
 

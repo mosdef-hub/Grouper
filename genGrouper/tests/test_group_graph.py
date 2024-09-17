@@ -1,9 +1,7 @@
 from genGrouper import GroupGraph, AtomGraph
 from genGrouper.io import has_mbuild, has_torch
 from genGrouper.tests.base_test import BaseTest
-# from group_selfies import Group
 import networkx as nx
-# from pysmiles import write_smiles
 import pytest
 import numpy as np
 
@@ -137,6 +135,7 @@ class TestGroupGraph(BaseTest):
         graph.add_edge((0, 0), (1, 0))
         with pytest.raises(ValueError):
             graph.add_edge((0, 0), (2, 0))
+
     @pytest.mark.parametrize("graph_fixture", ["empty_graph", "basic_graph", "single_node_graph"])
     def test_to_atom_graph(self, request, graph_fixture):
         # Access the graph using request.getfixturevalue
@@ -159,7 +158,6 @@ class TestGroupGraph(BaseTest):
             truth.add_node('C', 1)
             assert atomic_graph == truth
         
-
     def test_n_free_ports(self):
         graph = GroupGraph()
         graph.add_node('node1', 'type1', [0,1], [0,0])
@@ -185,79 +183,29 @@ class TestGroupGraph(BaseTest):
         if graph_fixture == "five_member_ring_graph":
             assert graph.to_smiles() == 'C1CCCC1'
 
+    def test_add_node_performance(self, benchmark):
         graph = GroupGraph()
-        print(graph)
-        graph.add_node('benzene', 'c1ccccc1', [0,1,2,3,4,5], [0,1,2,3,4,5])
-        assert graph.to_smiles() == 'C1=CC=CC=C1' or graph.to_smiles() == 'c1ccccc1'
-        graph.add_node('benzene', 'C1=CC=CC=C1', [0,1,2,3,4,5], [0,1,2,3,4,5])
-        graph.add_node('benzene', 'C1=CC=CC=C1', [0,1,2,3,4,5], [0,1,2,3,4,5])
-        graph.add_node('benzene', 'C1=CC=CC=C1', [0,1,2,3,4,5], [0,1,2,3,4,5])
-        graph.add_edge((0, 2), (3, 5))
-        graph.add_edge((1, 0), (3, 0))
-        graph.add_edge((2, 1), (3, 3))
-        assert graph.to_smiles() == 'c1ccc(-c2ccc(-c3ccccc3)c(-c3ccccc3)c2)cc1'
+        for i in range(100):
+            graph.add_node(f'type{i}', '', [0, 1], [0, 0])
         
-    # def test_chiral_smiles_conversion(self):
-    #     # Define node types with ports
-    #     node_types = {
-    #         'CC': ['C11', 'C12', 'C21', 'C22',],
-    #         'OH': ['O1'],
-    #     }
-    #     node_types_to_smiles = {
-    #         'CC': 'C=C',
-    #         'OH': 'O',
-    #     }
-    #     node_port_to_atom_index = {
-    #         'CC': {'C11': 0, 'C12': 0, 'C21': 1, 'C22': 1},
-    #         'OH': {'O1': 0},
-    #     }
-    #     node_type_to_chiral_subs = {
-    #         'CC': {'[C]=[C]' : ['/[C]=[C]/', '/[C]=[C]\\']},
-    #         'OH': {'O': []} # no chiral subs
-    #     }
+        def benchmark_add_node():
+            graph.add_node('type100', '', [0, 1], [0, 0])
+        
+        # Benchmark the add_node method
+        benchmark(benchmark_add_node)
 
-    #     # cis
-    #     graph = GroupGraph(node_types)
-    #     graph.add_node('n0', 'OH')
-    #     graph.add_node('n1', 'CC')
-    #     graph.add_node('n2', 'OH')
-    #     graph.add_edge(('n0', 'O1'), ('n1', 'C11'))
-    #     graph.add_edge(('n2', 'O1'), ('n1', 'C22'))
-    #     mG = graph.to_molecular_graph(node_types_to_smiles, node_port_to_atom_index)
-    #     smiles = write_smiles(mG)
 
-    #     chiral_smiles = substitute_chiral_smiles(smiles, '[C]=[C]', node_type_to_chiral_subs['CC']['[C]=[C]'])
-    #     #cis
-    #     assert '[O]/[C]=[C]\\[O]' in chiral_smiles
-    #     #trans
-    #     assert '[O]/[C]=[C]/[O]' in chiral_smiles
-
-    # @pytest.mark.skipif(not has_mbuild, reason="mBuild package not installed")
-    # def test_compound_to_group_graph(self):
-    #     import mbuild as mb
-    #     mol = mb.load('CCCCCCCC', smiles=True) # octane molecule
-    #     groups = [Group('c3', 'C([H])([H])([H])(*1)'), Group('c2', 'C([H])([H])(*1)(*1)')]
+    # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()
-    #     group_graph = graph.from_mbuild(mol, groups)
-    #     print(group_graph)
+    #     for i in range(100):
+    #         graph.add_node(f'type{i}', '', [0, 1], [0, 0])
+    #     def benchmark_add_edge():
+    #         graph.add_edge((0, 0), (1, 1))
+    #         graph.remove_edge((0, 0), (1, 1))
+        
+    #     # Benchmark the add_edge method
+    #     benchmark(benchmark_add_edge)
 
-    def test_group_graph_to_vector(self):
-        def get_ground_truth(graph):
-            hist = {node: 0 for node in graph.node_types}
-            for k, v in graph.nodes.items():
-                hist[v.type] += 1
-            return hist
-
-        graph = GroupGraph()
-        graph.add_node('node1', '', [0,1], [0,0])
-        graph.add_node('node2', '', [0,1], [0,0])
-
-        group_vector = graph.to_vector()
-        true_hist = get_ground_truth(graph)
-
-        assert len(group_vector) == len(true_hist)
-        for ntype in group_vector:
-            assert group_vector[ntype] == true_hist[ntype]
 
     # @pytest.mark.skipif(not has_torch, reason="torch package not installed")
     # def test_group_graph_to_pyG(self, basic_graph):

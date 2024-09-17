@@ -1,3 +1,6 @@
+*.err
+*.out
+y
 cpp_code
 notebooks
 foo

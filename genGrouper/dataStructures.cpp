@@ -421,8 +421,6 @@ std::vector<std::vector<int>> GroupGraph::nodeAut() const {
     return automorphisms;
 }
 
-
-
 std::vector<std::vector<std::pair<int, int>>> GroupGraph::edgeAut(const std::vector<std::pair<int, int>>& edge_list) const {
     int n = nodes.size();
     std::vector<std::vector<int>> adj_matrix(n, std::vector<int>(n, 0));
@@ -531,6 +529,70 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
     
     return atomGraph;
 }
+
+std::string GroupGraph::serialize() const {
+        std::ostringstream oss;
+        oss << "{\n  \"nodes\": [\n";
+        for (const auto& pair : nodes) {
+            const Node& node = pair.second;
+            oss << "    {\n      \"id\": " << node.id 
+                << ",\n      \"ntype\": \"" << node.ntype
+                << "\",\n      \"smiles\": \"" << node.smiles
+                << "\",\n      \"ports\": [";
+            for (const auto& port : node.ports) {
+                oss << port << ",";
+            }
+            oss.seekp(-1, oss.cur); // remove the last comma
+            oss << "],\n      \"hubs\": [";
+            for (const auto& hub : node.hubs) {
+                oss << hub << ",";
+            }
+            oss.seekp(-1, oss.cur); // remove the last comma
+            oss << "]\n    },\n";
+        }
+        oss.seekp(-2, oss.cur); // remove the last comma and newline
+        oss << "\n  ],\n  \"edges\": [\n";
+        for (const auto& edge : edges) {
+            oss << "    [" 
+                << std::get<0>(edge) << "," 
+                << std::get<1>(edge) << "," 
+                << std::get<2>(edge) << "," 
+                << std::get<3>(edge) << "],\n";
+        }
+        oss.seekp(-2, oss.cur); // remove the last comma and newline
+        oss << "\n  ]\n}";
+        return oss.str();
+    }
+
+std::string GroupGraph::Canon() const {
+        // TODO: Implement canonicalization algorithm, this doesn't work because the it doesn't account for automorphisms
+        
+        // Step 1: Sort nodes based on their attributes (e.g., id, ntype, smiles)
+        std::vector<Node> sortedNodes;
+        for (const auto& pair : nodes) {
+            sortedNodes.push_back(pair.second);
+        }
+        std::sort(sortedNodes.begin(), sortedNodes.end(), [](const Node& a, const Node& b) {
+            return std::tie(a.ntype, a.smiles, a.id) < std::tie(b.ntype, b.smiles, b.id);
+        });
+
+        // Step 2: Sort edges by connected nodes and ports
+        std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType>> sortedEdges = edges;
+        std::sort(sortedEdges.begin(), sortedEdges.end());
+
+        // Step 3: Convert sorted nodes and edges to a canonical SMILES or other format
+        std::stringstream ss;
+        for (const auto& node : sortedNodes) {
+            ss << node.ntype << ":" << node.smiles << ";";
+        }
+        for (const auto& edge : sortedEdges) {
+            ss << std::get<0>(edge) << "-" << std::get<1>(edge) << "-" 
+               << std::get<2>(edge) << "-" << std::get<3>(edge) << ";";
+        }
+
+        // Step 4: Return the canonical representation
+        return ss.str();
+    }
 
 //#############################################################################################################
 
