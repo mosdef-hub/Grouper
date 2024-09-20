@@ -83,9 +83,9 @@ PYBIND11_MODULE(_genGrouper, m) {
                                     int num_procs, 
                                     const std::unordered_map<std::string, int>& positive_constraints, 
                                     const std::unordered_set<std::string>& negative_constraints, 
-                                    bool write_to_db,
+                                    const std::string& config_path,
                                     bool verbose) {
-        std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, nauty_path, input_file_path, num_procs, positive_constraints, negative_constraints, write_to_db, verbose);
+        std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, nauty_path, input_file_path, num_procs, positive_constraints, negative_constraints, config_path, verbose);
         return convert_unordered_set(result);
     },
         py::arg("n_nodes"), 
@@ -95,7 +95,7 @@ PYBIND11_MODULE(_genGrouper, m) {
         py::arg("num_procs") = -1, 
         py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
         py::arg("negative_constraints") = std::unordered_set<std::string>{},
-        py::arg("write_to_db") = false,
+        py::arg("config_path") = "",
         py::arg("verbose") = false);
     m.def("fragment", &fragment, 
         py::arg("smiles"), 

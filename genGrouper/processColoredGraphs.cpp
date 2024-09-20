@@ -16,6 +16,7 @@
 #include <unordered_set>
 
 #include "dataStructures.hpp"
+#include "colorPermutations.cuh"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -277,21 +278,68 @@ void process_nauty_output(
     }
 
 
+    // Prepare to generate all possible colorings
+    std::vector<std::vector<int>> all_colorings;
+    std::unordered_map<std::pair<int, int>, int> possible_edge_colors;
+    std::vector<int> current_coloring(possible_edge_colors.size(), 0);
+    // Calculate the possible edge colors for each edge
+    for (const auto& edge : edge_list) {
+        int src = edge.first;
+        int dst = edge.second;
+        int n_src_ports = node_types.at(int_to_node_type.at(colors[src])).size();
+        int n_dst_ports = node_types.at(int_to_node_type.at(colors[dst])).size();
+        int n_colors = n_src_ports * n_dst_ports;
+        possible_edge_colors[{src, dst}] = n_colors;
+    }
+    generate_all_colorings(possible_edge_colors, all_colorings, current_coloring, 0);
 
-    std::vector<GroupGraph> graphs = generate_non_isomorphic_colored_graphs(
-        edge_list, 
-        int_to_node_type, 
-        int_to_smiles, 
-        node_types, 
-        node_type_to_hub,
-        colors
-    );
+    // Compute the edge automorphisms of the graph
+    std::vector<std::vector<std::pair<int, int>>> edge_automorphisms = gG.edgeAut(edge_list);
 
-    for (const auto& graph : graphs) {
-        if (canon_set.find(graph.toSmiles()) == canon_set.end()) {
-            canon_set.insert(graph.toSmiles());
-            graph_basis->insert(graph);
+    std::vector<std::vector<int>> unique_colorings = apply_edge_automorphisms_gpu(all_colorings, edge_automorphisms);
+
+    // Iterate over unique colorings
+    for (const auto& coloring: unique_colorings){
+        // Add edges with the current coloring
+        size_t edge_index = 0;
+        try {
+            for (const auto& edge : edge_list) {
+                int src = edge.first;
+                int dst = edge.second;
+                int color = coloring[edge_index++];
+                std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(colors[src])), node_types.at(int_to_node_type.at(colors[dst])));
+                int srcPort = colorPort.first;
+                int dstPort = colorPort.second;
+
+                gG.addEdge({src, srcPort}, {dst, dstPort});
+            }
+        } catch (const std::exception& e) {
+            std::cout << "Error adding edge: " << e.what() << std::endl;
+            continue;
+        }
+
+        // Check if the graph is unique considering permutations
+        if (canon_set.find(gG.toSmiles()) == canon_set.end()) {
+            canon_set.insert(gG.toSmiles());
+            graph_basis->insert(gG);
         }
     }
+    
+    // std::vector<GroupGraph> graphs = generate_non_isomorphic_colored_graphs(
+    //     edge_list, 
+    //     int_to_node_type, 
+    //     int_to_smiles, 
+    //     node_types, 
+    //     node_type_to_hub,
+    //     colors
+    // );
+
+    // for (const auto& graph : graphs) {
+    //     if (canon_set.find(graph.toSmiles()) == canon_set.end()) {
+    //         canon_set.insert(graph.toSmiles());
+    //         graph_basis->insert(graph);
+    //     }
+    // }
+    
 }
 

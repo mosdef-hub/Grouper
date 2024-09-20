@@ -26,12 +26,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Exhaustively generate set of molecular graphs')
     parser.add_argument('--n', type=int, default=-1, help='Number of nodes in the graph')
     parser.add_argument('--n_cpus', type=int, default=8, help='Number of cpus to use for multiprocessing')
+    parser.add_argument('--config_path', type=str, default="", help='Path to config file')
     args = parser.parse_args()
 
     parent = str(pathlib.Path(__file__).parent.absolute())
 
     print(f"Generating all possible molecular graphs with {args.n} nodes\n")
     print(f"Multiprocessing with {args.n_cpus} cpus\n")
+    if len(args.config_path) > 0:
+        print(f"Saving to database with config at {args.config_path}\n")
 
     # call nauty
     start = time.time()
@@ -43,14 +46,10 @@ if __name__ == "__main__":
         num_procs=args.n_cpus,
         positive_constraints=positive_constraints,
         negative_constraints=negative_constraints,
+        config_path=args.config_path,
         verbose=False
     )
     end = time.time()
     print(f"Time taken for generation: {end - start}")
 
     print(f"Total graphs: {len(result)}")
-
-    # save set of unique mols
-    with open("unique_mols.txt", "w") as f:
-        for mol in result:
-            f.write(f"{mol}\n")

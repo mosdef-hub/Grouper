@@ -14,6 +14,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     int num_procs = 32,
     std::unordered_map<std::string, int> positiveConstraints = {},
     std::unordered_set<std::string> negativeConstraints = {},
-    bool writeToDatabase = false,
+    std::string config_path = "",
     bool verbose = false
 );

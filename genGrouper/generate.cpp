@@ -34,28 +34,28 @@ void update_progress(int current, int total) {
     std::cout.flush();
 }
 
-// Function to execute an SQL query with parameters
-void executeQuery(PGconn* conn, const std::string& query, const std::vector<std::string>& params) {
-    std::vector<const char*> param_values(params.size());
-    for (size_t i = 0; i < params.size(); ++i) {
-        param_values[i] = params[i].c_str();
+std::unordered_map<std::string, std::string> parseConfig(const std::string& configFile) {
+    std::unordered_map<std::string, std::string> configParams;
+    std::ifstream config(configFile);
+    std::string line;
+    while (std::getline(config, line)) {
+        std::istringstream iss(line);
+        std::string key, value;
+        if (std::getline(iss, key, '=') && std::getline(iss, value)) {
+            configParams[key] = value;
+        }
     }
+    return configParams;
+}
 
-    // Execute the query with parameters
-    PGresult* res = PQexecParams(
-        conn,                // Connection
-        query.c_str(),       // SQL query
-        params.size(),       // Number of parameters
-        NULL,                // Parameter types (NULL means let libpq infer types)
-        param_values.data(), // Parameter values
-        NULL,                // Parameter lengths (NULL means use default lengths)
-        NULL,                // Parameter formats (NULL means use text format)
-        0                    // Result format (0 for text, 1 for binary)
-    );
-
-    // Check the result status
+void executeQuery(PGconn* conn, const std::string& query, const std::vector<std::string>& params = {}) {
+    const char* paramValues[params.size()];
+    for (size_t i = 0; i < params.size(); ++i) {
+        paramValues[i] = params[i].c_str();
+    }
+    PGresult* res = PQexecParams(conn, query.c_str(), params.size(), nullptr, paramValues, nullptr, nullptr, 0);
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        std::cerr << "Query failed: " << PQerrorMessage(conn) << std::endl;
+        std::cerr << "Query execution failed: " << PQerrorMessage(conn) << std::endl;
     }
     PQclear(res);
 }
@@ -68,7 +68,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     int num_procs = -1,
     std::unordered_map<std::string, int> positiveConstraints = {},
     std::unordered_set<std::string> negativeConstraints = {},
-    bool writeToDatabase = false,
+    std::string config_path = "",
     bool verbose = false
 ) {
     // Error handling
@@ -182,61 +182,92 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
     std::cout<< "Generated " << global_basis.size()<< " unique graphs" << std::endl;
 
-    if (writeToDatabase) {
-        // Database connection parameters
-        // dbname, user, password, hostaddr, port, 
-        // Connection parameters
-        const char* conninfo = "dbname=foo user=tmpuser password=password hostaddr=127.0.0.1 port=5432";
-        
-        // Establish a connection to the PostgreSQL database
-        PGconn* conn = PQconnectdb(conninfo);
+    if (!config_path.empty()) {
+
+        std::unordered_map<std::string, std::string> configParams = parseConfig(config_path);
+
+        std::string table_name = configParams["table_name"]; // Get the table name from config
+
+        std::string conninfo = "dbname=" + configParams["dbname"] +
+                       " user=" + configParams["user"] +
+                       " password=" + configParams["password"] +
+                       " hostaddr=" + configParams["hostaddr"] +
+                       " port=" + configParams["port"];
+
+        PGconn* conn = PQconnectdb(conninfo.c_str());
         if (PQstatus(conn) != CONNECTION_OK) {
-            std::cerr << "Connection to database failed: " << PQerrorMessage(conn) << std::endl;
-            PQfinish(conn);
-        }
+                std::cerr << "Connection to database failed: " << PQerrorMessage(conn) << std::endl;
+                PQfinish(conn);
+            }
+
         try {
-            // Prepare SQL statement for insertion
-            std::string insert_query = "INSERT INTO graph_table (smiles, graph_data) VALUES ($1, $2)";
+                // Sanity check: Check if connection is in a valid state
+                if (PQstatus(conn) != CONNECTION_OK) {
+                    std::cerr << "Database connection is not in a valid state: " << PQerrorMessage(conn) << std::endl;
+                    PQfinish(conn);
+                }
 
-            // Start a transaction block
-            PGresult* res = PQexec(conn, "BEGIN");
-            if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-                std::cerr << "BEGIN command failed: " << PQerrorMessage(conn) << std::endl;
+                // Sanity check: Check if the table exists and create it if it doesn't
+                std::string create_table_query = 
+                    "CREATE TABLE IF NOT EXISTS " + table_name + " ("
+                    "smiles TEXT PRIMARY KEY, "
+                    "graph_data TEXT, "   
+                    "n_nodes INT"         
+                    ");";
+
+                executeQuery(conn, create_table_query);
+
+                // Prepare SQL statement for insertion
+                std::string insert_query = "INSERT INTO " + table_name +" (smiles, graph_data, n_nodes) VALUES ($1, $2, $3)";
+
+                // Start a transaction block
+                PGresult* res = PQexec(conn, "BEGIN");
+                if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+                    std::cerr << "BEGIN command failed: " << PQerrorMessage(conn) << std::endl;
+                    PQclear(res);
+                    PQfinish(conn);
+                }
                 PQclear(res);
-                PQfinish(conn);
-            }
-            PQclear(res);
 
-            // Loop through the global_basis set and insert each GroupGraph into the database
-            for (const auto& graph : global_basis) {
-                // Convert the GroupGraph to a SMILES string
-                std::string smiles = graph.toSmiles();
+                // Loop through the global_basis set and insert each GroupGraph into the database
+                for (const auto& graph : global_basis) {
+                    std::string smiles = graph.toSmiles();
+                    std::string graph_data = graph.serialize();
+                    int n_nodes = graph.numNodes();
 
-                // Serialize or otherwise convert GroupGraph to a format for storage (e.g., JSON, binary)
-                std::string graph_data = graph.serialize();  // Assuming you have a serialize method
+                    // Prepare parameters for the insert query
+                    const char* paramValues[3];
+                    paramValues[0] = smiles.c_str();
+                    paramValues[1] = graph_data.c_str();
+                    paramValues[2] = std::to_string(n_nodes).c_str();
 
-                // Execute the prepared statement
-                std::vector<std::string> params = { smiles, graph_data };
-                executeQuery(conn, insert_query, params);
-            }
+                    // Execute the insert query
+                    PGresult* insertRes = PQexecParams(conn, insert_query.c_str(), 3, nullptr, paramValues, nullptr, nullptr, 0);
+                    if (PQresultStatus(insertRes) != PGRES_COMMAND_OK) {
+                        std::cerr << "Insert command failed for SMILES: " << smiles << ", Error: " << PQerrorMessage(conn) << std::endl;
+                        PQclear(insertRes);
+                        // Optionally, you could choose to rollback the transaction here if any insert fails
+                        continue;  // Skip to the next graph if insertion fails
+                    }
+                    PQclear(insertRes);
+                }
 
-            // Commit the transaction
-            res = PQexec(conn, "COMMIT");
-            if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-                std::cerr << "COMMIT command failed: " << PQerrorMessage(conn) << std::endl;
+                // Commit the transaction
+                res = PQexec(conn, "COMMIT");
+                if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+                    std::cerr << "COMMIT command failed: " << PQerrorMessage(conn) << std::endl;
+                    PQclear(res);
+                    PQfinish(conn);
+                }
                 PQclear(res);
-                PQfinish(conn);
-            }
-            PQclear(res);
 
         } catch (const std::exception& e) {
-            std::cerr << "Database error: " << e.what() << std::endl;
-            PQfinish(conn);
-        }
+                std::cerr << "Database error: " << e.what() << std::endl;
+                PQfinish(conn);
+            }
 
-        // Close the connection
-        PQfinish(conn);
-        std::cout << "Connection closed." << std::endl;
+            PQfinish(conn);
+            std::cout << "Connection closed." << std::endl;
     }
 
     return global_basis;
