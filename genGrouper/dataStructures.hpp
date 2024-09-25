@@ -115,6 +115,7 @@ public:
     int n_free_ports(NodeIDType nid) const;
     int numNodes() const;
     std::string printGraph() const;
+    void clearEdges();
     std::unordered_map<std::string, int> toVector() const;
     std::string toSmiles() const;
     void toNautyFormat(int *n, int *m, int *adj) const;
@@ -123,6 +124,7 @@ public:
     std::unique_ptr<AtomGraph> toAtomicGraph() const;
     std::string serialize() const;
     std::string Canon() const;
+    GroupGraph edgeColoringConvert() const;
 
 private:
     // Helper methods or additional private members can be declared here if needed

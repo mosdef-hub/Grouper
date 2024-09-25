@@ -17,6 +17,7 @@
 
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
+#include "logger.cpp"
 
 // Function to update and display progress bar
 void update_progress(int current, int total) {
@@ -71,6 +72,11 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     std::string config_path = "",
     bool verbose = false
 ) {
+
+
+    // Logger& logger = Logger::getInstance();
+    // logger.enableFileLogging("process_nauty_output.log");
+    // logger.setLogLevel(Logger::ERROR);  // Set desired log level
     // Error handling
 
     if (n_nodes < 1) {
@@ -81,12 +87,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     }
     if (num_procs <= -1){
         num_procs = omp_get_max_threads();
-    }
-    if (verbose) {
-        std::cout << "Number of nodes: " << n_nodes << std::endl;
-        std::cout << "Number of node definitions: " << node_defs.size() << std::endl;
-        std::cout << "Input file path: " << input_file_path << std::endl;
-        std::cout << "Number of processors: " << num_procs << std::endl;
     }
 
     if (input_file_path.empty()) {
@@ -163,8 +163,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 update_progress(i + 1, total_lines);
             }
         }
-        // std::cout << "Thread " << thread_id << " finished" << std::endl;
-        // std::cout.flush();
 
         // Merge thread-local results into global results
         #pragma omp critical

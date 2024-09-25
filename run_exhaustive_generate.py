@@ -18,8 +18,10 @@ if __name__ == "__main__":
     node_defs.add(Node(0, 'tertiary_amine', 'N', [0,1,2], [0,0,0]))
     node_defs.add(Node(0, 'hydroxyl', 'O', [0], [0]))
 
-    positive_constraints = {"hydroxyl" : 1, "tertiary_amine" : 1}
-    negative_constraints = {'NN', 'NO', 'NCN', 'NCO', 'OCO'}
+    # positive_constraints = {"hydroxyl" : 1, "tertiary_amine" : 1}
+    # negative_constraints = {'NN', 'NO', 'NCN', 'NCO', 'OCO'}
+    positive_constraints = {}
+    negative_constraints = set()
 
 
     # parse arguments

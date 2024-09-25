@@ -14,9 +14,13 @@
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
+#include <stdexcept>
 
 #include "dataStructures.hpp"
 #include "colorPermutations.cuh"
+// #include "logger.cpp"
+#include <iterator>
+#include <mutex>
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -76,98 +80,160 @@ std::pair<int, int> color_to_ports(int color, const std::vector<int>& src_ports,
     return {src_port, dst_port};
 }
 
-// Function to generate all non-isomorphic colored graphs
-std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
-    const std::vector<std::pair<int, int>>& edge_list,
-    const std::unordered_map<int, std::string>& int_to_node_type,
-    const std::unordered_map<int, std::string>& int_to_smiles,
-    const std::unordered_map<std::string, std::vector<int>>& node_types,
-    const std::unordered_map<std::string, std::vector<int>>& node_type_to_hub,
-    const std::vector<int> node_colors
+std::vector<std::vector<int>> computeEdgeOrbits(
+    const std::vector<std::pair<int, int>>& edges,  // List of edges (pairs of vertices)
+    const std::vector<std::vector<int>>& automorphisms // List of automorphisms (vertex permutations)
 ) {
-    std::unordered_set<GroupGraph> unique_graphs;
-    std::unordered_map<std::pair<int, int>, int> possible_edge_colors;
-
-    // Calculate the possible edge colors for each edge
-    for (const auto& edge : edge_list) {
-        int src = edge.first;
-        int dst = edge.second;
-        int n_src_ports = node_types.at(int_to_node_type.at(node_colors[src])).size();
-        int n_dst_ports = node_types.at(int_to_node_type.at(node_colors[dst])).size();
-        int n_colors = n_src_ports * n_dst_ports;
-        possible_edge_colors[{src, dst}] = n_colors;
+    int numEdges = edges.size();
+    int numAutomorphisms = automorphisms.size();
+    
+    // Initialize edge orbits: Initially, each edge is in its own orbit
+    std::vector<int> edgeOrbit(numEdges);
+    for (int i = 0; i < numEdges; ++i) {
+        edgeOrbit[i] = i; // Each edge is its own orbit representative
     }
 
-    // Prepare to generate all possible colorings
-    std::vector<std::vector<int>> all_colorings;
-    std::vector<int> current_coloring(possible_edge_colors.size(), 0);
-    generate_all_colorings(possible_edge_colors, all_colorings, current_coloring, 0);
-
-    // Create a graph object to compute automorphisms
-    GroupGraph gG;
-    // Add nodes to the graph
-    for (std::vector<int>::size_type i = 0; i < node_colors.size(); ++i) {
-        gG.addNode(
-            int_to_node_type.at(node_colors[i]), 
-            int_to_smiles.at(node_colors[i]), 
-            node_types.at(int_to_node_type.at(node_colors[i])), 
-            node_type_to_hub.at(int_to_node_type.at(node_colors[i]))
-        );
-    }
-
-    // Compute the edge automorphisms of the graph
-    std::vector<std::vector<std::pair<int, int>>> automorphisms = gG.edgeAut(edge_list);
-    // for (const auto& automorphism : automorphisms) {
-    //     for (const auto& edge : automorphism) {
-    //         std::cout << edge.first << " " << edge.second << " | ";
-    //     }
-    //     std::cout << std::endl;
-    // }
-
-    // Apply automorphisms to filter out redundant colorings
-    std::vector<std::vector<int>> unique_colorings = apply_edge_automorphisms(all_colorings, automorphisms);
-    // Iterate over unique colorings
-    std::vector<GroupGraph> result;
-    for (const auto& coloring : unique_colorings) {
-        GroupGraph gG;
-
-        // Add nodes to the graph
-        for (std::vector<int>::size_type i = 0; i < node_colors.size(); ++i) {
-            gG.addNode(
-                int_to_node_type.at(node_colors[i]), 
-                int_to_smiles.at(node_colors[i]), 
-                node_types.at(int_to_node_type.at(node_colors[i])), 
-                node_type_to_hub.at(int_to_node_type.at(node_colors[i]))
-            );
+    // Helper function to find the representative of an orbit (union-find technique)
+    auto findRepresentative = [&](int edgeIndex) {
+        if (edgeOrbit[edgeIndex] != edgeIndex) {
+            edgeOrbit[edgeIndex] = findRepresentative(edgeOrbit[edgeIndex]);
         }
-        // Add edges with the current coloring
-        size_t edge_index = 0;
-        try {
-            for (const auto& edge : edge_list) {
-                int src = edge.first;
-                int dst = edge.second;
-                int color = coloring[edge_index++];
-                std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(node_colors[src])), node_types.at(int_to_node_type.at(node_colors[dst])));
-                int srcPort = colorPort.first;
-                int dstPort = colorPort.second;
+        return edgeOrbit[edgeIndex];
+    };
 
-                gG.addEdge({src, srcPort}, {dst, dstPort});
+    // Helper function to unite two edge orbits (union-find technique)
+    auto unionOrbits = [&](int edgeA, int edgeB) {
+        int repA = findRepresentative(edgeA);
+        int repB = findRepresentative(edgeB);
+        if (repA != repB) {
+            edgeOrbit[repA] = repB; // Unite the two orbits
+        }
+    };
+
+    // Apply each automorphism to all edges
+    for (const auto& automorphism : automorphisms) {
+        for (int i = 0; i < numEdges; ++i) {
+            int v1 = edges[i].first;
+            int v2 = edges[i].second;
+
+            // Apply automorphism to both vertices of the edge
+            int permutedV1 = automorphism[v1];
+            int permutedV2 = automorphism[v2];
+
+            // Find the edge (permutedV1, permutedV2) in the edge list
+            for (int j = 0; j < numEdges; ++j) {
+                if ((edges[j].first == permutedV1 && edges[j].second == permutedV2) ||
+                    (edges[j].first == permutedV2 && edges[j].second == permutedV1)) {
+                    // Unite the two edges' orbits
+                    unionOrbits(i, j);
+                    break;
+                }
             }
-        } catch (const std::exception& e) {
-            continue;
-        }
-
-        // Check if the graph is unique considering permutations
-        if (unique_graphs.find(gG) == unique_graphs.end()) {
-            unique_graphs.insert(gG);
-            result.push_back(gG);
         }
     }
 
-    return result;
+    // Group edges by their orbit representative
+    std::unordered_map<int, std::vector<int>> orbitGroups;
+    for (int i = 0; i < numEdges; ++i) {
+        int rep = findRepresentative(i);
+        orbitGroups[rep].push_back(i);
+    }
+
+    // Collect the results into a vector of edge orbits
+    std::vector<std::vector<int>> edgeOrbits;
+    for (const auto& orbitGroup : orbitGroups) {
+        edgeOrbits.push_back(orbitGroup.second);
+    }
+
+    return edgeOrbits;
 }
 
+// // Function to generate all non-isomorphic colored graphs
+// std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
+//     const std::vector<std::pair<int, int>>& edge_list,
+//     const std::unordered_map<int, std::string>& int_to_node_type,
+//     const std::unordered_map<int, std::string>& int_to_smiles,
+//     const std::unordered_map<std::string, std::vector<int>>& node_types,
+//     const std::unordered_map<std::string, std::vector<int>>& node_type_to_hub,
+//     const std::vector<int> node_colors) {
+//     std::unordered_set<GroupGraph> unique_graphs;
+//     std::unordered_map<std::pair<int, int>, int> possible_edge_colors;
 
+//     // Calculate the possible edge colors for each edge
+//     for (const auto& edge : edge_list) {
+//         int src = edge.first;
+//         int dst = edge.second;
+//         int n_src_ports = node_types.at(int_to_node_type.at(node_colors[src])).size();
+//         int n_dst_ports = node_types.at(int_to_node_type.at(node_colors[dst])).size();
+//         int n_colors = n_src_ports * n_dst_ports;
+//         possible_edge_colors[{src, dst}] = n_colors;
+//     }
+
+//     // Prepare to generate all possible colorings
+//     std::vector<std::vector<int>> all_colorings;
+//     std::vector<int> current_coloring(possible_edge_colors.size(), 0);
+//     generate_all_colorings(possible_edge_colors, all_colorings, current_coloring, 0);
+
+//     // Create a graph object to compute automorphisms
+//     GroupGraph gG;
+//     // Add nodes to the graph
+//     for (std::vector<int>::size_type i = 0; i < node_colors.size(); ++i) {
+//         gG.addNode(
+//             int_to_node_type.at(node_colors[i]), 
+//             int_to_smiles.at(node_colors[i]), 
+//             node_types.at(int_to_node_type.at(node_colors[i])), 
+//             node_type_to_hub.at(int_to_node_type.at(node_colors[i]))
+//         );
+//     }
+
+//     // Compute the edge automorphisms of the graph
+//     std::vector<std::vector<std::pair<int, int>>> automorphisms = gG.edgeAut(edge_list);
+
+//     // Apply automorphisms to filter out redundant colorings
+//     std::vector<std::vector<int>> unique_colorings = apply_edge_automorphisms(all_colorings, automorphisms);
+//     // Iterate over unique colorings
+//     std::vector<GroupGraph> result;
+//     for (const auto& coloring : unique_colorings) {
+//         GroupGraph gG;
+
+//         // Add nodes to the graph
+//         for (std::vector<int>::size_type i = 0; i < node_colors.size(); ++i) {
+//             gG.addNode(
+//                 int_to_node_type.at(node_colors[i]), 
+//                 int_to_smiles.at(node_colors[i]), 
+//                 node_types.at(int_to_node_type.at(node_colors[i])), 
+//                 node_type_to_hub.at(int_to_node_type.at(node_colors[i]))
+//             );
+//         }
+//         // Add edges with the current coloring
+//         size_t edge_index = 0;
+//         try {
+//             for (const auto& edge : edge_list) {
+//                 int src = edge.first;
+//                 int dst = edge.second;
+//                 int color = coloring[edge_index++];
+//                 std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(node_colors[src])), node_types.at(int_to_node_type.at(node_colors[dst])));
+//                 int srcPort = colorPort.first;
+//                 int dstPort = colorPort.second;
+
+//                 gG.addEdge({src, srcPort}, {dst, dstPort});
+//             }
+//         } catch (const std::exception& e) {
+//             continue;
+//         }
+
+//         // Check if the graph is unique considering permutations
+//         if (unique_graphs.find(gG) == unique_graphs.end()) {
+//             unique_graphs.insert(gG);
+//             result.push_back(gG);
+//         }
+//     }
+
+//     return result;
+// }
+
+
+// Assume GroupGraph and related types are defined elsewhere
 
 void process_nauty_output(
     const std::string& line, 
@@ -177,6 +243,8 @@ void process_nauty_output(
     const std::unordered_set<std::string> negativeConstraints,
     bool verbose
 ) {
+    // Logger& logger = Logger::getInstance();
+    // logger.log("Entering process_nauty_output function.", Logger::INFO);
 
     std::vector<GroupGraph> group_graphs_list;
     std::unordered_set<std::string> canon_set;
@@ -190,6 +258,7 @@ void process_nauty_output(
     std::string node_description_str = line.substr(0, split_pos);
     std::string edge_description_str = line.substr(split_pos + 2);
 
+
     std::istringstream node_desc_iss(node_description_str);
     std::vector<std::string> node_description(std::istream_iterator<std::string>{node_desc_iss},
                                               std::istream_iterator<std::string>());
@@ -198,30 +267,42 @@ void process_nauty_output(
     std::vector<std::string> edge_description(std::istream_iterator<std::string>{edge_desc_iss},
                                               std::istream_iterator<std::string>());
 
+    // Convert edge descriptions to integer pairs
     std::vector<std::pair<int, int>> edge_list;
-    for (size_t i = 0; i < edge_description.size(); i += 2) {
-        edge_list.emplace_back(std::stoi(edge_description[i]), std::stoi(edge_description[i + 1]));
+    try {
+        for (size_t i = 0; i < edge_description.size(); i += 2) {
+            edge_list.emplace_back(std::stoi(edge_description[i]), std::stoi(edge_description[i + 1]));
+        }
+    } catch (const std::exception& e) {
+        return;
     }
 
-    
+    int n_vertices;
+    try {
+        n_vertices = std::stoi(node_description[0]);
+    } catch (const std::exception& e) {
+        return;
+    }
 
-    int n_vertices = std::stoi(node_description[0]);
-    // int n_edges = std::stoi(node_description[1]);
     std::vector<int> colors;
-    for (size_t i = 2; i < node_description.size(); ++i) {
-        colors.push_back(std::stoi(node_description[i]));
+    try {
+        for (size_t i = 2; i < node_description.size(); ++i) {
+            colors.push_back(std::stoi(node_description[i]));
+        }
+    } catch (const std::exception& e) {
+        return;
     }
 
-    // Error checking
-    // for (const auto& color : colors) {
-    //     std::cout << "colors: " << color << " ";
-    // }
-    if (node_defs.size() < static_cast<size_t>(*std::max_element(colors.begin(), colors.end()) + 1)) {
-        throw std::runtime_error("Number of nodes in node_defs does not match the number of nodes in the nauty_output_file...");
+    try {
+        if (node_defs.size() < static_cast<size_t>(*std::max_element(colors.begin(), colors.end()) + 1)) {
+            throw std::runtime_error("Number of nodes in node_defs does not match the number of nodes in the nauty_output_file...");
+        }
+    } catch (const std::exception& e) {
+        throw;  // Re-throwing the exception after logging
     }
 
 
-    // Actual function starts here
+    // Initialize data structures
     std::vector<std::pair<int, int>> non_colored_edge_list;
     std::unordered_map<int, std::string> int_to_node_type;
     std::unordered_map<std::string, std::vector<int>> node_types;
@@ -229,33 +310,37 @@ void process_nauty_output(
     std::unordered_map<int, std::string> int_to_smiles;
     std::unordered_map<std::string, std::string> type_to_smiles;
 
+    // Populate node types and smiles
     for (const auto& node : node_defs) {
         node_types[node.ntype] = node.ports;
         type_to_smiles[node.ntype] = node.smiles;
     }
 
-    for (const auto& node: node_defs) {
+    for (const auto& node : node_defs) {
         for (const auto& h : node.hubs) {
             node_type_to_hub[node.ntype].push_back(h);
         }
     }
 
+    // Map integers to node types and smiles
     int i = 0;
     for (const auto& [node_type, ports] : node_types) {
         int_to_node_type[i] = node_type;
         int_to_smiles[i] = type_to_smiles[node_type];
         i++;
     }
-    
+
     // Create a histogram of node types for positive constraints
     std::unordered_map<std::string, int> node_hist;
     for (const auto& node : node_defs) {
         node_hist[node.ntype] = 0;
     }
     for (const auto& c : colors) {
-        node_hist[int_to_node_type.at(c)] += 1;
+        node_hist.at(int_to_node_type.at(c)) += 1;
     }
-    // Check if the number of nodes of each type is less than the number listed in the positive constraints
+
+
+    // Check positive constraints
     for (const auto& [node_type, count] : node_hist) {
         if (positiveConstraints.find(node_type) == positiveConstraints.end()) {
             continue;
@@ -265,41 +350,61 @@ void process_nauty_output(
         }
     }
 
-
     // Add nodes to the graph
     GroupGraph gG;
-    for (int i = 0; i < n_vertices; ++i) {
-        gG.addNode(
-            int_to_node_type.at(colors[i]), 
-            int_to_smiles.at(colors[i]), 
-            node_types.at(int_to_node_type.at(colors[i])), 
-            node_type_to_hub.at(int_to_node_type.at(colors[i]))
-        );
+    try {
+        for (int i = 0; i < n_vertices; ++i) {
+            gG.addNode(
+                int_to_node_type.at(colors[i]), 
+                int_to_smiles.at(colors[i]), 
+                node_types.at(int_to_node_type.at(colors[i])), 
+                node_type_to_hub.at(int_to_node_type.at(colors[i]))
+            );
+        }
+    } catch (const std::exception& e) {
+        return;
     }
-
 
     // Prepare to generate all possible colorings
     std::vector<std::vector<int>> all_colorings;
     std::unordered_map<std::pair<int, int>, int> possible_edge_colors;
-    std::vector<int> current_coloring(possible_edge_colors.size(), 0);
+
     // Calculate the possible edge colors for each edge
-    for (const auto& edge : edge_list) {
-        int src = edge.first;
-        int dst = edge.second;
-        int n_src_ports = node_types.at(int_to_node_type.at(colors[src])).size();
-        int n_dst_ports = node_types.at(int_to_node_type.at(colors[dst])).size();
-        int n_colors = n_src_ports * n_dst_ports;
-        possible_edge_colors[{src, dst}] = n_colors;
+    try {
+        for (const auto& edge : edge_list) {
+            int src = edge.first;
+            int dst = edge.second;
+            int n_src_ports = node_types.at(int_to_node_type.at(colors[src])).size();
+            int n_dst_ports = node_types.at(int_to_node_type.at(colors[dst])).size();
+            int n_colors = n_src_ports * n_dst_ports;
+            possible_edge_colors[{src, dst}] = n_colors;
+        }
+    } catch (const std::exception& e) {
+        return;
     }
+
+
+    // Placeholder for generate_all_colorings function
+    // You need to ensure this function is defined and handles the current_coloring size appropriately
+    std::vector<int> current_coloring(possible_edge_colors.size(), 0);
     generate_all_colorings(possible_edge_colors, all_colorings, current_coloring, 0);
 
     // Compute the edge automorphisms of the graph
-    std::vector<std::vector<std::pair<int, int>>> edge_automorphisms = gG.edgeAut(edge_list);
+    std::vector<std::vector<std::pair<int, int>>> edge_automorphisms;
+    try {
+        edge_automorphisms = gG.edgeAut(edge_list);
+    } catch (const std::exception& e) {
+        return;
+    }
 
+    // Placeholder for apply_edge_automorphisms_gpu function
+    // Ensure this function is defined and correctly integrates with your GPU processing
     std::vector<std::vector<int>> unique_colorings = apply_edge_automorphisms_gpu(all_colorings, edge_automorphisms);
 
     // Iterate over unique colorings
-    for (const auto& coloring: unique_colorings){
+    for (const auto& coloring : unique_colorings) {
+        // Remove edges from the graph
+        gG.clearEdges();
         // Add edges with the current coloring
         size_t edge_index = 0;
         try {
@@ -307,23 +412,31 @@ void process_nauty_output(
                 int src = edge.first;
                 int dst = edge.second;
                 int color = coloring[edge_index++];
-                std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(colors[src])), node_types.at(int_to_node_type.at(colors[dst])));
+                std::pair<int, int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(colors[src])), node_types.at(int_to_node_type.at(colors[dst])));
                 int srcPort = colorPort.first;
                 int dstPort = colorPort.second;
 
                 gG.addEdge({src, srcPort}, {dst, dstPort});
             }
         } catch (const std::exception& e) {
-            std::cout << "Error adding edge: " << e.what() << std::endl;
-            continue;
         }
 
         // Check if the graph is unique considering permutations
-        if (canon_set.find(gG.toSmiles()) == canon_set.end()) {
-            canon_set.insert(gG.toSmiles());
-            graph_basis->insert(gG);
+        try {
+            std::string smiles = gG.toSmiles();
+            if (canon_set.find(smiles) == canon_set.end()) {
+                canon_set.insert(smiles);
+                graph_basis->insert(gG);
+            } else {
+            }
+        } catch (const std::exception& e) {
+            continue;
         }
     }
+
+    // logger.log("Exiting process_nauty_output function.", Logger::INFO);
+}
+
     
     // std::vector<GroupGraph> graphs = generate_non_isomorphic_colored_graphs(
     //     edge_list, 
@@ -341,5 +454,5 @@ void process_nauty_output(
     //     }
     // }
     
-}
+
 

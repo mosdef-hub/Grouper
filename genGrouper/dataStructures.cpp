@@ -257,6 +257,10 @@ int GroupGraph::numNodes() const {
     return nodes.size();
 }
 
+void GroupGraph::clearEdges() {
+    edges.clear();
+}
+
 std::string GroupGraph::printGraph() const {
     std::ostringstream output;
     output << "Nodes:\n";
@@ -425,6 +429,10 @@ std::vector<std::vector<int>> GroupGraph::nodeAut() const {
 // }
 
 std::vector<std::vector<std::pair<int, int>>> GroupGraph::edgeAut(const std::vector<std::pair<int, int>>& edge_list) const {
+    /*
+    Given a list of edges, this function returns all automorphisms of the edge list. This function is currently O(n!) since it considers every possible permutation
+     and should be optimized in the future.
+    */
     int n = nodes.size();
     std::vector<std::vector<int>> adj_matrix(n, std::vector<int>(n, 0));
     
