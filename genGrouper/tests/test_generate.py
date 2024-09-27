@@ -6,8 +6,8 @@ import logging
 
 class TestGeneration(BaseTest):
 
-    @pytest.mark.parametrize("n_nodes", [4])
-    @pytest.mark.parametrize("num_procs", [1, 2, 4, 8])
+    @pytest.mark.parametrize("n_nodes", [2, 3, 4, 5, 6])
+    @pytest.mark.parametrize("num_procs", [1, 2, 4, 8, 16])
     @pytest.mark.parametrize("node_defs", [[
             {"type": "t1", "smiles": "C", "ports": [0,1,2,3], "hubs": [0,0,0,0]},
             {"type": "t2", "smiles": "N", "ports": [0,1,2], "hubs": [0,0,0]},
