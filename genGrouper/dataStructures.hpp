@@ -95,12 +95,12 @@ public:
     std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType>> edges; ///< List of edges connecting nodes.
     std::unordered_map<std::string, std::vector<PortType>> nodetypes; ///< Map of node types to their respective ports.
 
-    // Methods
+    // Core Methods
     GroupGraph();
     GroupGraph(const GroupGraph& other);
     GroupGraph& operator=(const GroupGraph& other);
     bool operator==(const GroupGraph& other) const;
-
+    // Operating methods
     void addNode(
         std::string ntype, 
         std::string smiles, 
@@ -114,12 +114,14 @@ public:
     );
     int n_free_ports(NodeIDType nid) const;
     int numNodes() const;
+    void clearEdges();
+    std::vector<std::vector<int>> nodeAut() const;
+    std::vector<std::vector<std::pair<int, int>>> edgeAut(const std::vector<std::pair<int, int>>& edge_list) const;
+    // Conversion methods
     std::string printGraph() const;
     std::unordered_map<std::string, int> toVector() const;
     std::string toSmiles() const;
     void toNautyFormat(int *n, int *m, int *adj) const;
-    std::vector<std::vector<int>> nodeAut() const;
-    std::vector<std::vector<std::pair<int, int>>> edgeAut(const std::vector<std::pair<int, int>>& edge_list) const;
     std::unique_ptr<AtomGraph> toAtomicGraph() const;
     std::string serialize() const;
     std::string Canon() const;

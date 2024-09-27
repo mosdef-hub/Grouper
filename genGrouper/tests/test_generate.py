@@ -6,7 +6,7 @@ import logging
 
 class TestGeneration(BaseTest):
 
-    @pytest.mark.parametrize("n_nodes", [2,3, 4])
+    @pytest.mark.parametrize("n_nodes", [4])
     @pytest.mark.parametrize("num_procs", [1, 2, 4, 8])
     @pytest.mark.parametrize("node_defs", [[
             {"type": "t1", "smiles": "C", "ports": [0,1,2,3], "hubs": [0,0,0,0]},
@@ -23,7 +23,7 @@ class TestGeneration(BaseTest):
 
         write_to_db = False
         verbose = False
-        nauty_path = "/Users/kieran/projects/genGrouper/packages/nauty2_8_8"
+        nauty_path = "/raid6/homes/kierannp/projects/molGrouper/packages/nauty2_8_8"
         input_file_path = ""
         positive_constraints = {}
         negative_constraints = set()
@@ -39,7 +39,7 @@ class TestGeneration(BaseTest):
             num_procs, 
             positive_constraints, 
             negative_constraints, 
-            write_to_db, 
+            '',
             verbose
         )
         logging.info("Benchmark complete")

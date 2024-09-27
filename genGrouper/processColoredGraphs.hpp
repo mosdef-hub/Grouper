@@ -39,6 +39,38 @@ std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
     const std::unordered_map<std::string, std::string>& node_type_to_hub
 );
 
+std::vector<std::vector<int>> compute_non_isomorphic_colorings(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<std::unordered_set<std::pair<int, int>>>& edge_orbits,
+    const std::unordered_map<std::pair<int, int>, std::vector<int>>& available_colors
+);
+
+std::vector<std::vector<int>> apply_edge_automorphisms(
+    const std::vector<std::vector<int>>& colorings, 
+    const std::vector<std::vector<std::pair<int, int>>>& automorphisms
+);
+
+std::pair<int, int> color_to_ports(int color, const std::vector<int>& src_ports, const std::vector<int>& dst_ports);
+
+std::vector<std::unordered_set<std::pair<int, int>>> compute_edge_orbits(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<std::vector<int>>& automorphisms
+);
+
+void enumerate_colorings(
+    size_t orbit_idx,
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<std::unordered_set<std::pair<int, int>>>& edge_orbits,
+    const std::unordered_map<std::pair<int, int>, std::vector<int>>& available_colors,
+    std::vector<int>& current_coloring,
+    std::vector<std::vector<int>>& all_colorings
+);
+
+std::tuple<int, std::vector<int>, std::vector<std::pair<int, int>>> parse_nauty_graph_line(
+    const std::string& line, 
+    const std::unordered_set<GroupGraph::Node>& node_defs
+);
+
 // Function to process nauty output
 void process_nauty_output(
     const std::string& line, 

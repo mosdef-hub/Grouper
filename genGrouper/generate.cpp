@@ -17,6 +17,7 @@
 
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
+#include "debugTools.hpp"
 
 // Function to update and display progress bar
 void update_progress(int current, int total) {
@@ -71,8 +72,8 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     std::string config_path = "",
     bool verbose = false
 ) {
-    // Error handling
 
+    // Error handling
     if (n_nodes < 1) {
         throw std::invalid_argument("Number of nodes must be greater than 0...");
     }

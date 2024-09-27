@@ -25,7 +25,7 @@
 
 
 
-
+// Core methods
 GroupGraph::GroupGraph()
     : nodes(), edges(), nodetypes() {}
 
@@ -41,7 +41,6 @@ GroupGraph& GroupGraph::operator=(const GroupGraph& other) {
     return *this;
 }
 
-// Implementation of Node equality operator
 bool GroupGraph::Node::operator==(const Node& other) const {
     return id == other.id &&
            ntype == other.ntype &&
@@ -129,7 +128,6 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
     return false;
 }
 
-
 // Non-member function to compare tuples (used for sorting edges)
 inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& lhs,
                       const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& rhs) {
@@ -137,6 +135,7 @@ inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortT
     return std::tie(lhs) < std::tie(rhs);
 }
 
+// Operating methods
 void GroupGraph::addNode( 
     std::string ntype = "", 
     std::string smiles = "", 
@@ -257,6 +256,10 @@ int GroupGraph::numNodes() const {
     return nodes.size();
 }
 
+void GroupGraph::clearEdges() {
+    edges.clear();
+}
+// Conversion methods
 std::string GroupGraph::printGraph() const {
     std::ostringstream output;
     output << "Nodes:\n";
