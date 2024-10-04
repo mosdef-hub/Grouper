@@ -17,7 +17,7 @@
 
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
-#include "logger.cpp"
+// #include "logger.cpp"
 
 // Function to update and display progress bar
 void update_progress(int current, int total) {

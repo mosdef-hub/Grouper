@@ -8,15 +8,13 @@ import pathlib
 if __name__ == "__main__":
 
     node_defs = set()
-    node_defs.add(Node(0, 'carbon', 'C', [0,1,2,3], [0,0,0,0]))
-    node_defs.add(Node(0, 'methine', 'C', [0,1,2], [0,0,0]))
-    node_defs.add(Node(0, 'methylene', 'C', [0,1], [0,0]))
-    node_defs.add(Node(0, 'methyl', 'C', [0], [0]))
+    node_defs.add(Node(0, 'methyl', 'C', [0,1,2], [0,0,0]))
+    node_defs.add(Node(0, 't2', 'N', [0,1,2], [0,0,0]))
+    node_defs.add(Node(0, 'ester', 'C(=O)O', [0,1], [0,2]))
+    node_defs.add(Node(0, 'extra1', 'O', [0,1], [0,0]))
     # node_defs.add(Node(0, 'hydroxymethyl', 'CO', [0], [0]))
     # node_defs.add(Node(0, 'primary_amine', 'CN', [0,1,2], [0,0,0]))
     # node_defs.add(Node(0, 'secondary_amine', 'CNC', [0,1], [0,0]))
-    node_defs.add(Node(0, 'tertiary_amine', 'N', [0,1,2], [0,0,0]))
-    node_defs.add(Node(0, 'hydroxyl', 'O', [0], [0]))
 
     # positive_constraints = {"hydroxyl" : 1, "tertiary_amine" : 1}
     # negative_constraints = {'NN', 'NO', 'NCN', 'NCO', 'OCO'}

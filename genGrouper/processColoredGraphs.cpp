@@ -80,6 +80,52 @@ std::pair<int, int> color_to_ports(int color, const std::vector<int>& src_ports,
     return {src_port, dst_port};
 }
 
+bool check_max_bond_not_exceeded(
+    const std::vector<std::pair<int,int>>& edge_list,
+    const std::vector<int>& colors, 
+    const std::unordered_map<std::string, std::vector<int>>& node_types, 
+    const std::unordered_map<int, std::string>& int_to_node_type) {
+
+    std::vector<int> node_bond_count;
+    for (int i = 0; i < colors.size(); ++i) {
+        std::string node_type = int_to_node_type.at(colors[i]);
+        int n_ports = node_types.at(node_type).size();
+        node_bond_count.push_back(n_ports);
+    }
+    for (const auto& edge : edge_list) {
+        int src = edge.first;
+        int dst = edge.second;
+        int src_color = colors[src];
+        int dst_color = colors[dst];
+        node_bond_count[src] -= 1;
+        node_bond_count[dst] -= 1;
+    }
+    for (const auto& count : node_bond_count) {
+        if (count < 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+
+// Helper function to find the representative of an orbit (union-find technique)
+int findRepresentative(int edgeIndex, std::vector<int>& edgeOrbit) {
+    if (edgeOrbit[edgeIndex] != edgeIndex) {
+        edgeOrbit[edgeIndex] = findRepresentative(edgeOrbit[edgeIndex], edgeOrbit);
+    }
+    return edgeOrbit[edgeIndex];
+};
+
+// Helper function to unite two edge orbits (union-find technique)
+void unionOrbits(int edgeA, int edgeB, std::vector<int>& edgeOrbit) {
+    int repA = findRepresentative(edgeA, edgeOrbit);
+    int repB = findRepresentative(edgeB, edgeOrbit);
+    if (repA != repB) {
+        edgeOrbit[repA] = repB; // Unite the two orbits
+    }
+};
+
 std::vector<std::vector<int>> computeEdgeOrbits(
     const std::vector<std::pair<int, int>>& edges,  // List of edges (pairs of vertices)
     const std::vector<std::vector<int>>& automorphisms // List of automorphisms (vertex permutations)
@@ -92,23 +138,6 @@ std::vector<std::vector<int>> computeEdgeOrbits(
     for (int i = 0; i < numEdges; ++i) {
         edgeOrbit[i] = i; // Each edge is its own orbit representative
     }
-
-    // Helper function to find the representative of an orbit (union-find technique)
-    auto findRepresentative = [&](int edgeIndex) {
-        if (edgeOrbit[edgeIndex] != edgeIndex) {
-            edgeOrbit[edgeIndex] = findRepresentative(edgeOrbit[edgeIndex]);
-        }
-        return edgeOrbit[edgeIndex];
-    };
-
-    // Helper function to unite two edge orbits (union-find technique)
-    auto unionOrbits = [&](int edgeA, int edgeB) {
-        int repA = findRepresentative(edgeA);
-        int repB = findRepresentative(edgeB);
-        if (repA != repB) {
-            edgeOrbit[repA] = repB; // Unite the two orbits
-        }
-    };
 
     // Apply each automorphism to all edges
     for (const auto& automorphism : automorphisms) {
@@ -125,7 +154,7 @@ std::vector<std::vector<int>> computeEdgeOrbits(
                 if ((edges[j].first == permutedV1 && edges[j].second == permutedV2) ||
                     (edges[j].first == permutedV2 && edges[j].second == permutedV1)) {
                     // Unite the two edges' orbits
-                    unionOrbits(i, j);
+                    unionOrbits(i, j, edgeOrbit);
                     break;
                 }
             }
@@ -135,7 +164,7 @@ std::vector<std::vector<int>> computeEdgeOrbits(
     // Group edges by their orbit representative
     std::unordered_map<int, std::vector<int>> orbitGroups;
     for (int i = 0; i < numEdges; ++i) {
-        int rep = findRepresentative(i);
+        int rep = findRepresentative(i, edgeOrbit);
         orbitGroups[rep].push_back(i);
     }
 
@@ -337,6 +366,11 @@ void process_nauty_output(
     }
     for (const auto& c : colors) {
         node_hist.at(int_to_node_type.at(c)) += 1;
+    }
+
+    // Check if any node has too many bonds
+    if (!check_max_bond_not_exceeded(edge_list, colors, node_types, int_to_node_type)) {
+        return;
     }
 
 

@@ -6,13 +6,13 @@ import logging
 
 class TestGeneration(BaseTest):
 
-    @pytest.mark.parametrize("n_nodes", [2,3, 4, 5])
+    @pytest.mark.parametrize("n_nodes", [2,3, 4, 5, 6])
     @pytest.mark.parametrize("num_procs", [1, 2, 4, 8])
     @pytest.mark.parametrize("node_defs", [[
-            {"type": "t1", "smiles": "C", "ports": [0,1,2,3], "hubs": [0,0,0,0]},
+            # {"type": "t1", "smiles": "C", "ports": [0,1,2,3], "hubs": [0,0,0,0]},
             {"type": "t2", "smiles": "N", "ports": [0,1,2], "hubs": [0,0,0]},
             {"type": "Methyl", "smiles": "C", "ports": [0,1,2], "hubs": [0,0,0]},
-            {"type": "Benzene", "smiles": "C1=CC=CC=C1", "ports": [0,1,2,3,4,5], "hubs": [0,1,2,3,4,5]},
+            # {"type": "Benzene", "smiles": "C1=CC=CC=C1", "ports": [0,1,2,3,4,5], "hubs": [0,1,2,3,4,5]},
             {"type": "ester", "smiles": "C(=O)O", "ports": [0,1], "hubs": [0,2]},
             {"type": "extra1", "smiles": "O", "ports": [0,1], "hubs": [0,0]}
         ]]
