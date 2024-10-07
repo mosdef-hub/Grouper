@@ -1,5 +1,3 @@
-// File: color_permutations.cu
-
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/sort.h>
@@ -37,7 +35,7 @@ struct Coloring {
     }
 };
 
-// CUDA kernel to find canonical colorings
+// CUDA kernel remains the same
 __global__ void find_canonical_colorings_kernel(
     const int* colorings,              // N x M
     const int* automorphisms,          // K x M (source indices)
@@ -61,19 +59,21 @@ __global__ void find_canonical_colorings_kernel(
         Coloring permuted_coloring;
         for(int i = 0; i < M_edges; ++i){
             int source_idx = automorphisms[k * M_edges + i];
-            permuted_coloring.colors[i] = colorings[idx * M_edges + source_idx];
+            if(source_idx == PADDING){
+                permuted_coloring.colors[i] = PADDING;
+            } else {
+                permuted_coloring.colors[i] = colorings[idx * M_edges + source_idx];
+            }
         }
 
         // Compare permuted_coloring with min_coloring
         bool is_less = false;
-        bool is_greater = false;
         for(int i = 0; i < M_edges; ++i){
             if(permuted_coloring.colors[i] < min_coloring.colors[i]){
                 is_less = true;
                 break;
             }
             if(permuted_coloring.colors[i] > min_coloring.colors[i]){
-                is_greater = true;
                 break;
             }
         }
@@ -92,19 +92,11 @@ std::vector<std::vector<int>> apply_edge_automorphisms_gpu(
     const std::vector<std::vector<int>>& colorings, 
     const std::vector<std::vector<std::pair<int, int>>>& automorphisms
 ){
-    size_t N = colorings.size(); // Number of colorings
+    size_t total_N = colorings.size(); // Total number of colorings
     size_t K = automorphisms.size(); // Number of automorphisms
 
-    // Flatten colorings: N x M
-    thrust::host_vector<int> h_colorings_flat;
-    h_colorings_flat.reserve(N * M);
-    for(const auto& coloring : colorings){
-        for(int i = 0; i < M; ++i){
-            int color = i < coloring.size() ? coloring[i] : PADDING;
-            h_colorings_flat.push_back(color);
-        }
-    }
-    thrust::device_vector<int> d_colorings_flat = h_colorings_flat;
+    // std::cout << "Total number of colorings (N): " << total_N << std::endl;
+    // std::cout << "Number of automorphisms (K): " << K << std::endl;
 
     // Flatten automorphisms: K x M (store source indices)
     thrust::host_vector<int> h_automorphisms_flat;
@@ -120,53 +112,175 @@ std::vector<std::vector<int>> apply_edge_automorphisms_gpu(
     }
     thrust::device_vector<int> d_automorphisms_flat = h_automorphisms_flat;
 
-    // Allocate space for canonical colorings: N x M
-    thrust::device_vector<Coloring> d_canonical_colorings(N);
-
-    // Launch canonical mapping kernel
-    int threads_per_block = 256;
-    int blocks = (N + threads_per_block - 1) / threads_per_block;
-    find_canonical_colorings_kernel<<<blocks, threads_per_block>>>(
-        thrust::raw_pointer_cast(d_colorings_flat.data()),
-        thrust::raw_pointer_cast(d_automorphisms_flat.data()),
-        thrust::raw_pointer_cast(d_canonical_colorings.data()),
-        N, K, M
-    );
-
-    // Error checking
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess){
-        std::cerr << "CUDA kernel launch error: " << cudaGetErrorString(err) << std::endl;
+    // Determine available GPU memory
+    size_t free_mem, total_mem;
+    cudaError_t cudaStatus = cudaMemGetInfo(&free_mem, &total_mem);
+    if(cudaStatus != cudaSuccess){
+        std::cerr << "Failed to get GPU memory info: " << cudaGetErrorString(cudaStatus) << std::endl;
         exit(EXIT_FAILURE);
     }
-    cudaDeviceSynchronize();
+    // std::cout << "Available GPU memory: " << free_mem / (1024 * 1024) << " MB out of " << total_mem / (1024 * 1024) << " MB\n";
 
-    // Sort the canonical colorings lexicographically
-    thrust::sort(d_canonical_colorings.begin(), d_canonical_colorings.end());
+    // Calculate memory required for each coloring batch
+    size_t bytes_per_coloring = M * sizeof(int); // Original colorings
+    size_t bytes_per_canonical = sizeof(Coloring); // Canonical colorings
+    size_t bytes_automorphisms = K * M * sizeof(int);
 
-    // Remove duplicates
-    auto new_end = thrust::unique(d_canonical_colorings.begin(), d_canonical_colorings.end());
+    // Estimate maximum N that fits into free memory
+    // Additionally, account for other allocations and some buffer (e.g., 10%)
+    size_t buffer = free_mem / 10;
+    size_t usable_mem = free_mem - buffer;
+
+    // Each batch requires:
+    // - colorings_flat: N_batch * M * sizeof(int)
+    // - canonical_colorings: N_batch * sizeof(Coloring)
+    // Total per batch: N_batch * (M * sizeof(int) + sizeof(Coloring))
+    size_t memory_per_coloring = M * sizeof(int) + sizeof(Coloring);
+    size_t max_N_per_batch = usable_mem / memory_per_coloring;
+
+    if(max_N_per_batch == 0){
+        std::cerr << "Not enough GPU memory to process even a single coloring.\n";
+        exit(EXIT_FAILURE);
+    }
+
+    // std::cout << "Processing colorings in batches of up to " << max_N_per_batch << " colorings.\n";
+
+    std::vector<std::vector<int>> unique_colorings_all;
+
+    size_t processed_N = 0;
+    while(processed_N < total_N){
+        size_t current_batch_size = std::min(max_N_per_batch, total_N - processed_N);
+        // std::cout << "Processing batch: " << processed_N << " to " << (processed_N + current_batch_size -1) << "\n";
+
+        // Prepare the current batch of colorings
+        thrust::host_vector<int> h_colorings_flat;
+        h_colorings_flat.reserve(current_batch_size * M);
+        for(size_t i = processed_N; i < processed_N + current_batch_size; ++i){
+            for(int j = 0; j < M; ++j){
+                int color = j < colorings[i].size() ? colorings[i][j] : PADDING;
+                h_colorings_flat.push_back(color);
+            }
+        }
+        thrust::device_vector<int> d_colorings_flat = h_colorings_flat;
+
+        // Allocate space for canonical colorings: current_batch_size x M
+        thrust::device_vector<Coloring> d_canonical_colorings(current_batch_size);
+
+        // Launch canonical mapping kernel
+        int threads_per_block = 256;
+        int blocks = (current_batch_size + threads_per_block - 1) / threads_per_block;
+
+        // std::cout << "Launching kernel with " << blocks << " blocks of " << threads_per_block << " threads.\n";
+
+        find_canonical_colorings_kernel<<<blocks, threads_per_block>>>(
+            thrust::raw_pointer_cast(d_colorings_flat.data()),
+            thrust::raw_pointer_cast(d_automorphisms_flat.data()),
+            thrust::raw_pointer_cast(d_canonical_colorings.data()),
+            current_batch_size, K, M
+        );
+
+        // Error checking
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess){
+            std::cerr << "CUDA kernel launch error: " << cudaGetErrorString(err) << std::endl;
+            exit(EXIT_FAILURE);
+        }
+        cudaDeviceSynchronize();
+
+        // Sort the canonical colorings lexicographically
+        thrust::sort(d_canonical_colorings.begin(), d_canonical_colorings.end());
+
+        // Remove duplicates within the batch
+        auto new_end = thrust::unique(d_canonical_colorings.begin(), d_canonical_colorings.end());
+
+        // Erase the duplicates
+        d_canonical_colorings.erase(new_end, d_canonical_colorings.end());
+
+        // Transfer unique colorings back to host
+        thrust::host_vector<Coloring> h_unique_colorings_struct = d_canonical_colorings;
+
+        // Convert structs back to vector of vectors and add to the global list
+        for(const auto& coloring_struct : h_unique_colorings_struct){
+            std::vector<int> coloring;
+            coloring.reserve(M);
+            for(int i = 0; i < M; ++i){
+                coloring.push_back(coloring_struct.colors[i]);
+            }
+            unique_colorings_all.push_back(coloring);
+        }
+
+        processed_N += current_batch_size;
+    }
+
+    // std::cout << "Total unique colorings before global deduplication: " << unique_colorings_all.size() << "\n";
+
+    // At this point, unique_colorings_all contains unique colorings per batch.
+    // Now, transfer all unique colorings to the GPU again to perform a global unique operation.
+
+    // Flatten unique_colorings_all
+    thrust::host_vector<int> h_all_unique_flat;
+    h_all_unique_flat.reserve(unique_colorings_all.size() * M);
+    for(const auto& coloring : unique_colorings_all){
+        for(int i = 0; i < M; ++i){
+            h_all_unique_flat.push_back(coloring[i]);
+        }
+    }
+
+    thrust::device_vector<int> d_all_unique_flat = h_all_unique_flat;
+
+    // Convert to Coloring structs
+    struct ColoringComparator {
+        __host__ __device__
+        bool operator()(const Coloring& a, const Coloring& b) const {
+            return a < b;
+        }
+    };
+
+    size_t total_unique = unique_colorings_all.size();
+    thrust::device_vector<Coloring> d_all_unique_colorings(total_unique);
+
+    // Populate d_all_unique_colorings
+    // This step can be optimized, but for simplicity, we'll do it on the host and transfer
+    thrust::host_vector<Coloring> h_all_unique_colorings_host;
+    h_all_unique_colorings_host.reserve(total_unique);
+    for(const auto& coloring : unique_colorings_all){
+        Coloring c;
+        for(int i = 0; i < M; ++i){
+            c.colors[i] = coloring[i];
+        }
+        h_all_unique_colorings_host.push_back(c);
+    }
+    d_all_unique_colorings = h_all_unique_colorings_host;
+
+    // Sort all unique colorings globally
+    thrust::sort(d_all_unique_colorings.begin(), d_all_unique_colorings.end());
+
+    // Remove duplicates globally
+    auto global_new_end = thrust::unique(d_all_unique_colorings.begin(), d_all_unique_colorings.end());
 
     // Erase the duplicates
-    d_canonical_colorings.erase(new_end, d_canonical_colorings.end());
+    d_all_unique_colorings.erase(global_new_end, d_all_unique_colorings.end());
 
     // Transfer unique colorings back to host
-    thrust::host_vector<Coloring> h_unique_colorings_struct = d_canonical_colorings;
+    thrust::host_vector<Coloring> h_final_unique_colorings_struct = d_all_unique_colorings;
 
     // Convert structs back to vector of vectors
-    std::vector<std::vector<int>> unique_colorings;
-    unique_colorings.reserve(h_unique_colorings_struct.size());
-    for(const auto& coloring_struct : h_unique_colorings_struct){
+    std::vector<std::vector<int>> final_unique_colorings;
+    final_unique_colorings.reserve(h_final_unique_colorings_struct.size());
+    for(const auto& coloring_struct : h_final_unique_colorings_struct){
         std::vector<int> coloring;
         coloring.reserve(M);
         for(int i = 0; i < M; ++i){
             coloring.push_back(coloring_struct.colors[i]);
         }
-        unique_colorings.push_back(coloring);
+        final_unique_colorings.push_back(coloring);
     }
 
-    return unique_colorings;
+    // std::cout << "Total unique colorings after global deduplication: " << final_unique_colorings.size() << "\n";
+
+    return final_unique_colorings;
 }
+
 
 // int main(){
 
@@ -199,7 +313,6 @@ std::vector<std::vector<int>> apply_edge_automorphisms_gpu(
 //         for(int j = 0; j < M; ++j){
 //             coloring[j] = (i >> j) & 1; // Extract the j-th bit
 //         }
-//         coloring[M -1] = PADDING;
 //         hex_colorings.push_back(coloring);
 //     }
 //     // Define automorphisms (identity, rotations, and reflections for hexagon)

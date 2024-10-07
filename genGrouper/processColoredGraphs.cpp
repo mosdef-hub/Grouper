@@ -18,7 +18,7 @@
 
 #include "dataStructures.hpp"
 #include "colorPermutations.cuh"
-// #include "logger.cpp"
+#include "debugTools.hpp"
 #include <iterator>
 #include <mutex>
 
@@ -264,6 +264,14 @@ std::vector<std::vector<int>> computeEdgeOrbits(
 
 // Assume GroupGraph and related types are defined elsewhere
 
+// Initialize logger
+// Logger& logger = Logger::getInstance();
+
+// void initializeLogger() {
+//     logger.setLogLevel(Logger::LogLevel::DEBUG);
+//     logger.enableFileLogging("log.txt");
+// }
+
 void process_nauty_output(
     const std::string& line, 
     const std::unordered_set<GroupGraph::Node>& node_defs,
@@ -272,8 +280,8 @@ void process_nauty_output(
     const std::unordered_set<std::string> negativeConstraints,
     bool verbose
 ) {
-    // Logger& logger = Logger::getInstance();
-    // logger.log("Entering process_nauty_output function.", Logger::INFO);
+    
+    // initializeLogger();
 
     std::vector<GroupGraph> group_graphs_list;
     std::unordered_set<std::string> canon_set;
