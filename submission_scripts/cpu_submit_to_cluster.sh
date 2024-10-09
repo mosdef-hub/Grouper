@@ -25,10 +25,5 @@ python setup.py install
 
 echo "--> Compiled genGrouper"
 
-# with orbit
-# without orbit but auto
-# without orbit and without auto
-# Without orbit but auto and gpu
-
 python run_exhaustive_generate.py --n 7 --n_cpus 30 --config_path /raid6/homes/kierannp/projects/genGrouper/dfconfig.cfg
 
