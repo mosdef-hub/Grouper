@@ -15,6 +15,9 @@
 
 #include <libpq-fe.h>
 
+#define _Thread_local thread_local
+#include "nauty/nauty.h"
+
 #include "dataStructures.hpp"
 
 class GroupGraph; // Forward declaration of GroupGraph
@@ -78,6 +81,12 @@ void process_nauty_output(
     std::unordered_set<GroupGraph>* graph_basis,
     const std::unordered_map<std::string, int> positiveConstraints,
     const std::unordered_set<std::string> negativeConstraints,
-    bool verbose
+    bool verbose,
+    graph* g,
+    int* lab,
+    int* ptn,
+    int* orbits,
+    optionblk* options,
+    statsblk* stats
 );
 

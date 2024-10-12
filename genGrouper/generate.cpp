@@ -15,6 +15,8 @@
 #include <omp.h>
 #include <stdio.h>
 
+#include "nauty/nauty.h"
+
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
 #include "debugTools.hpp"
@@ -139,24 +141,36 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
     #pragma omp parallel
     {
+        // Thread-local nauty structures
+        DYNALLSTAT(graph, g, g_sz);
+        DYNALLSTAT(int, lab, lab_sz);
+        DYNALLSTAT(int, ptn, ptn_sz);
+        DYNALLSTAT(int, orbits, orbits_sz);
+        DEFAULTOPTIONS_GRAPH(options);
+        statsblk stats;
 
-        // int thread_id = omp_get_thread_num();
-        // std::cout<< "Thread " << thread_id << " started" << std::endl;
-        std::cout.flush();
+        // Initialize thread-local nauty structures
+        int n = 2; // for now we will use 2 nodes
+        int m = SETWORDSNEEDED(n);
+        DYNALLOC2(graph, g, g_sz, m, n, "malloc");
+        DYNALLOC1(int, lab, lab_sz, n, "malloc");
+        DYNALLOC1(int, ptn, ptn_sz, n, "malloc");
+        DYNALLOC1(int, orbits, orbits_sz, n, "malloc");
 
-        // Thread-local data structures
+        std::fill(orbits, orbits + n, -1);
+
         std::unordered_set<GroupGraph> local_basis;
 
         #pragma omp for schedule(dynamic) nowait
         for (int i = 0; i < total_lines; ++i) {
-
             process_nauty_output(
                 lines[i], 
                 node_defs,
                 &local_basis,
                 positiveConstraints, 
                 negativeConstraints, 
-                verbose
+                verbose,
+                g, lab, ptn, orbits, &options, &stats // Pass nauty structures
             );
 
             #pragma omp critical
@@ -164,10 +178,17 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 update_progress(i + 1, total_lines);
             }
         }
-        // std::cout << "Thread " << thread_id << " finished" << std::endl;
-        // std::cout.flush();
 
-        // Merge thread-local results into global results
+        // Free thread-local nauty resources
+        DYNFREE(g, g_sz);
+        DYNFREE(lab, lab_sz);
+        DYNFREE(ptn, ptn_sz);
+        // DYNFREE(orbits, orbits_sz);
+        delete[] orbits;
+        nauty_freedyn();
+        nautil_freedyn();
+        naugraph_freedyn();
+
         #pragma omp critical
         {
             for (const auto& graph : local_basis) {
@@ -181,7 +202,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
     std::cout << std::endl;
 
-    std::cout<< "Generated " << global_basis.size()<< " unique graphs" << std::endl;
 
     if (!config_path.empty()) {
 
@@ -234,7 +254,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 for (const auto& graph : global_basis) {
                     std::string smiles = graph.toSmiles();
                     std::string graph_data = graph.serialize();
-                    int n_nodes = graph.numNodes();
+                    int n_nodes = graph.nodes.size();
 
                     // Prepare parameters for the insert query
                     const char* paramValues[3];

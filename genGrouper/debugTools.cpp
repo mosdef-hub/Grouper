@@ -71,9 +71,11 @@ public:
             // Write to file if file logging is enabled
             if (logFile.is_open()) {
                 logFile << "[" << timeStr << "] " << levelStr << ": " << message << std::endl;
+                logFile.flush();  // Ensure the log gets written to the file immediately
             }
         }
     }
+
 
     // Enable logging to file
     bool enableFileLogging(const std::string& filename) {
