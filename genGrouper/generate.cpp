@@ -150,7 +150,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         statsblk stats;
 
         // Initialize thread-local nauty structures
-        int n = 2; // for now we will use 2 nodes
+        int n = 20; // Maximum number of nodes we are going to make this 20 for now, should be larger than the largest graph we are going to generate
         int m = SETWORDSNEEDED(n);
         DYNALLOC2(graph, g, g_sz, m, n, "malloc");
         DYNALLOC1(int, lab, lab_sz, n, "malloc");
@@ -183,8 +183,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         DYNFREE(g, g_sz);
         DYNFREE(lab, lab_sz);
         DYNFREE(ptn, ptn_sz);
-        // DYNFREE(orbits, orbits_sz);
-        delete[] orbits;
+        DYNFREE(orbits, orbits_sz);
         nauty_freedyn();
         nautil_freedyn();
         naugraph_freedyn();
