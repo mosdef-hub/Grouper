@@ -1,5 +1,5 @@
 from genGrouper import Node, exhaustive_generate
-from genGrouper.visualization import nx_visualize
+from genGrouper.visualization import visualize
 from genGrouper.utils import convert_to_nx
 import time
 from rdkit import Chem
@@ -15,15 +15,15 @@ import io
 if __name__ == "__main__":
 
     node_defs = set()
-    node_defs.add(Node(0, 'carbon', 'C', [0,1,2,3], [0,0,0,0]))
+    node_defs.add(Node(0, 'carbon', 'C', [0,0,0,0]))
     # node_defs.add(Node(0, 'methine', 'C', [0,1,2], [0,0,0]))
     # node_defs.add(Node(0, 'methylene', 'C', [0,1], [0,0]))
     # node_defs.add(Node(0, 'methyl', 'C', [0], [0]))
     # node_defs.add(Node(0, 'hydroxymethyl', 'CO', [0], [0]))
     # node_defs.add(Node(0, 'primary_amine', 'CN', [0,1,2], [0,0,0]))
     # node_defs.add(Node(0, 'secondary_amine', 'CNC', [0,1], [0,0]))
-    node_defs.add(Node(0, 'tertiary_amine', 'N', [0,1,2], [0,0,0]))
-    node_defs.add(Node(0, 'hydroxyl', 'O', [0], [0]))
+    node_defs.add(Node(0, 'tertiary_amine', 'N', [0,0,0]))
+    node_defs.add(Node(0, 'hydroxyl', 'O',  [0]))
 
     # positive_constraints = {"hydroxyl" : 1, "tertiary_amine" : 1}
     # negative_constraints = {'NN', 'NO', 'NCN', 'NCO', 'OCO'}
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     result = exhaustive_generate(
         args.n, 
         node_defs, 
-        nauty_path="/raid6/homes/kierannp/projects/molGrouper/packages/nauty2_8_8",
+        nauty_path="/Users/kieran/projects/genGrouper/packages/nauty2_8_8",
         input_file_path="",
         num_procs=args.n_cpus,
         positive_constraints=positive_constraints,
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     figures  = []
     for graph in result:
         nx_graph = convert_to_nx(graph)
-        fig = nx_visualize(nx_graph)
+        fig = visualize(nx_graph)
         figures.append(fig_to_img(fig))
         plt.close(fig)
 

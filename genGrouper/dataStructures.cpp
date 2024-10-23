@@ -136,74 +136,78 @@ inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortT
 }
 
 // Operating methods
-void GroupGraph::addNode( 
-    std::string ntype = "", 
-    std::string smiles = "", 
+// Operating methods
+void GroupGraph::addNode(
+    std::string ntype = "",
+    std::string smiles = "",
     std::vector<NodeIDType> hubs = {}
 ) {
-    // We assume that either you provide a type or a smiles string, if you provide smiles but not the type we will use it as the type
-    int id;
-    std::vector<PortType> ports;
-    std::iota(ports.begin(), ports.end(), 1);
+    /*There are 5 ways you can input a node:
+        1. ntype, smiles, hubs
+        2. ntype, hubs
+        3. smiles, hubs
+        4. ntype if it already exists
+        5. smiles if it already exists
+    */
 
-    if (ntype == "" && smiles == "") {
+    // Ensure that either ntype or smiles is provided
+    if (ntype.empty() && smiles.empty()) {
         throw std::invalid_argument("Either smiles or type must be provided");
     }
-    else if (ntype != "" && smiles == "") {
+
+    // If no ntype is provided, use smiles as the type
+    if (ntype.empty()) {
+        ntype = smiles;
+    }
+
+    // Initialize id and ports
+    int id = nodes.size();
+    std::vector<PortType> ports(hubs.size());
+
+    // Case 0: Node type and hubs are provided
+    if (!ntype.empty() && nodetypes.find(ntype) != nodetypes.end() && hubs.empty()) {
+        hubs = nodetypes[ntype]; // Reuse existing hubs
+    }
+
+    // Case 1: Node type (ntype) is provided
+    if (!ntype.empty()) {
+        // If the ntype (or smiles used as ntype) already exists
         if (nodetypes.find(ntype) != nodetypes.end()) {
-            if (ports.size() == 0) {
-                ports = nodetypes[ntype];
+            // Check if hub sizes match the existing node type
+            if (hubs.empty()) {
+                ports = nodetypes[ntype]; // Use the existing ports
             }
-            if (nodetypes[ntype] != ports) {
-                throw std::invalid_argument("Node type already exists with different ports");
+            if (nodetypes[ntype].size() != hubs.size()) {
+                throw std::invalid_argument("Node type already exists with a different number of hubs");
             }
-            id = nodes.size();
-        } 
-       else {
-            if (ports.size() == 0) {
-                throw std::invalid_argument("Ports and hubs must be provided for new node type");
-            };
-            id = nodes.size();
-            nodetypes[ntype] = ports;
-        } 
+        } else { // New node type
+            if (hubs.empty()) {
+                throw std::invalid_argument("Hubs must be provided for a new node type");
+            }
+            std::iota(ports.begin(), ports.end(), 0); // Initialize ports for hubs
+            nodetypes[ntype] = ports; // Save the new node type
+        }
     }
-    else if (ntype == "" && smiles != "") {
-        if (nodetypes.find(smiles) != nodetypes.end()) {
-            if (nodetypes[smiles] != ports) {
-                throw std::invalid_argument("Smiles already exists with different ports");
-            }
-            if (nodetypes[ntype] != ports) {
-                throw std::invalid_argument("Smiles already exists with different ports");
-            }
+
+    // Case 2: Smiles is provided (and used as ntype if ntype was empty)
+    if (!smiles.empty() && nodetypes.find(smiles) != nodetypes.end()) {
+        // Check if hub sizes match the existing smiles node
+        if (nodetypes[smiles].size() != hubs.size()) {
+            throw std::invalid_argument("Smiles already exists with a different number of hubs");
         }
-        else {
-            if (ports.size() == 0) {
-                throw std::invalid_argument("Ports and hubs must be provided for new node type");
-            };
-            ntype = smiles.c_str();
-            nodetypes[ntype] = ports;
+    } else if (!smiles.empty() && nodetypes.find(smiles) == nodetypes.end()) {
+        // New smiles entry
+        if (hubs.empty()) {
+            throw std::invalid_argument("Hubs must be provided for a new node type");
         }
-        
+        std::iota(ports.begin(), ports.end(), 0);
+        nodetypes[smiles] = ports; // Save the new smiles as a node type
     }
-    else {
-        if (nodetypes.find(ntype) != nodetypes.end()) {
-            if (ports.size() == 0) {
-                ports = nodetypes[ntype];
-            }
-            if (nodetypes[ntype] != ports) {
-                throw std::invalid_argument("Node type already exists with different ports");
-            }
-        }
-        else {
-            nodetypes[ntype] = ports;
-        }
-        
-    }
-    
-    id = nodes.size();
+
+    // Create the new node and add it to the nodes map
     nodes[id] = Node(id, ntype, smiles, hubs);
-    
 }
+
 
 bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, bool verbose) {
     NodeIDType from = std::get<0>(fromNodePort);
@@ -233,6 +237,17 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
         throw std::invalid_argument("Node does not exist");
     }
     if (std::find(nodes[from].ports.begin(), nodes[from].ports.end(), fromPort) == nodes[from].ports.end()) {
+        std::string ports_string = "";
+        for (const auto& port : nodes[from].ports) {
+            ports_string += std::to_string(port) + " ";
+        }
+        std::cout<< "Node " << from << " has ports: " << ports_string << std::endl;
+
+        ports_string = "";
+        for (const auto& port : nodes[to].ports) {
+            ports_string += std::to_string(port) + " ";
+        }
+        std::cout<< "Node " << to << " has ports: " << ports_string << std::endl;
         throw std::invalid_argument("Port does not exist");
     }
     edges.push_back(std::make_tuple(from, fromPort, to, toPort));

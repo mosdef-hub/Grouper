@@ -10,16 +10,16 @@ class TestGeneration(BaseTest):
     @pytest.mark.parametrize("num_procs", [1, 2, 4, 8, 16])
     @pytest.mark.parametrize("node_defs", [[
             # {"type": "t1", "smiles": "C", "ports": [0,1,2,3], "hubs": [0,0,0,0]},
-            {"type": "t2", "smiles": "N", "ports": [0,1,2], "hubs": [0,0,0]},
-            {"type": "Methyl", "smiles": "C", "ports": [0,1,2], "hubs": [0,0,0]},
+            {"type": "t2", "smiles": "N", "hubs": [0,0,0]},
+            {"type": "Methyl", "smiles": "C", "hubs": [0,0,0]},
             # {"type": "Benzene", "smiles": "C1=CC=CC=C1", "ports": [0,1,2,3,4,5], "hubs": [0,1,2,3,4,5]},
-            {"type": "ester", "smiles": "C(=O)O", "ports": [0,1], "hubs": [0,2]},
-            {"type": "extra1", "smiles": "O", "ports": [0,1], "hubs": [0,0]}
+            {"type": "ester", "smiles": "C(=O)O", "hubs": [0,2]},
+            {"type": "extra1", "smiles": "O", "hubs": [0,0]}
         ]]
     )
     def test_exhaustive_generate_performance(self, benchmark, n_nodes, num_procs, node_defs):
         # Convert node_defs to the expected format
-        node_defs = set(Node(0, n["type"], n["smiles"], n["ports"], n["hubs"]) for n in node_defs)
+        node_defs = set(Node(0, n["type"], n["smiles"], n["hubs"]) for n in node_defs)
 
         write_to_db = False
         verbose = False

@@ -90,7 +90,7 @@ public:
 
         Node(int id, const std::string& ntype, const std::string& smiles, const std::vector<int>& hubs)
             : id(id), ntype(ntype), smiles(smiles), ports(hubs.size()), hubs(hubs) {
-                std::iota(ports.begin(), ports.end(), 1);
+                std::iota(ports.begin(), ports.end(), 0);
         }
     };
     std::unordered_map<NodeIDType, Node> nodes; ///< Map of node IDs to their respective nodes.

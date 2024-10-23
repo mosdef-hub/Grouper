@@ -9,14 +9,14 @@ class TestGroupGraph(BaseTest):
     def test_add_node(self):
         # Basic node addition
         graph = GroupGraph()
-        graph.add_node('type1', '', [0,1], [0,0])
+        graph.add_node('type1', '', [0,0])
         assert 0 in [n.id for n in graph.nodes.values()]
         assert set(n.type for n in graph.nodes.values()) == set(['type1'])
         assert set(n.smiles for n in graph.nodes.values()) == set([''])
         assert [n.ports for n in graph.nodes.values()] == [[0,1]]
 
         # Adding a node with different type and smiles
-        graph.add_node('', 'C', [0,1], [0,0])
+        graph.add_node('', 'C', [0,0])
         assert len(graph.nodes) == 2
         assert set(n.type for n in graph.nodes.values()) == set(['type1', 'C'])
         assert set(n.smiles for n in graph.nodes.values()) == set(['', 'C'])
@@ -31,9 +31,9 @@ class TestGroupGraph(BaseTest):
 
     def test_add_edge(self):
         graph = GroupGraph()
-        graph.add_node('type1', '', [0,1], [0,0])
-        graph.add_node('', 'C', [0,1], [0,0])
-        graph.add_node('type1', '', [0,1], [0,0])
+        graph.add_node('type1', '', [0,0])
+        graph.add_node('', 'C', [0,0])
+        graph.add_node('type1', '', [0,0])
 
         graph.add_edge((0, 0), (1, 0))
         assert (0,0,1,0) in graph.edges   
@@ -43,31 +43,31 @@ class TestGroupGraph(BaseTest):
 
     def test_add_edge_with_invalid_nodes(self):
         graph = GroupGraph()
-        graph.add_node('node1', '', [0,1], [0,0])
-        graph.add_node('node2', '', [0], [0])
+        graph.add_node('node1', '', [0,0])
+        graph.add_node('node2', '', [0])
         with pytest.raises(ValueError):
             graph.add_edge((0, 1), (2, 1))
 
     def test_add_edge_with_invalid_ports(self):
         graph = GroupGraph()
-        graph.add_node('node1', '', [0,1], [0,0])
-        graph.add_node('node2', '', [0,1], [0,0])
+        graph.add_node('node1', '', [0,0])
+        graph.add_node('node2', '', [0,0])
         with pytest.raises(ValueError):
             graph.add_edge((0, 2), (1, 1))
 
     def test_add_edge_with_occupied_port(self):
         graph = GroupGraph()
-        graph.add_node('node1', '', [0,1], [0,0])
-        graph.add_node('node2', '', [0,1], [0,0])
+        graph.add_node('node1', '', [0,0])
+        graph.add_node('node2', '', [0,0])
         graph.add_edge((0, 1), (1, 1))
         with pytest.raises(ValueError):
             graph.add_edge((0, 1), (1, 0))
 
     def test_add_edge_with_same_ports(self):
         graph = GroupGraph()
-        graph.add_node('node1', '', [0,1], [0,0])
-        graph.add_node('node2', '', [0,1], [0,0])
-        graph.add_node('node3', '', [0,1], [0,0])
+        graph.add_node('node1', '', [0,0])
+        graph.add_node('node2', '', [0,0])
+        graph.add_node('node3', '', [0,0])
         graph.add_edge((0, 1), (1, 1))
         graph.add_edge((1, 0), (2, 1))
         with pytest.raises(ValueError):
@@ -87,13 +87,13 @@ class TestGroupGraph(BaseTest):
         graph1 = GroupGraph()
         graph2 = GroupGraph()
         assert graph1 == graph2
-        graph1.add_node('node1', 'type1', [0,1], [0,0])
+        graph1.add_node('node1', 'type1', [0,0])
         assert graph1 != graph2
-        graph2.add_node('node1', 'type1', [0,1], [0,0])
+        graph2.add_node('node1', 'type1', [0,0])
         assert graph1 == graph2
-        graph1.add_node('node2', 'type2', [0,1], [0,0])
+        graph1.add_node('node2', 'type2', [0,0])
         assert graph1 != graph2
-        graph2.add_node('node2', 'type2', [0,1], [0,0])
+        graph2.add_node('node2', 'type2', [0,0])
         assert graph1 == graph2
         graph1.add_edge((0, 0), (1, 0))
         assert graph1 != graph2
@@ -106,16 +106,16 @@ class TestGroupGraph(BaseTest):
 
         assert graph1 in [graph1]
 
-        graph1.add_node('node1', 'type1', [0,1], [0,0])
+        graph1.add_node('node1', 'type1', [0,0])
         assert graph1 not in [graph2]
 
-        graph2.add_node('node1', 'type1', [0,1], [0,0])
+        graph2.add_node('node1', 'type1', [0,0])
         assert graph1 in [graph2]
 
-        graph1.add_node('node2', 'type2', [0,1], [0,0])
+        graph1.add_node('node2', 'type2', [0,0])
         assert graph1 not in [graph2]
 
-        graph2.add_node('node2', 'type2', [0,1], [0,0])
+        graph2.add_node('node2', 'type2', [0,0])
         assert graph1 in [graph2]
 
         graph1.add_edge((0, 0), (1, 0))
@@ -128,7 +128,7 @@ class TestGroupGraph(BaseTest):
 
     def test_rings(self):
         graph = GroupGraph()
-        graph.add_node('ring', 'c1ccccc1', [0,1,2,3,4,5], [0,1,2,3,4,5])
+        graph.add_node('ring', 'c1ccccc1', [0,1,2,3,4,5])
         graph.add_node('ring')
         graph.add_node('ring')
 
@@ -160,8 +160,8 @@ class TestGroupGraph(BaseTest):
         
     def test_n_free_ports(self):
         graph = GroupGraph()
-        graph.add_node('node1', 'type1', [0,1], [0,0])
-        graph.add_node('node2', 'type2', [0,1,2], [0,0,1])
+        graph.add_node('node1', 'type1', [0,0])
+        graph.add_node('node2', 'type2', [0,0,1])
         assert graph.n_free_ports(0) ==  2
 
         # Connect a edge and recheck
@@ -186,10 +186,10 @@ class TestGroupGraph(BaseTest):
     def test_add_node_performance(self, benchmark):
         graph = GroupGraph()
         for i in range(100):
-            graph.add_node(f'type{i}', '', [0, 1], [0, 0])
+            graph.add_node(f'type{i}', '', [0, 0])
         
         def benchmark_add_node():
-            graph.add_node('type100', '', [0, 1], [0, 0])
+            graph.add_node('type100', '', [0, 0])
         
         # Benchmark the add_node method
         benchmark(benchmark_add_node)
