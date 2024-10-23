@@ -308,7 +308,6 @@ void process_nauty_output(
         gG.addNode(
             int_to_node_type.at(colors[i]), 
             int_to_smiles.at(colors[i]), 
-            node_types.at(int_to_node_type.at(colors[i])), 
             node_type_to_hub.at(int_to_node_type.at(colors[i]))
         );
     }
@@ -360,7 +359,7 @@ void process_nauty_output(
             continue;
         }
 
-    //     // Check if the graph is unique considering permutations
+    //  Check if the graph is unique considering permutations
         if (canon_set.find(gG.toSmiles()) == canon_set.end()) {
             canon_set.insert(gG.toSmiles());
             graph_basis->insert(gG);

@@ -25,7 +25,7 @@ PYBIND11_MODULE(_genGrouper, m) {
     m.doc() = "genGrouper bindings for Python";
     py::class_<GroupGraph::Node>(m, "Node")
         .def(py::init<>())
-        .def(py::init<int, const std::string&, const std::string&, const std::vector<int>&, const std::vector<int>&>())
+        .def(py::init<int, const std::string&, const std::string&, const std::vector<int>&>())
         .def_readwrite("id", &GroupGraph::Node::id)
         .def_readwrite("type", &GroupGraph::Node::ntype)
         .def_readwrite("smiles", &GroupGraph::Node::smiles)
@@ -43,7 +43,6 @@ PYBIND11_MODULE(_genGrouper, m) {
         .def("add_node", &GroupGraph::addNode, 
              py::arg("type") = "", 
              py::arg("smiles") = "", 
-             py::arg("ports") = std::vector<int>{}, 
              py::arg("hubs") = std::vector<int>{})
         .def("add_edge", &GroupGraph::addEdge, 
              py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0}, 

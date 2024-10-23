@@ -65,7 +65,6 @@ GroupGraph fragment(
             groupGraph.addNode(
                 nodeData.ntype, 
                 RDKit::MolToSmiles(*query), 
-                nodeData.ports, 
                 nodeData.hubs
             );
             GroupGraph::NodeIDType currentId = nodeId++;

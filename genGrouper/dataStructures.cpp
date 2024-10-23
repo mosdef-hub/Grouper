@@ -47,7 +47,6 @@ bool GroupGraph::Node::operator==(const Node& other) const {
     return id == other.id &&
            ntype == other.ntype &&
            smiles == other.smiles &&
-           ports == other.ports &&
            hubs == other.hubs;
 }
 
@@ -140,11 +139,12 @@ inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortT
 void GroupGraph::addNode( 
     std::string ntype = "", 
     std::string smiles = "", 
-    std::vector<PortType> ports = {}, 
     std::vector<NodeIDType> hubs = {}
 ) {
     // We assume that either you provide a type or a smiles string, if you provide smiles but not the type we will use it as the type
     int id;
+    std::vector<PortType> ports;
+    std::iota(ports.begin(), ports.end(), 1);
 
     if (ntype == "" && smiles == "") {
         throw std::invalid_argument("Either smiles or type must be provided");
@@ -201,7 +201,7 @@ void GroupGraph::addNode(
     }
     
     id = nodes.size();
-    nodes[id] = Node(id, ntype, smiles, ports, hubs);
+    nodes[id] = Node(id, ntype, smiles, hubs);
     
 }
 
