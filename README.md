@@ -17,7 +17,7 @@
     <img src="images/grouper.jpeg" alt="Logo" width="700" height="300">
   </a>
 
-<h3 align="center">genGrouper</h3>
+<h3 align="center">Grouper</h3>
 
   <p align="center">
     A software package for creating and manipulating graphs of molecular groups.
