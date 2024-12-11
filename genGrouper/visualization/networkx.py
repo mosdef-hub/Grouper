@@ -6,6 +6,56 @@ from matplotlib import colors
 from PIL import Image
 from io import BytesIO
 import cairosvg
+import networkx as nx
+import numpy as np
+
+def spring_layout(group_graph, iterations=50, k=1.0):
+    """
+    Computes a spring layout for a generic graph.
+    
+    Parameters:
+        group_graph: The graph structure with `nodes` and edges
+        iterations: Number of iterations for layout optimization
+        k: Spring constant (controls node spacing)
+    
+    Returns:
+        pos: A dictionary mapping nodes to 2D positions
+    """
+    nodes = list(group_graph.nodes)
+    num_nodes = len(nodes)
+    
+    # Initialize positions randomly in 2D space
+    pos = {node: np.random.rand(2) for node in nodes}
+    
+    # Compute repulsion and attraction forces iteratively
+    for _ in range(iterations):
+        forces = {node: np.zeros(2) for node in nodes}
+        
+        # Repulsive forces (Coulomb's law)
+        for i, node1 in enumerate(nodes):
+            for j, node2 in enumerate(nodes):
+                if i >= j:
+                    continue
+                delta = pos[node1] - pos[node2]
+                distance = np.linalg.norm(delta) + 1e-4  # Avoid division by zero
+                force = (k ** 2 / distance ** 2) * delta / distance
+                forces[node1] += force
+                forces[node2] -= force
+        
+        # Attractive forces (Hooke's law)
+        for edge in group_graph.edges:
+            (node1,port1,node2,port2) = edge
+            delta = pos[node1] - pos[node2]
+            distance = np.linalg.norm(delta) + 1e-4
+            force = -(distance ** 2 / k) * delta / distance
+            forces[node1] += force
+            forces[node2] -= force
+        
+        # Update positions
+        for node in nodes:
+            pos[node] += 0.01 * forces[node]  # Small step size for stability
+    
+    return pos
 
 # Calculate positions for ports around a node, adjusted by zoom factor and distance
 def calculate_port_positions(center_x, center_y, num_ports, distance_from_center, zoom_factor=0.4):
@@ -61,7 +111,17 @@ def generate_svg_for_node(num_ports, node_type, radius_node=50, radius_ports=10,
 
 
 # Manual visualization without using NetworkX for drawing
-def visualize(group_graph, pos):
+def visualize(group_graph, pos = None):
+    """
+    Visualize a graph with optional custom positioning for nodes.
+    
+    Parameters:
+    - group_graph: A NetworkX graph object to be visualized.
+    - pos: A dictionary specifying positions for nodes (optional). 
+           If None, a default layout will be used.
+    """
+    if pos is None:
+        pos = spring_layout(group_graph, iterations=50, k=1.0)
     fig, ax = plt.subplots(figsize=(5, 5), )
 
     # Set axis limits
