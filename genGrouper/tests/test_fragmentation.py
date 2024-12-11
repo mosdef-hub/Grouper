@@ -16,11 +16,59 @@ class TestGroupGraph(BaseTest):
 
         smiles = "C=CO"
 
-
         out = fragment(smiles, node_defs)
-        print(truth)
-        print(out)
 
         assert out == truth
 
+    def test_fragment_2(self):
+        node_defs = {}
+        node_defs['[NH2]'] = Node(0, 'amine', 'N', [1,1])
+        node_defs['C=C'] = Node(1, 'alkene', 'C=C', [0,0,1,1])
+
+        truth = GroupGraph()
+        truth.add_node('amine', '[NH2]', [0])
+        truth.add_node('alkene', 'C=C', [0,0,1,1])
+        truth.add_edge((0,0),(1,0))
+
+        smiles = "C=C[NH2]"
+
+        out = fragment(smiles, node_defs)
+
+        assert out == truth
+
+    def test_empty_smiles(self):
+        node_defs = {}
+        smiles = ""
+        
+        out = fragment(smiles, node_defs)
+        
+        assert out == GroupGraph()
+
+    def test_invalid_smiles(self):
+        node_defs = {}
+        smiles = "C==C"  # Invalid SMILES
+        
+        try:
+            out = fragment(smiles, node_defs)
+        except Exception as e:
+            assert isinstance(e, ValueError)  # or the appropriate exception class for invalid SMILES
+
+    def test_multiple_bonds(self):
+        node_defs = {}
+        node_defs['[OX2]'] = Node(0, 'oxygen', 'O', [0,0])
+        node_defs['C=C'] = Node(1, 'alkene', 'C=C', [0,0,1,1])
+        node_defs['[NH2]'] = Node(2, 'amine', 'N', [0])
+
+        truth = GroupGraph()
+        truth.add_node('hydroxyl', '[O]', [0,0])
+        truth.add_node('alkene', 'C=C', [0,0,1,1])
+        truth.add_node('amine', '[NH2]', [0])
+        truth.add_edge((0,0),(1,0))
+        truth.add_edge((1,1),(2,0))
+
+        smiles = "C=CO[NH2]"
+
+        out = fragment(smiles, node_defs)
+
+        assert out == truth
 
