@@ -87,13 +87,13 @@ class TestGroupGraph(BaseTest):
         graph1 = GroupGraph()
         graph2 = GroupGraph()
         assert graph1 == graph2
-        graph1.add_node('node1', 'type1', [0,0])
+        graph1.add_node('node1', 'C', [0,0])
         assert graph1 != graph2
-        graph2.add_node('node1', 'type1', [0,0])
+        graph2.add_node('node1', 'C', [0,0])
         assert graph1 == graph2
-        graph1.add_node('node2', 'type2', [0,0])
+        graph1.add_node('node2', 'C', [0,0])
         assert graph1 != graph2
-        graph2.add_node('node2', 'type2', [0,0])
+        graph2.add_node('node2', 'C', [0,0])
         assert graph1 == graph2
         graph1.add_edge((0, 0), (1, 0))
         assert graph1 != graph2
@@ -106,16 +106,16 @@ class TestGroupGraph(BaseTest):
 
         assert graph1 in [graph1]
 
-        graph1.add_node('node1', 'type1', [0,0])
+        graph1.add_node('node1', 'C', [0,0])
         assert graph1 not in [graph2]
 
-        graph2.add_node('node1', 'type1', [0,0])
+        graph2.add_node('node1', 'C', [0,0])
         assert graph1 in [graph2]
 
-        graph1.add_node('node2', 'type2', [0,0])
+        graph1.add_node('node2', 'C', [0,0])
         assert graph1 not in [graph2]
 
-        graph2.add_node('node2', 'type2', [0,0])
+        graph2.add_node('node2', 'C', [0,0])
         assert graph1 in [graph2]
 
         graph1.add_edge((0, 0), (1, 0))

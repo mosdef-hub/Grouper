@@ -20,11 +20,8 @@
 #include <GraphMol/PeriodicTable.h>
 #include <RDGeneral/types.h>
 
-
-
 #include <nauty/nauty.h>
 #include <nauty/naututil.h>
-
 
 
 // Core methods
@@ -51,82 +48,85 @@ bool GroupGraph::Node::operator==(const Node& other) const {
 }
 
 bool GroupGraph::operator==(const GroupGraph& other) const {
-    // Check if both graphs have the same number of nodes and edges
-    if (nodes.size() != other.nodes.size() || edges.size() != other.edges.size()) {
+    // Check if empty
+    if (nodes.empty() && other.nodes.empty()) {
+        return true;
+    }
+    if (nodes.empty() || other.nodes.empty()) {
+        return false;
+    }
+    // Convert GroupGraph to AtomGraph
+    std::unique_ptr<AtomGraph> atomGraph1 = this->toAtomicGraph();
+    std::unique_ptr<AtomGraph> atomGraph2 = other.toAtomicGraph();
+
+    // Check if the number of nodes and edges are the same
+    if (atomGraph1->nodes.size() != atomGraph2->nodes.size()) {
+        return false;
+    }
+    int edgeCount1 = 0;
+    int edgeCount2 = 0;
+    for (const auto& node : atomGraph1->edges) {
+        edgeCount1 += node.second.size();
+    }
+    for (const auto& node : atomGraph2->edges) {
+        edgeCount2 += node.second.size();
+    }
+    if (edgeCount1 != edgeCount2) {
         return false;
     }
 
-    // Create adjacency lists for comparison using unordered_map and unordered_set
-    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> adjacency_list_1;
-    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> adjacency_list_2;
+    // Convert AtomGraph to nauty graph
+    std::cout<< "Converting to nauty graph" << std::endl;
+    int n = atomGraph1->nodes.size(); // Assuming the number of nodes is the same for both graphs
+    int m = SETWORDSNEEDED(n);
+    DYNALLSTAT(graph, g1, g1_sz);
+    DYNALLSTAT(graph, g2, g2_sz);
+    DYNALLOC2(graph, g1, g1_sz, n, m, "malloc");
+    DYNALLOC2(graph, g2, g2_sz, n, m, "malloc");
+    std::cout<<"Allocated memory for nauty graph" << std::endl;
 
-    // Populate adjacency lists for the current graph
-    for (const auto& edge : edges) {
-        NodeIDType node1 = std::get<0>(edge);
-        NodeIDType node2 = std::get<2>(edge);
-        adjacency_list_1[node1].insert(node2);
-        adjacency_list_1[node2].insert(node1);
-    }
+    // Initialize nauty structures
+    static DEFAULTOPTIONS_GRAPH(options);
+    statsblk stats;
+    int lab1[n], ptn1[n], orbits1[n];
+    int lab2[n], ptn2[n], orbits2[n];
+    setword workspace[160];
+    graph canong1[g1_sz], canong2[g2_sz];  // Canonical forms
 
-    // Populate adjacency lists for the other graph
-    for (const auto& edge : other.edges) {
-        NodeIDType node1 = std::get<0>(edge);
-        NodeIDType node2 = std::get<2>(edge);
-        adjacency_list_2[node1].insert(node2);
-        adjacency_list_2[node2].insert(node1);
-    }
-
-    // Create a vector of node IDs for the current graph and the other graph
-    std::vector<NodeIDType> nodes_1;
-    std::vector<NodeIDType> nodes_2;
-    
-    for (const auto& node : nodes) {
-        nodes_1.push_back(node.first);
-    }
-
-    for (const auto& node : other.nodes) {
-        nodes_2.push_back(node.first);
-    }
-
-    // Sort nodes to ensure consistent permutation checks
-    std::sort(nodes_1.begin(), nodes_1.end());
-    std::sort(nodes_2.begin(), nodes_2.end());
-
-    // Try all permutations of node mappings
-    do {
-        std::unordered_map<NodeIDType, NodeIDType> node_mapping;
-
-        for (size_t i = 0; i < nodes_1.size(); ++i) {
-            node_mapping[nodes_1[i]] = nodes_2[i];
-        }
-
-        bool is_match = true;
-        
-        for (const auto& entry : adjacency_list_1) {
-            NodeIDType node_id_1 = entry.first;
-            const auto& neighbors_1 = entry.second;
-
-            NodeIDType node_id_2 = node_mapping[node_id_1];
-            const auto& neighbors_2 = adjacency_list_2[node_id_2];
-
-            std::unordered_set<NodeIDType> mapped_neighbors_1;
-            for (NodeIDType neighbor : neighbors_1) {
-                mapped_neighbors_1.insert(node_mapping[neighbor]);
-            }
-
-            if (mapped_neighbors_1 != neighbors_2) {
-                is_match = false;
-                break;
+    // Convert AtomGraph to nauty graph
+    EMPTYGRAPH(g1, m, n);
+    for (const auto& id_node : atomGraph1->edges) {
+        if (id_node.second.size() != 0){
+            for (const auto& dest : id_node.second) {
+                int from = id_node.first;
+                int to = dest;
+                ADDONEEDGE(g1, from, to, m);
             }
         }
+    }
 
-        if (is_match) {
-            return true;
+    EMPTYGRAPH(g2, m, n);
+    for (const auto& id_node : atomGraph2->edges) {
+        if (id_node.second.size() != 0){
+            for (const auto& dest : id_node.second) {
+                int from = id_node.first;
+                int to = dest;
+                ADDONEEDGE(g2, from, to, m);
+            }
         }
+    }
 
-    } while (std::next_permutation(nodes_2.begin(), nodes_2.end()));
+    // Call nauty to canonicalize the graphs
+    options.getcanon = TRUE;
+    nauty(g1, lab1, ptn1, NULL, orbits1, &options, &stats, workspace, 160, m, n, canong1);
+    nauty(g2, lab2, ptn2, NULL, orbits2, &options, &stats, workspace, 160, m, n, canong2);
 
-    return false;
+    // Compare the canonical forms to determine isomorphism
+    if (memcmp(canong1, canong2, sizeof(set) * n * m) != 0) {
+        return false;
+    }
+
+    return true;
 }
 
 inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& lhs,

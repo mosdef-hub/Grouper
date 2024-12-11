@@ -73,7 +73,7 @@ GroupGraph fragment(
                 int atomIdx = atomMatch.second;
                 atomMapping[atomIdx] = currentId;
                 atomToSmarts[atomIdx] = smarts;  // Track which SMARTS pattern the atom belongs to
-                atomToPort[atomIdx] = nodeData.hubs[atomMatch.first];
+                atomToPort[atomIdx] = nodeData.ports[atomMatch.first];
             }
         }
     }

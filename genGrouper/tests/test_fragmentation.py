@@ -72,3 +72,18 @@ class TestGroupGraph(BaseTest):
 
         assert out == truth
 
+    def test_triple_node(self):
+        node_defs = {}
+        node_defs['[OX2]'] = Node(0, 'oxyl', 'O', [0,0])  # oxyl group
+        node_defs['C(=O)O'] = Node(0, 'ester', 'C(=O)O', [0, 2])  # Ester group
+
+        truth = GroupGraph()
+        truth.add_node('ester', 'C(=O)O', [0, 2])
+        truth.add_node('oxyl', 'O', [0,0])
+        truth.add_node('ester', 'C(=O)O', [0, 2])
+        truth.add_edge((0, 1), (1, 0))
+        truth.add_edge((1, 1), (2, 0))
+
+        out = fragment('O=COOC(=O)O', node_defs)
+
+        assert out == truth
