@@ -33,7 +33,8 @@ GroupGraph fragment(
         });
 
     // Map to keep track of atom indices and corresponding node IDs
-    std::unordered_map<int, GroupGraph::NodeIDType> atomMapping;
+    std::unordered_map<int, GroupGraph::NodeIDType> atomMapping; // Maps atom indices to node IDs
+    std::unordered_map<int, int> atomToPort;  // Maps atom indices to port numbers
     std::unordered_map<int, std::string> atomToSmarts;  // Maps atom indices to SMARTS patterns
     GroupGraph::NodeIDType nodeId = 0;
 
@@ -72,6 +73,7 @@ GroupGraph fragment(
                 int atomIdx = atomMatch.second;
                 atomMapping[atomIdx] = currentId;
                 atomToSmarts[atomIdx] = smarts;  // Track which SMARTS pattern the atom belongs to
+                atomToPort[atomIdx] = nodeData.hubs[atomMatch.first];
             }
         }
     }
@@ -86,15 +88,14 @@ GroupGraph fragment(
             GroupGraph::NodeIDType toNode = atomMapping[endAtomIdx];
             std::string fromSmarts = atomToSmarts[beginAtomIdx];
             std::string toSmarts = atomToSmarts[endAtomIdx];
-
-            // std::cout<< "Checking edge between atoms: " << beginAtomIdx << " and " << endAtomIdx << std::endl;
-            // std::cout << "From SMARTS: " << fromSmarts << " To SMARTS: " << toSmarts << std::endl;
-            // std::cout << "From Node: " << fromNode << " To Node: " << toNode << std::endl;
             
             // Check if both atoms are part of the same SMARTS subgraph
-            if (fromSmarts != toSmarts && fromNode != toNode) {
-                std::cout << "Adding edge between nodes: " << fromNode << " and " << toNode << std::endl;
-                groupGraph.addEdge({fromNode, 0}, {toNode, 0}, false);  // Assuming port 0 for simplicity
+            if (fromNode != toNode) {
+                // Get the port numbers for the atoms
+                int fromPort = atomToPort[beginAtomIdx];
+                int toPort = atomToPort[endAtomIdx];
+                // add edge
+                groupGraph.addEdge({fromNode, fromPort}, {toNode, toPort}, false);  // Assuming port 0 for simplicity
             }
         }
     }
