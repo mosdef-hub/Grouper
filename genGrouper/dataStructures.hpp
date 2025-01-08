@@ -17,6 +17,7 @@
 #include <GraphMol/AtomIterators.h>
 #include <GraphMol/BondIterators.h>
 
+
 #include <nauty/nauty.h>
 #include <nauty/naututil.h>
 
@@ -72,7 +73,6 @@ private:
     // Helper methods or additional private members can be declared here if needed
 };
 
-
 class GroupGraph {
 public:
     using NodeIDType = int;
@@ -83,28 +83,29 @@ public:
         NodeIDType id;
         std::string ntype;
         std::string smiles;
-        std::vector<PortType> ports;
         std::vector<NodeIDType> hubs;
+        std::vector<PortType> ports;
         bool operator==(const Node& other) const;
         Node() : id(0), ntype(""), smiles(""), ports(), hubs() {}
 
-        Node(int id, const std::string& ntype, const std::string& smiles, const std::vector<int>& ports, const std::vector<int>& hubs)
-            : id(id), ntype(ntype), smiles(smiles), ports(ports), hubs(hubs) {}
+        Node(int id, const std::string& ntype, const std::string& smiles, const std::vector<int>& hubs)
+            : id(id), ntype(ntype), smiles(smiles), ports(hubs.size()), hubs(hubs) {
+                std::iota(ports.begin(), ports.end(), 0);
+        }
     };
     std::unordered_map<NodeIDType, Node> nodes; ///< Map of node IDs to their respective nodes.
     std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType>> edges; ///< List of edges connecting nodes.
     std::unordered_map<std::string, std::vector<PortType>> nodetypes; ///< Map of node types to their respective ports.
 
-    // Methods
+    // Core Methods
     GroupGraph();
     GroupGraph(const GroupGraph& other);
     GroupGraph& operator=(const GroupGraph& other);
     bool operator==(const GroupGraph& other) const;
-
+    // Operating methods
     void addNode(
         std::string ntype, 
         std::string smiles, 
-        std::vector<PortType> ports,
         std::vector<NodeIDType> hubs
     );
     bool addEdge(
@@ -113,19 +114,25 @@ public:
         bool verbose = false
     );
     int n_free_ports(NodeIDType nid) const;
-    int numNodes() const;
+    int* computeEdgeOrbits(
+        const std::vector<std::pair<int, int>> edge_list,
+        graph* g, int* lab, int* ptn, int* orbits,
+        optionblk* options, statsblk* stats
+        ) const;
+    void clearEdges();
+    // Conversion methods
     std::string printGraph() const;
     std::unordered_map<std::string, int> toVector() const;
     std::string toSmiles() const;
-    void toNautyFormat(int *n, int *m, int *adj) const;
-    std::vector<std::vector<int>> nodeAut() const;
-    std::vector<std::vector<std::pair<int, int>>> edgeAut(const std::vector<std::pair<int, int>>& edge_list) const;
     std::unique_ptr<AtomGraph> toAtomicGraph() const;
     std::string serialize() const;
     std::string Canon() const;
+    
 
 private:
-    // Helper methods or additional private members can be declared here if needed
+    std::vector<std::vector<int>> toEdgeGraph(const std::vector<std::pair<int, int>>& edge_list) const;
+    void toNautyGraph(int *n, int *m, int *adj) const;
+    int numNodes() const;
 };
 
 inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& lhs,

@@ -5,6 +5,7 @@
 #include "generate.hpp"
 #include "autUtils.hpp"
 #include "fragmentation.hpp"
+#include "nauty/nauty.h"
 
 
 
@@ -24,7 +25,7 @@ PYBIND11_MODULE(_genGrouper, m) {
     m.doc() = "genGrouper bindings for Python";
     py::class_<GroupGraph::Node>(m, "Node")
         .def(py::init<>())
-        .def(py::init<int, const std::string&, const std::string&, const std::vector<int>&, const std::vector<int>&>())
+        .def(py::init<int, const std::string&, const std::string&, const std::vector<int>&>())
         .def_readwrite("id", &GroupGraph::Node::id)
         .def_readwrite("type", &GroupGraph::Node::ntype)
         .def_readwrite("smiles", &GroupGraph::Node::smiles)
@@ -42,14 +43,13 @@ PYBIND11_MODULE(_genGrouper, m) {
         .def("add_node", &GroupGraph::addNode, 
              py::arg("type") = "", 
              py::arg("smiles") = "", 
-             py::arg("ports") = std::vector<int>{}, 
              py::arg("hubs") = std::vector<int>{})
         .def("add_edge", &GroupGraph::addEdge, 
              py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0}, 
              py::arg("dst") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
              py::arg("verbose") = false)
-        .def("n_nodes", &GroupGraph::numNodes)
         .def("n_free_ports", &GroupGraph::n_free_ports)
+        .def("compute_edge_orbits", &GroupGraph::computeEdgeOrbits)
         .def("__str__", &GroupGraph::printGraph)
         .def("to_smiles", &GroupGraph::toSmiles, "Convert GroupGraph to SMILES")
         .def("to_vector", &GroupGraph::toVector, "Convert GroupGraph to group vector")
@@ -75,7 +75,13 @@ PYBIND11_MODULE(_genGrouper, m) {
         py::arg("graph_basis"),
         py::arg("positive_constraints"),
         py::arg("negative_constraints"),
-        py::arg("verbose") = false);
+        py::arg("verbose") = false,
+        py::arg("g"),
+        py::arg("lab"),
+        py::arg("ptn"),
+        py::arg("orbits"),
+        py::arg("options"),
+        py::arg("stats"));
     m.def("exhaustive_generate", [](int n_nodes, 
                                     const std::unordered_set<GroupGraph::Node>& node_defs, 
                                     const std::string& nauty_path, 

@@ -1,2 +1,2 @@
-from .networkx import nx_visualize
+from .networkx import visualize
 from .space_visualization import *

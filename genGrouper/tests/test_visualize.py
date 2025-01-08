@@ -4,7 +4,7 @@ import networkx as nx
 import numpy as np
 from genGrouper import GroupGraph
 from genGrouper.tests.base_test import BaseTest
-from genGrouper.visualization import nx_visualize
+from genGrouper.visualization import visualize
 from genGrouper.utils import convert_to_nx
 
 class TestGroupGraph(BaseTest):
@@ -14,7 +14,9 @@ class TestGroupGraph(BaseTest):
         conversion = convert_to_nx(graph)
         if graph_fixture == "empty_graph":
             with pytest.raises(ValueError):
-                fig = nx_visualize(conversion)
+                pos = nx.spring_layout(conversion)
+                fig = visualize(graph, pos)
         else:
-            fig = nx_visualize(conversion)
+            pos = nx.spring_layout(conversion)
+            fig = visualize(graph, pos)
             assert fig

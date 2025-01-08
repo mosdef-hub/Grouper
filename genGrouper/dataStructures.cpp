@@ -24,8 +24,7 @@
 #include <nauty/naututil.h>
 
 
-
-
+// Core methods
 GroupGraph::GroupGraph()
     : nodes(), edges(), nodetypes() {}
 
@@ -41,169 +40,172 @@ GroupGraph& GroupGraph::operator=(const GroupGraph& other) {
     return *this;
 }
 
-// Implementation of Node equality operator
 bool GroupGraph::Node::operator==(const Node& other) const {
     return id == other.id &&
            ntype == other.ntype &&
            smiles == other.smiles &&
-           ports == other.ports &&
            hubs == other.hubs;
 }
 
 bool GroupGraph::operator==(const GroupGraph& other) const {
-    // Check if both graphs have the same number of nodes and edges
-    if (nodes.size() != other.nodes.size() || edges.size() != other.edges.size()) {
+    // Check if empty
+    if (nodes.empty() && other.nodes.empty()) {
+        return true;
+    }
+    if (nodes.empty() || other.nodes.empty()) {
+        return false;
+    }
+    // Convert GroupGraph to AtomGraph
+    std::unique_ptr<AtomGraph> atomGraph1 = this->toAtomicGraph();
+    std::unique_ptr<AtomGraph> atomGraph2 = other.toAtomicGraph();
+
+    // Check if the number of nodes and edges are the same
+    if (atomGraph1->nodes.size() != atomGraph2->nodes.size()) {
+        return false;
+    }
+    int edgeCount1 = 0;
+    int edgeCount2 = 0;
+    for (const auto& node : atomGraph1->edges) {
+        edgeCount1 += node.second.size();
+    }
+    for (const auto& node : atomGraph2->edges) {
+        edgeCount2 += node.second.size();
+    }
+    if (edgeCount1 != edgeCount2) {
         return false;
     }
 
-    // Create adjacency lists for comparison using unordered_map and unordered_set
-    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> adjacency_list_1;
-    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> adjacency_list_2;
+    // Convert AtomGraph to nauty graph
+    int n = atomGraph1->nodes.size(); // Assuming the number of nodes is the same for both graphs
+    int m = SETWORDSNEEDED(n);
+    DYNALLSTAT(graph, g1, g1_sz);
+    DYNALLSTAT(graph, g2, g2_sz);
+    DYNALLOC2(graph, g1, g1_sz, n, m, "malloc");
+    DYNALLOC2(graph, g2, g2_sz, n, m, "malloc");
 
-    // Populate adjacency lists for the current graph
-    for (const auto& edge : edges) {
-        NodeIDType node1 = std::get<0>(edge);
-        NodeIDType node2 = std::get<2>(edge);
-        adjacency_list_1[node1].insert(node2);
-        adjacency_list_1[node2].insert(node1);
-    }
+    // Initialize nauty structures
+    static DEFAULTOPTIONS_GRAPH(options);
+    statsblk stats;
+    int lab1[n], ptn1[n], orbits1[n];
+    int lab2[n], ptn2[n], orbits2[n];
+    setword workspace[160];
+    graph canong1[g1_sz], canong2[g2_sz];  // Canonical forms
 
-    // Populate adjacency lists for the other graph
-    for (const auto& edge : other.edges) {
-        NodeIDType node1 = std::get<0>(edge);
-        NodeIDType node2 = std::get<2>(edge);
-        adjacency_list_2[node1].insert(node2);
-        adjacency_list_2[node2].insert(node1);
-    }
-
-    // Create a vector of node IDs for the current graph and the other graph
-    std::vector<NodeIDType> nodes_1;
-    std::vector<NodeIDType> nodes_2;
-    
-    for (const auto& node : nodes) {
-        nodes_1.push_back(node.first);
-    }
-
-    for (const auto& node : other.nodes) {
-        nodes_2.push_back(node.first);
-    }
-
-    // Sort nodes to ensure consistent permutation checks
-    std::sort(nodes_1.begin(), nodes_1.end());
-    std::sort(nodes_2.begin(), nodes_2.end());
-
-    // Try all permutations of node mappings
-    do {
-        std::unordered_map<NodeIDType, NodeIDType> node_mapping;
-
-        for (size_t i = 0; i < nodes_1.size(); ++i) {
-            node_mapping[nodes_1[i]] = nodes_2[i];
-        }
-
-        bool is_match = true;
-        
-        for (const auto& entry : adjacency_list_1) {
-            NodeIDType node_id_1 = entry.first;
-            const auto& neighbors_1 = entry.second;
-
-            NodeIDType node_id_2 = node_mapping[node_id_1];
-            const auto& neighbors_2 = adjacency_list_2[node_id_2];
-
-            std::unordered_set<NodeIDType> mapped_neighbors_1;
-            for (NodeIDType neighbor : neighbors_1) {
-                mapped_neighbors_1.insert(node_mapping[neighbor]);
-            }
-
-            if (mapped_neighbors_1 != neighbors_2) {
-                is_match = false;
-                break;
+    // Convert AtomGraph to nauty graph
+    EMPTYGRAPH(g1, m, n);
+    for (const auto& id_node : atomGraph1->edges) {
+        if (id_node.second.size() != 0){
+            for (const auto& dest : id_node.second) {
+                int from = id_node.first;
+                int to = dest;
+                ADDONEEDGE(g1, from, to, m);
             }
         }
+    }
 
-        if (is_match) {
-            return true;
+    EMPTYGRAPH(g2, m, n);
+    for (const auto& id_node : atomGraph2->edges) {
+        if (id_node.second.size() != 0){
+            for (const auto& dest : id_node.second) {
+                int from = id_node.first;
+                int to = dest;
+                ADDONEEDGE(g2, from, to, m);
+            }
         }
+    }
 
-    } while (std::next_permutation(nodes_2.begin(), nodes_2.end()));
+    // Call nauty to canonicalize the graphs
+    options.getcanon = TRUE;
+    nauty(g1, lab1, ptn1, NULL, orbits1, &options, &stats, workspace, 160, m, n, canong1);
+    nauty(g2, lab2, ptn2, NULL, orbits2, &options, &stats, workspace, 160, m, n, canong2);
 
-    return false;
+    // Compare the canonical forms to determine isomorphism
+    if (memcmp(canong1, canong2, sizeof(set) * n * m) != 0) {
+        return false;
+    }
+
+    return true;
 }
 
-
-// Non-member function to compare tuples (used for sorting edges)
 inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& lhs,
                       const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType>& rhs) {
     // Use the built-in tuple comparison operator
     return std::tie(lhs) < std::tie(rhs);
 }
 
-void GroupGraph::addNode( 
-    std::string ntype = "", 
-    std::string smiles = "", 
-    std::vector<PortType> ports = {}, 
+// Operating methods
+// Operating methods
+void GroupGraph::addNode(
+    std::string ntype = "",
+    std::string smiles = "",
     std::vector<NodeIDType> hubs = {}
 ) {
-    // We assume that either you provide a type or a smiles string, if you provide smiles but not the type we will use it as the type
-    int id;
+    /*There are 5 ways you can input a node:
+        1. ntype, smiles, hubs
+        2. ntype, hubs
+        3. smiles, hubs
+        4. ntype if it already exists
+        5. smiles if it already exists
+    */
 
-    if (ntype == "" && smiles == "") {
+    // Ensure that either ntype or smiles is provided
+    if (ntype.empty() && smiles.empty()) {
         throw std::invalid_argument("Either smiles or type must be provided");
     }
-    else if (ntype != "" && smiles == "") {
+
+    // If no ntype is provided, use smiles as the type
+    if (ntype.empty()) {
+        ntype = smiles;
+    }
+
+    // Initialize id and ports
+    int id = nodes.size();
+    std::vector<PortType> ports(hubs.size());
+
+    // Case 0: Node type and hubs are provided
+    if (!ntype.empty() && nodetypes.find(ntype) != nodetypes.end() && hubs.empty()) {
+        hubs = nodetypes[ntype]; // Reuse existing hubs
+    }
+
+    // Case 1: Node type (ntype) is provided
+    if (!ntype.empty()) {
+        // If the ntype (or smiles used as ntype) already exists
         if (nodetypes.find(ntype) != nodetypes.end()) {
-            if (ports.size() == 0) {
-                ports = nodetypes[ntype];
+            // Check if hub sizes match the existing node type
+            if (hubs.empty()) {
+                ports = nodetypes[ntype]; // Use the existing ports
             }
-            if (nodetypes[ntype] != ports) {
-                throw std::invalid_argument("Node type already exists with different ports");
+            if (nodetypes[ntype].size() != hubs.size()) {
+                throw std::invalid_argument("Node type already exists with a different number of hubs");
             }
-            id = nodes.size();
-        } 
-       else {
-            if (ports.size() == 0) {
-                throw std::invalid_argument("Ports and hubs must be provided for new node type");
-            };
-            id = nodes.size();
-            nodetypes[ntype] = ports;
-        } 
+        } else { // New node type
+            if (hubs.empty()) {
+                throw std::invalid_argument("Hubs must be provided for a new node type");
+            }
+            std::iota(ports.begin(), ports.end(), 0); // Initialize ports for hubs
+            nodetypes[ntype] = ports; // Save the new node type
+        }
     }
-    else if (ntype == "" && smiles != "") {
-        if (nodetypes.find(smiles) != nodetypes.end()) {
-            if (nodetypes[smiles] != ports) {
-                throw std::invalid_argument("Smiles already exists with different ports");
-            }
-            if (nodetypes[ntype] != ports) {
-                throw std::invalid_argument("Smiles already exists with different ports");
-            }
+
+    // Case 2: Smiles is provided (and used as ntype if ntype was empty)
+    if (!smiles.empty() && nodetypes.find(smiles) != nodetypes.end()) {
+        // Check if hub sizes match the existing smiles node
+        if (nodetypes[smiles].size() != hubs.size()) {
+            throw std::invalid_argument("Smiles already exists with a different number of hubs");
         }
-        else {
-            if (ports.size() == 0) {
-                throw std::invalid_argument("Ports and hubs must be provided for new node type");
-            };
-            ntype = smiles.c_str();
-            nodetypes[ntype] = ports;
+    } else if (!smiles.empty() && nodetypes.find(smiles) == nodetypes.end()) {
+        // New smiles entry
+        if (hubs.empty()) {
+            throw std::invalid_argument("Hubs must be provided for a new node type");
         }
-        
+        std::iota(ports.begin(), ports.end(), 0);
+        nodetypes[smiles] = ports; // Save the new smiles as a node type
     }
-    else {
-        if (nodetypes.find(ntype) != nodetypes.end()) {
-            if (ports.size() == 0) {
-                ports = nodetypes[ntype];
-            }
-            if (nodetypes[ntype] != ports) {
-                throw std::invalid_argument("Node type already exists with different ports");
-            }
-        }
-        else {
-            nodetypes[ntype] = ports;
-        }
-        
-    }
-    
-    id = nodes.size();
-    nodes[id] = Node(id, ntype, smiles, ports, hubs);
-    
+
+    // Create the new node and add it to the nodes map
+    nodes[id] = Node(id, ntype, smiles, hubs);
 }
+
 
 bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, bool verbose) {
     NodeIDType from = std::get<0>(fromNodePort);
@@ -233,6 +235,17 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
         throw std::invalid_argument("Node does not exist");
     }
     if (std::find(nodes[from].ports.begin(), nodes[from].ports.end(), fromPort) == nodes[from].ports.end()) {
+        std::string ports_string = "";
+        for (const auto& port : nodes[from].ports) {
+            ports_string += std::to_string(port) + " ";
+        }
+        std::cout<< "Node " << from << " has ports: " << ports_string << std::endl;
+
+        ports_string = "";
+        for (const auto& port : nodes[to].ports) {
+            ports_string += std::to_string(port) + " ";
+        }
+        std::cout<< "Node " << to << " has ports: " << ports_string << std::endl;
         throw std::invalid_argument("Port does not exist");
     }
     edges.push_back(std::make_tuple(from, fromPort, to, toPort));
@@ -253,10 +266,94 @@ int GroupGraph::n_free_ports(NodeIDType nodeID) const {
     return node.ports.size() - occupied_ports;
 }
 
-int GroupGraph::numNodes() const {
-    return nodes.size();
+void GroupGraph::clearEdges() {
+    edges.clear();
 }
 
+int* GroupGraph::computeEdgeOrbits(
+    const std::vector<std::pair<int, int>> edge_list,
+    graph* g, int* lab, int* ptn, int* orbits,
+    optionblk* options,
+    statsblk* stats
+) const {
+    std::vector<std::vector<int>> edge_list_edge_graph = toEdgeGraph(edge_list);
+    int n = edge_list.size();
+    int m = SETWORDSNEEDED(n);
+
+    EMPTYGRAPH(g, m, n);
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (edge_list_edge_graph[i][j] == 1) {
+                ADDONEEDGE(g, i, j, m);
+            }
+        }
+    }
+
+    densenauty(g, lab, ptn, orbits, options, stats, m, n, NULL);
+
+    int* result = new int[n];
+    std::copy(orbits, orbits + n, result);
+
+    return result;
+}
+
+// std::vector<std::vector<int>> GroupGraph::nodeAut() const {
+//     int n = nodes.size();  // Number of vertices
+//     int m = SETWORDSNEEDED(n);  // Size of set words for NAUTY
+    
+//     // Dynamically allocate NAUTY structures
+//     DYNALLSTAT(graph, g, g_sz);
+//     DYNALLOC2(graph, g, g_sz, n, m, "malloc");
+    
+//     // Initialize the NAUTY graph to be empty
+//     EMPTYGRAPH(g, m, n);
+
+//     // Convert the adjacency matrix to the NAUTY graph representation
+//     for (const auto& edge : edges) {
+//         int u = std::get<0>(edge);
+//         int v = std::get<2>(edge);
+//         ADDELEMENT(GRAPHROW(g, u, m), v);
+//         ADDELEMENT(GRAPHROW(g, v, m), u);
+//     }
+
+//     // NAUTY variables
+//     int lab[MAXN], ptn[MAXN], orbits[MAXN];
+//     optionblk options_struct;  // Define options structure
+//     statsblk stats;
+
+//     // Initialize options manually
+//     options_struct.getcanon = FALSE;  // We only need automorphisms, not a canonical form
+//     options_struct.defaultptn = TRUE;
+
+//     // Workspace array for nauty
+//     static set workspace[160 * MAXN];
+
+//     // Active set (can be nullptr if not needed)
+//     set *active = nullptr;
+
+//     // Canonical form (not needed, so we set it to nullptr)
+//     graph *canong = nullptr;
+
+//     // Call NAUTY to compute automorphisms
+//     nauty(g, lab, ptn, active, orbits, &options_struct, &stats, workspace, 160 * MAXN, m, n, canong);
+
+//     // Collect results
+//     std::vector<std::vector<int>> automorphisms;
+//     for (int i = 0; i < stats.numorbits; ++i) {
+//         std::vector<int> perm(n);
+//         for (int j = 0; j < n; ++j) {
+//             perm[j] = lab[j];
+//         }
+//         automorphisms.push_back(perm);
+//     }
+
+//     // Free dynamically allocated memory
+//     DYNFREE(g, g_sz);
+
+//     return automorphisms;
+// }
+
+// Conversion methods
 std::string GroupGraph::printGraph() const {
     std::ostringstream output;
     output << "Nodes:\n";
@@ -347,102 +444,42 @@ std::string GroupGraph::toSmiles() const {
     return RDKit::MolToSmiles(*molecularGraph);
 }
 
-void GroupGraph::toNautyFormat(int *n, int *m, int *adj) const {
-    // Set number of vertices
-    *n = nodes.size();
+void toNautyGraph(const std::vector<std::vector<int>>& adjList, graph* g, int n) {
+    EMPTYGRAPH(g, 1, n);  // Initialize an empty graph for Nauty
 
-    // Initialize adjacency matrix
-    std::fill(adj, adj + (*n) * (*n), 0);
+    // Loop through adjacency list and add edges
+    for (int i = 0; i < n; ++i) {
+        for (int j : adjList[i]) {
+            ADDONEEDGE(g, i, j, 1);  // Add edge to Nauty graph
+        }
+    }
+}
+
+std::vector<std::vector<int>> GroupGraph::toEdgeGraph(const std::vector<std::pair<int, int>>& edge_list) const {
+    int num_edges = edge_list.size();
     
-    // Fill adjacency matrix from edges
-    for (const auto& edge : edges) {
-        NodeIDType from = std::get<0>(edge);
-        NodeIDType to = std::get<2>(edge);
-        adj[from * (*n) + to] = 1;
-        adj[to * (*n) + from] = 1; // Assuming undirected graph
+    // Initialize edge graph as an adjacency matrix where each element is initially 0
+    std::vector<std::vector<int>> edge_graph(num_edges, std::vector<int>(num_edges, 0));
+
+    // Iterate through each pair of edges in the edge list
+    for (int i = 0; i < num_edges; i++) {
+        for (int j = i + 1; j < num_edges; j++) {
+            const std::pair<int, int>& edge_i = edge_list[i];
+            const std::pair<int, int>& edge_j = edge_list[j];
+
+            // Check if the two edges share a common node
+            if (edge_i.first == edge_j.first || edge_i.first == edge_j.second ||
+                edge_i.second == edge_j.first || edge_i.second == edge_j.second) {
+                // If they share a node, mark them as connected in the edge graph
+                edge_graph[i][j] = 1;
+                edge_graph[j][i] = 1;  // Symmetric adjacency matrix
+            }
+        }
     }
 
-    *m = edges.size();
+    return edge_graph;
 }
 
-std::vector<std::vector<int>> GroupGraph::nodeAut() const {
-    return {{}};
-}
-// std::vector<std::vector<int>> GroupGraph::nodeAut() const {
-//     int n = nodes.size();  // Number of vertices
-//     int m = SETWORDSNEEDED(n);  // Size of set words for NAUTY
-    
-//     // Dynamically allocate NAUTY structures
-//     DYNALLSTAT(graph, g, g_sz);
-//     DYNALLOC2(graph, g, g_sz, n, m, "malloc");
-    
-//     // Initialize the NAUTY graph to be empty
-//     EMPTYGRAPH(g, m, n);
-
-//     // Convert the adjacency matrix to the NAUTY graph representation
-//     for (const auto& edge : edges) {
-//         int u = std::get<0>(edge);
-//         int v = std::get<2>(edge);
-//         ADDELEMENT(GRAPHROW(g, u, m), v);
-//         ADDELEMENT(GRAPHROW(g, v, m), u);
-//     }
-
-//     // NAUTY variables
-//     int lab[MAXN], ptn[MAXN], orbits[MAXN];
-//     optionblk options_struct;  // Define options structure
-//     statsblk stats;
-
-//     // Initialize options manually
-//     options_struct.getcanon = FALSE;  // We only need automorphisms, not a canonical form
-//     options_struct.defaultptn = TRUE;
-
-//     // Workspace array for nauty
-//     static set workspace[160 * MAXN];
-
-//     // Active set (can be nullptr if not needed)
-//     set *active = nullptr;
-
-//     // Canonical form (not needed, so we set it to nullptr)
-//     graph *canong = nullptr;
-
-//     // Call NAUTY to compute automorphisms
-//     nauty(g, lab, ptn, active, orbits, &options_struct, &stats, workspace, 160 * MAXN, m, n, canong);
-
-//     // Collect results
-//     std::vector<std::vector<int>> automorphisms;
-//     for (int i = 0; i < stats.numorbits; ++i) {
-//         std::vector<int> perm(n);
-//         for (int j = 0; j < n; ++j) {
-//             perm[j] = lab[j];
-//         }
-//         automorphisms.push_back(perm);
-//     }
-
-//     // Free dynamically allocated memory
-//     DYNFREE(g, g_sz);
-
-//     return automorphisms;
-// }
-
-std::vector<std::vector<std::pair<int, int>>> GroupGraph::edgeAut(const std::vector<std::pair<int, int>>& edge_list) const {
-    int n = nodes.size();
-    std::vector<std::vector<int>> adj_matrix(n, std::vector<int>(n, 0));
-    
-    createAdjMatrix(edge_list, adj_matrix);
-
-    std::vector<std::pair<int, int>> edge_list_copy = edge_list;
-    std::sort(edge_list_copy.begin(), edge_list_copy.end());
-
-    std::vector<std::vector<std::pair<int, int>>> automorphisms;
-    
-    do {
-        if (areEdgePermutationsEquivalent(edge_list, edge_list_copy)) {
-            automorphisms.push_back(edge_list_copy);
-        }
-    } while (std::next_permutation(edge_list_copy.begin(), edge_list_copy.end()));
-
-    return automorphisms;
-}
 
 std::unordered_map<std::string, int> GroupGraph::toVector() const {
     std::unordered_map<std::string, int> hist(nodetypes.size());

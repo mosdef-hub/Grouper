@@ -33,7 +33,8 @@ GroupGraph fragment(
         });
 
     // Map to keep track of atom indices and corresponding node IDs
-    std::unordered_map<int, GroupGraph::NodeIDType> atomMapping;
+    std::unordered_map<int, GroupGraph::NodeIDType> atomMapping; // Maps atom indices to node IDs
+    std::unordered_map<int, std::vector<int>> atomToPorts;  // atom to matching port indices
     std::unordered_map<int, std::string> atomToSmarts;  // Maps atom indices to SMARTS patterns
     GroupGraph::NodeIDType nodeId = 0;
 
@@ -61,11 +62,9 @@ GroupGraph fragment(
             if (alreadyMatched) {
                 continue;
             }
-
             groupGraph.addNode(
                 nodeData.ntype, 
-                RDKit::MolToSmiles(*query), 
-                nodeData.ports, 
+                nodeData.smiles, 
                 nodeData.hubs
             );
             GroupGraph::NodeIDType currentId = nodeId++;
@@ -73,6 +72,15 @@ GroupGraph fragment(
                 int atomIdx = atomMatch.second;
                 atomMapping[atomIdx] = currentId;
                 atomToSmarts[atomIdx] = smarts;  // Track which SMARTS pattern the atom belongs to
+                // check if atom is associated with multiple ports
+                std::vector<int> hubIndices;
+                for (size_t idx = 0; idx < nodeData.hubs.size(); ++idx) {
+                    const auto& hub = nodeData.hubs[idx];
+                    if (hub == atomMatch.first) {
+                        hubIndices.push_back(idx);
+                    }
+                }
+                atomToPorts[atomIdx] = hubIndices;
             }
         }
     }
@@ -81,24 +89,26 @@ GroupGraph fragment(
     for (const auto& bond : mol->bonds()) {
         int beginAtomIdx = bond->getBeginAtomIdx();
         int endAtomIdx = bond->getEndAtomIdx();
-
         if (atomMapping.count(beginAtomIdx) && atomMapping.count(endAtomIdx)) {
             GroupGraph::NodeIDType fromNode = atomMapping[beginAtomIdx];
             GroupGraph::NodeIDType toNode = atomMapping[endAtomIdx];
             std::string fromSmarts = atomToSmarts[beginAtomIdx];
             std::string toSmarts = atomToSmarts[endAtomIdx];
 
-            // std::cout<< "Checking edge between atoms: " << beginAtomIdx << " and " << endAtomIdx << std::endl;
-            // std::cout << "From SMARTS: " << fromSmarts << " To SMARTS: " << toSmarts << std::endl;
-            // std::cout << "From Node: " << fromNode << " To Node: " << toNode << std::endl;
-            
             // Check if both atoms are part of the same SMARTS subgraph
-            if (fromSmarts != toSmarts && fromNode != toNode) {
-                std::cout << "Adding edge between nodes: " << fromNode << " and " << toNode << std::endl;
-                groupGraph.addEdge({fromNode, 0}, {toNode, 0}, false);  // Assuming port 0 for simplicity
+            if (fromNode != toNode) {
+                // Get the port numbers for the atoms
+                std::vector<int> fromPorts = atomToPorts[beginAtomIdx];
+                std::vector<int> toPorts = atomToPorts[endAtomIdx];
+                if (!fromPorts.empty() && !toPorts.empty()) {
+                    int fromPort = fromPorts.back();
+                    int toPort = toPorts.back();
+                    groupGraph.addEdge({fromNode, fromPort}, {toNode, toPort}, false);
+                    atomToPorts[beginAtomIdx].pop_back();
+                    atomToPorts[endAtomIdx].pop_back();
+                }
             }
         }
     }
-
     return groupGraph;
 }
