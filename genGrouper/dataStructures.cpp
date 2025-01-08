@@ -76,14 +76,12 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
     }
 
     // Convert AtomGraph to nauty graph
-    std::cout<< "Converting to nauty graph" << std::endl;
     int n = atomGraph1->nodes.size(); // Assuming the number of nodes is the same for both graphs
     int m = SETWORDSNEEDED(n);
     DYNALLSTAT(graph, g1, g1_sz);
     DYNALLSTAT(graph, g2, g2_sz);
     DYNALLOC2(graph, g1, g1_sz, n, m, "malloc");
     DYNALLOC2(graph, g2, g2_sz, n, m, "malloc");
-    std::cout<<"Allocated memory for nauty graph" << std::endl;
 
     // Initialize nauty structures
     static DEFAULTOPTIONS_GRAPH(options);

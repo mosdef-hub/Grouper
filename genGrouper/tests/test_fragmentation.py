@@ -22,11 +22,11 @@ class TestGroupGraph(BaseTest):
 
     def test_fragment_2(self):
         node_defs = {}
-        node_defs['[NH2]'] = Node(0, 'amine', 'N', [1,1])
+        node_defs['[NH2]'] = Node(0, 'amine', 'N', [0,0])
         node_defs['C=C'] = Node(1, 'alkene', 'C=C', [0,0,1,1])
 
         truth = GroupGraph()
-        truth.add_node('amine', '[NH2]', [0])
+        truth.add_node('amine', '[NH2]', [0,0])
         truth.add_node('alkene', 'C=C', [0,0,1,1])
         truth.add_edge((0,0),(1,0))
 
@@ -60,11 +60,11 @@ class TestGroupGraph(BaseTest):
         node_defs['[NH2]'] = Node(2, 'amine', 'N', [0])
 
         truth = GroupGraph()
-        truth.add_node('hydroxyl', '[O]', [0,0])
+        truth.add_node('oxygen', 'O', [0,0])
         truth.add_node('alkene', 'C=C', [0,0,1,1])
-        truth.add_node('amine', '[NH2]', [0])
+        truth.add_node('amine', 'N', [0])
         truth.add_edge((0,0),(1,0))
-        truth.add_edge((1,1),(2,0))
+        truth.add_edge((0,1),(2,0))
 
         smiles = "C=CO[NH2]"
 
@@ -75,7 +75,7 @@ class TestGroupGraph(BaseTest):
     def test_triple_node(self):
         node_defs = {}
         node_defs['[OX2]'] = Node(0, 'oxyl', 'O', [0,0])  # oxyl group
-        node_defs['C(=O)O'] = Node(0, 'ester', 'C(=O)O', [0, 2])  # Ester group
+        node_defs['[CX3](=O)[OX2H0]'] = Node(0, 'ester', 'C(=O)O', [0,2])  # Ester group
 
         truth = GroupGraph()
         truth.add_node('ester', 'C(=O)O', [0, 2])
