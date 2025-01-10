@@ -36,4 +36,4 @@ jobs:
       run: micromamba run -n test-env python setup.py build_ext --inplace;micromamba run -n test-env pip install .
 
     - name: Run tests with pytest
-      run: micromamba run -n test-env pytest genGrouper/tests
+      run: micromamba run -n test-env pytest Grouper/tests

@@ -8,7 +8,7 @@ from networkx import Graph
 import networkx as nx
 from rdkit import Chem
 from rdkit.Chem import rdmolops
-from genGrouper import GroupGraph
+from Grouper import GroupGraph
 
 
 def chemical_space_network(space_set : t.Set[GroupGraph], kernel: Kernel, cutoff: float, known_values: dict = None, options: dict = None) -> Graph:
