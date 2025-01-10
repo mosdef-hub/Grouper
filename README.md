@@ -6,14 +6,14 @@
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![MIT License][license-shield]][license-url]
-[![CI](https://github.com/kierannp/genGrouper/actions/workflows/CI.yaml/badge.svg)](https://github.com/kierannp/genGrouper/actions/workflows/CI.yaml)
+[![CI](https://github.com/kierannp/Grouper/actions/workflows/CI.yaml/badge.svg)](https://github.com/kierannp/Grouper/actions/workflows/CI.yaml)
 
 
 
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/kierannp/genGrouper">
+  <a href="https://github.com/kierannp/Grouper">
     <img src="images/grouper.jpeg" alt="Logo" width="700" height="300">
   </a>
 
@@ -22,14 +22,14 @@
   <p align="center">
     A software package for creating and manipulating graphs of molecular groups.
     <br />
-    <a href="https://github.com/kierannp/genGrouper"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/kierannp/Grouper"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/kierannp/genGrouper">View Demo</a>
+    <a href="https://github.com/kierannp/Grouper">View Demo</a>
     ·
-    <a href="https://github.com/kierannp/genGrouper/issues">Report Bug</a>
+    <a href="https://github.com/kierannp/Grouper/issues">Report Bug</a>
     ·
-    <a href="https://github.com/kierannp/genGrouper/issues">Request Feature</a>
+    <a href="https://github.com/kierannp/Grouper/issues">Request Feature</a>
   </p>
 </div>
 
@@ -71,18 +71,18 @@ The fundamental data structure behind this package is based on a port graph, loo
 
 ### Prerequisites
 
-*  Download and install [`nauty`](https://pallini.di.uniroma1.it/) according to their installation instructions in `genGrouper/packages`
+*  Download and install [`nauty`](https://pallini.di.uniroma1.it/) according to their installation instructions in `Grouper/packages`
 
 ### Installation
 
 1. Clone the repo
 ```sh
-conda create -n genGrouper python=3.9
-conda activate genGrouper
+conda create -n Grouper python=3.9
+conda activate Grouper
 conda install librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 openmp
 
-git clone https://github.com/kierannp/genGrouper
-cd genGrouper
+git clone https://github.com/kierannp/Grouper
+cd Grouper
 ```
 2. Install with `pip`
 ```python
@@ -98,7 +98,7 @@ python setup.py install
 
 ### Group graph initalization
 ```python
-from genGrouper import GroupGraph
+from Grouper import GroupGraph
 
 group_graph = GroupGraph()
 
@@ -124,8 +124,8 @@ Will make
 
 ### Exhaustive chemical space generation
 ```python
-import genGrouper
-from genGrouper import Node, GroupGraph, exhaustive_generate
+import Grouper
+from Grouper import Node, GroupGraph, exhaustive_generate
 
 node_defs = set()
 # Define out node types that we will use to built our chemistries
@@ -168,7 +168,7 @@ mol_G = g.to_molecular_graph(
 
 ### Group graph to SMILES
 ```python
-from genGrouper import GroupGraph
+from Grouper import GroupGraph
 
 group_graph = GroupGraph()
 
@@ -187,7 +187,7 @@ smiles = group_graph.to_smiles()
 ```python
 import mbuild as mb
 from group_selfies import Group
-from genGrouper import GroupGraph
+from Grouper import GroupGraph
 
 mol = mb.load('CCCCCCCC', smiles=True) # octane molecule
 groups = [Group('c3', 'C([H])([H])([H])(*1)'), Group('c2', 'C([H])([H])(*1)(*1)')]
@@ -196,14 +196,14 @@ groupG = groupG.from_mbuild(mol, groups)
 ```
 ### Conversion to `torch_geometric.Data`
 ```python
-import genGrouper
+import Grouper
 
 node_types = {
     'CH2': ['C1', 'C2'], #methylene
     'CONH': ['C', 'N'], #amide
 }
 
-groupG = genGrouper.GroupGraph(node_types)
+groupG = Grouper.GroupGraph(node_types)
 groupG.add_node('node1', 'CH2')
 groupG.add_node('node2', 'CONH')
 groupG.add_edge('node1', 'C1', 'node2', 'C')
@@ -267,7 +267,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 Kieran Nehil-Puleo - nehilkieran@gmail.com
 
-Project Link: [https://github.com/kierannp/genGrouper](https://github.com/kierannp/genGrouper)
+Project Link: [https://github.com/kierannp/Grouper](https://github.com/kierannp/Grouper)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -283,13 +283,13 @@ Project Link: [https://github.com/kierannp/genGrouper](https://github.com/kieran
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contributors-shield]: https://img.shields.io/github/contributors/kierannp/genGrouper.svg?style=for-the-badge
-[contributors-url]: https://github.com/kierannp/genGrouper/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/kierannp/genGrouper.svg?style=for-the-badge
-[forks-url]: https://github.com/kierannp/genGrouper/network/members
-[stars-shield]: https://img.shields.io/github/stars/kierannp/genGrouper.svg?style=for-the-badge
-[stars-url]: https://github.com/kierannp/genGrouper/stargazers
-[issues-shield]: https://img.shields.io/github/issues/kierannp/genGrouper.svg?style=for-the-badge
-[issues-url]: https://github.com/kierannp/genGrouper/issues
+[contributors-shield]: https://img.shields.io/github/contributors/kierannp/Grouper.svg?style=for-the-badge
+[contributors-url]: https://github.com/kierannp/Grouper/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/kierannp/Grouper.svg?style=for-the-badge
+[forks-url]: https://github.com/kierannp/Grouper/network/members
+[stars-shield]: https://img.shields.io/github/stars/kierannp/Grouper.svg?style=for-the-badge
+[stars-url]: https://github.com/kierannp/Grouper/stargazers
+[issues-shield]: https://img.shields.io/github/issues/kierannp/Grouper.svg?style=for-the-badge
+[issues-url]: https://github.com/kierannp/Grouper/issues
 [license-shield]: https://img.shields.io/badge/License-MIT-yellow.svg
-[license-url]: https://github.com/kierannp/genGrouper/blob/master/LICENSE.txt
+[license-url]: https://github.com/kierannp/Grouper/blob/master/LICENSE.txt

@@ -1,5 +1,5 @@
-from genGrouper.tests.base_test import BaseTest
-from genGrouper import GroupGraph, fragment, Node
+from Grouper.tests.base_test import BaseTest
+from Grouper import GroupGraph, fragment, Node
 # from pysmiles import write_smiles
 # import pytest
 

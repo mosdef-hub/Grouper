@@ -4,6 +4,7 @@ y
 cpp_code
 notebooks
 foo
+.benchmarks
 # Data files
 *.txt
 *.pkl

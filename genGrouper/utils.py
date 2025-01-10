@@ -2,7 +2,7 @@
 import typing as t
 from typing import Any, Dict, List, Tuple, Union, Callable, Sequence
 from copy import deepcopy
-from genGrouper import GroupGraph
+from Grouper import GroupGraph
 import networkx as nx
 import torch_geometric
 
@@ -15,11 +15,11 @@ def run_performance_eval(
         verbose: bool = False
 ):
     """
-    Run performance evaluation of the genGrouper generation featrure with growing sized graphs.
+    Run performance evaluation of the Grouper generation featrure with growing sized graphs.
     """
     import os
     import time
-    from genGrouper import exhaustive_generate
+    from Grouper import exhaustive_generate
     import random
     import itertools
 

@@ -1,6 +1,6 @@
-from genGrouper import GroupGraph, AtomGraph
-from genGrouper.io import has_mbuild, has_torch
-from genGrouper.tests.base_test import BaseTest
+from Grouper import GroupGraph, AtomGraph
+from Grouper.io import has_mbuild, has_torch
+from Grouper.tests.base_test import BaseTest
 import networkx as nx
 import pytest
 import numpy as np

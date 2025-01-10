@@ -2,10 +2,10 @@ import pytest
 
 import networkx as nx
 import numpy as np
-from genGrouper import GroupGraph
-from genGrouper.tests.base_test import BaseTest
-from genGrouper.visualization import nx_visualize
-from genGrouper.utils import convert_to_nx
+from Grouper import GroupGraph
+from Grouper.tests.base_test import BaseTest
+from Grouper.visualization import nx_visualize
+from Grouper.utils import convert_to_nx
 
 class TestGroupGraph(BaseTest):
     @pytest.mark.parametrize("graph_fixture", ["empty_graph", "basic_graph", "single_node_graph"])

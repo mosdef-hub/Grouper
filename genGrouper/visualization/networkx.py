@@ -10,8 +10,8 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import cairosvg
 from PIL import Image
 from io import BytesIO
-from genGrouper import GroupGraph
-from genGrouper.utils import nxGroupGraph
+from Grouper import GroupGraph
+from Grouper.utils import nxGroupGraph
 import math
 
 def generate_svg(num_ports, radius_node=50, radius_ports=10, distance_from_center=48, color='lightblue'):

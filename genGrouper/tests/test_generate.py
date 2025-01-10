@@ -1,7 +1,7 @@
 import time
 import pytest
-from genGrouper import GroupGraph, exhaustive_generate, Node
-from genGrouper.tests.base_test import BaseTest
+from Grouper import GroupGraph, exhaustive_generate, Node
+from Grouper.tests.base_test import BaseTest
 import logging
 
 class TestGeneration(BaseTest):
@@ -23,7 +23,7 @@ class TestGeneration(BaseTest):
 
         write_to_db = False
         verbose = False
-        nauty_path = "/Users/kieran/projects/genGrouper/packages/nauty2_8_8"
+        nauty_path = "/Users/kieran/projects/Grouper/packages/nauty2_8_8"
         input_file_path = ""
         positive_constraints = {}
         negative_constraints = set()

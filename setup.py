@@ -124,15 +124,15 @@ if not os.path.exists(cub_include):
 
 # Define the extension module with CUDA sources
 molgrouper_module = CUDAExtension(
-    'genGrouper._genGrouper',
+    'Grouper._Grouper',
     sources=[
-        'genGrouper/dataStructures.cpp',
-        'genGrouper/binding.cpp',
-        'genGrouper/processColoredGraphs.cpp',
-        'genGrouper/generate.cpp',
-        'genGrouper/fragmentation.cpp',
-        'genGrouper/autUtils.cpp',
-        'genGrouper/colorPermutations.cu',  # Add your CUDA source files here
+        'Grouper/dataStructures.cpp',
+        'Grouper/binding.cpp',
+        'Grouper/processColoredGraphs.cpp',
+        'Grouper/generate.cpp',
+        'Grouper/fragmentation.cpp',
+        'Grouper/autUtils.cpp',
+        'Grouper/colorPermutations.cu',  # Add your CUDA source files here
     ],
     include_dirs=[
         os.path.join(condabase, 'include'),
@@ -144,7 +144,7 @@ molgrouper_module = CUDAExtension(
         os.path.join(condabase, "include/libpq"),
         pybind11.get_include(),
         pybind11.get_include(user=True),
-        'genGrouper',
+        'Grouper',
         cub_include,
         os.path.join(cuda_home, 'include'),
     ],
@@ -171,7 +171,7 @@ molgrouper_module = CUDAExtension(
 )
 
 setup(
-    name='genGrouper',
+    name='Grouper',
     version='0.1',
     packages=find_packages(),
     author='Kieran Nehil-Puleo',

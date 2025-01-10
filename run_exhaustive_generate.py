@@ -1,4 +1,4 @@
-from genGrouper import Node, exhaustive_generate
+from Grouper import Node, exhaustive_generate
 import time
 from rdkit import Chem
 import argparse

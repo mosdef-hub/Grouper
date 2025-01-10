@@ -2,10 +2,10 @@ import typing as t
 import pathlib
 import os
 import subprocess
-from genGrouper import GroupGraph
+from Grouper import GroupGraph
 import rdkit.Chem
 from tqdm import tqdm
-from genGrouper.utils import multi_to_pair
+from Grouper.utils import multi_to_pair
 
 constrained_fragments = [
     rdkit.Chem.MolFromSmarts('NN'),
