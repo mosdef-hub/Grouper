@@ -8,11 +8,13 @@ from networkx import Graph
 import networkx as nx
 from rdkit import Chem
 from rdkit.Chem import rdmolops
+from genGrouper import GroupGraph
 
 
-def chemical_space_network(space_set : t.Set[str], kernel: Kernel, cutoff: float, known_values: dict = None, options: dict = None) -> Graph:
+def chemical_space_network(space_set : t.Set[GroupGraph], kernel: Kernel, cutoff: float, known_values: dict = None, options: dict = None) -> Graph:
     graphs = []
-    for smile in space_set:
+    for g in space_set:
+        smile = g.to_smiles()
         mol = Chem.MolFromSmiles(smile)
         if mol is not None:
             adj_matrix = rdmolops.GetAdjacencyMatrix(mol)
@@ -21,11 +23,12 @@ def chemical_space_network(space_set : t.Set[str], kernel: Kernel, cutoff: float
     graph_kernel = kernel(n_iter=5, normalize=True)
     kernel_matrix = graph_kernel.fit_transform(graphs)
     G = nx.Graph()
-    for i, smile in enumerate(space_set):
+    for i, g in enumerate(space_set):
+        smile = g.to_smiles()
         if known_values is None:
             color = 0
         else:
-            color = 0 if smile not in known_values else known_values[smile]
+            color = 0 if known_values[smile] is None else known_values[smile]
         G.add_node(i, label=smile, property=color)
     for i in range(len(kernel_matrix)):
         for j in range(i+1, len(kernel_matrix)):
