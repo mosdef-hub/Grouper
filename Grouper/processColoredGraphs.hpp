@@ -14,7 +14,7 @@
 
 #include <libpq-fe.h>
 
-#define _Thread_local thread_local
+// #define _Thread_local thread_local
 #include "nauty/nauty.h"
 
 #include "dataStructures.hpp"
