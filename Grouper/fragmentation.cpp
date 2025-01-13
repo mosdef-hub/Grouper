@@ -97,7 +97,7 @@ GroupGraph fragment(
     std::unordered_map<int, std::vector<int>> atomToOrbit;  // Maps atom indices to other atom indices in the same orbit
     std::unordered_map<int, bool> atomIndividuation;  // Maps atom indices to whether differentiated from other atoms in the same orbit via a bond
     GroupGraph::NodeIDType nodeId = 0;
-    for (int i = 0; i < mol->getNumAtoms(); ++i) {
+    for (std::size_t i = 0; i < mol->getNumAtoms(); ++i) {
         atomToOrbit[i] = std::vector<int>();
     }
     // Nauty varibles
@@ -248,23 +248,22 @@ GroupGraph fragment(
     // }
     // std::cout<<std::endl;
 
-    
     // print all maps assoicated with atom index
-    for (int atomIdx = 0; atomIdx < mol->getNumAtoms(); atomIdx++) {
-        printf("atomIdx: %d ports: ", atomIdx);
-        for (const auto& port : atomToPorts[atomIdx]) {
-            printf("%d ", port);
-        }
-        printf(" nodeid: %d", atomToNodeid[atomIdx]);
-        printf(" element: %s", mol->getAtomWithIdx(atomIdx)->getSymbol().c_str());
-        printf(" individuation: %d", atomIndividuation[atomIdx]);
-        printf(" smarts: %s", atomToSmarts[atomIdx].c_str());
-        printf(" atomOrbits: ");
-        for (const auto& orbit : atomToOrbit[atomIdx]) {
-            printf("%d ", orbit);
-        }
-        printf("\n");
-    }
+    // for (int atomIdx = 0; atomIdx < mol->getNumAtoms(); atomIdx++) {
+    //     printf("atomIdx: %d ports: ", atomIdx);
+    //     for (const auto& port : atomToPorts[atomIdx]) {
+    //         printf("%d ", port);
+    //     }
+    //     printf(" nodeid: %d", atomToNodeid[atomIdx]);
+    //     printf(" element: %s", mol->getAtomWithIdx(atomIdx)->getSymbol().c_str());
+    //     printf(" individuation: %d", atomIndividuation[atomIdx]);
+    //     printf(" smarts: %s", atomToSmarts[atomIdx].c_str());
+    //     printf(" atomOrbits: ");
+    //     for (const auto& orbit : atomToOrbit[atomIdx]) {
+    //         printf("%d ", orbit);
+    //     }
+    //     printf("\n");
+    // }
 
 
 

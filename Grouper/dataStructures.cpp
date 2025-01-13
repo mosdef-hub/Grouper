@@ -133,6 +133,7 @@ inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortT
     return std::tie(lhs) < std::tie(rhs);
 }
 
+
 // Operating methods
 // Operating methods
 void GroupGraph::addNode(

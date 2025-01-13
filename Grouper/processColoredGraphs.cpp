@@ -87,8 +87,9 @@ bool check_max_bond_not_exceeded(
     const std::unordered_map<std::string, std::vector<int>>& node_types, 
     const std::unordered_map<int, std::string>& int_to_node_type) {
 
+
     std::vector<int> node_bond_count;
-    for (int i = 0; i < colors.size(); ++i) {
+    for (std::size_t i = 0; i < colors.size(); ++i) {
         std::string node_type = int_to_node_type.at(colors[i]);
         int n_ports = node_types.at(node_type).size();
         node_bond_count.push_back(n_ports);
@@ -96,8 +97,8 @@ bool check_max_bond_not_exceeded(
     for (const auto& edge : edge_list) {
         int src = edge.first;
         int dst = edge.second;
-        int src_color = colors[src];
-        int dst_color = colors[dst];
+        // int src_color = colors[src];
+        // int dst_color = colors[dst];
         node_bond_count[src] -= 1;
         node_bond_count[dst] -= 1;
     }
@@ -146,12 +147,12 @@ std::vector<std::vector<int>> generateOrbitCombinations(
     int n_edges = edge_orbit.size();
 
     // recursive function to generate all possible combinations
-    std::function<void(std::vector<int>, int, std::vector<int>, int)> generate_combinations = [&](std::vector<int> elements, int n_selections, std::vector<int> current_combination = {} , int i = 0) {
+    std::function<void(std::vector<int>, int, std::vector<int>, int)> generate_combinations = [&](std::vector<int> elements, std::size_t n_selections, std::vector<int> current_combination = {} , std::size_t i = 0) {
         if (current_combination.size() == n_selections) {
             all_combinations.push_back(current_combination);
             return;
         }
-        for (int j = i; j < elements.size(); ++j) {
+        for (std::size_t j = i; j < elements.size(); ++j) {
             current_combination.push_back(elements[j]);
             generate_combinations(elements, n_selections, current_combination, j + 1);
             current_combination.pop_back();
@@ -180,7 +181,7 @@ std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings(
     }
 
     // Helper function to recursively combine colorings from orbits
-    std::function<void(int)> combineOrbits = [&](int i) {
+    std::function<void(int)> combineOrbits = [&](std::size_t i) {
         if (i == colored_orbits.size()) {
             // If we have processed all orbits, store the current coloring
             all_colorings.push_back(current_coloring);

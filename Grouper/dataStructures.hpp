@@ -86,12 +86,12 @@ public:
         std::vector<NodeIDType> hubs;
         std::vector<PortType> ports;
         bool operator==(const Node& other) const;
-        Node() : id(0), ntype(""), smiles(""), ports(), hubs() {}
-
+        Node() : id(0), ntype(""), smiles(""), hubs(), ports() {}
         Node(int id, const std::string& ntype, const std::string& smiles, const std::vector<int>& hubs)
-            : id(id), ntype(ntype), smiles(smiles), ports(hubs.size()), hubs(hubs) {
-                std::iota(ports.begin(), ports.end(), 0);
+            : id(id), ntype(ntype), smiles(smiles), hubs(hubs), ports(hubs.size()) {
+            std::iota(ports.begin(), ports.end(), 0);
         }
+
     };
     std::unordered_map<NodeIDType, Node> nodes; ///< Map of node IDs to their respective nodes.
     std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType>> edges; ///< List of edges connecting nodes.
