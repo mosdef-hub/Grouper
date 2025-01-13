@@ -76,6 +76,9 @@ class TestGroupGraph(BaseTest):
         node_defs = {}
         node_defs['[OX2]'] = Node(0, 'oxyl', 'O', [0,0])  # oxyl group
         node_defs['[CX3](=O)[OX2H0]'] = Node(0, 'ester', 'C(=O)O', [0,2])  # Ester group
+        node_defs['[NX3]'] = Node(0, 'amine', 'N', [0,0,0])  # Amine group
+        node_defs['[CX4]([NX3]([CX4]))'] = Node(0, 'alkene_secondary_amine', 'CNC', [0,0])
+        
 
         truth = GroupGraph()
         truth.add_node('ester', 'C(=O)O', [0, 2])
@@ -87,3 +90,16 @@ class TestGroupGraph(BaseTest):
         out = fragment('O=COOC(=O)O', node_defs)
 
         assert out == truth
+
+        truth = GroupGraph()
+        truth.add_node('ester', 'C(=O)O', [0, 2])
+        truth.add_node('alkene_secondary_amine', 'CNC', [0, 0])
+        truth.add_node('amine', 'N', [0, 0, 0])
+        truth.add_edge((0, 1), (2, 0))
+        truth.add_edge((1, 1), (2, 1))
+
+        out = fragment('CNCNOC=O', node_defs)
+
+        assert out == truth
+
+
