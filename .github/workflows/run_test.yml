@@ -30,7 +30,7 @@ jobs:
       run: micromamba install -n test-env librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 networkx pytest llvm-openmp -y
 
     - name : Install nauty
-      run: micromamba install -c conda-forge nauty -y
+      run: micromamba install -n test-env -c conda-forge nauty -y
   
     - name: List libraries in test-env
       run: ls /home/runner/micromamba/envs/test-env/lib | grep omp
