@@ -18,20 +18,20 @@ molgrouper_module = Extension(
         'Grouper/autUtils.cpp',
     ],
     include_dirs = [
-            os.path.join(condabase, 'include'),
-            os.path.join(condabase, "include/cairo"),
-            os.path.join(condabase, "include/boost"),
-            os.path.join(condabase, "include/rdkit"),
-            os.path.join(condabase, "include/omp"),
-            os.path.join(condabase, "include/nauty"),
-            os.path.join(condabase, "include/libpq"),
-            pybind11.get_include(),
-            pybind11.get_include(user=True),
-            'Grouper',
+        os.path.join(condabase, 'include'),
+        os.path.join(condabase, "include/cairo"),
+        os.path.join(condabase, "include/boost"),
+        os.path.join(condabase, "include/rdkit"),
+        os.path.join(condabase, "include/omp"),
+        os.path.join(condabase, "include/nauty"),
+        os.path.join(condabase, "include/libpq"),
+        pybind11.get_include(),
+        pybind11.get_include(user=True),
+        'Grouper',
     ],
     library_dirs = [
-            os.path.join(condabase, 'lib'),
-            os.path.join(condabase, "lib/cairo"),
+        os.path.join(condabase, 'lib'),
+        os.path.join(condabase, "lib/cairo"),
     ],
     libraries = [
         'RDKitFileParsers', 
@@ -42,8 +42,15 @@ molgrouper_module = Extension(
         'nauty', 
         'pq'
     ],
-    extra_compile_args = ['-Xpreprocessor', '-fopenmp', '-std=c++17', '-g'], # '-mmacosx-version-min=10.13'
-    language='c++')
+    extra_compile_args = [
+        '-Xpreprocessor', '-fopenmp', '-std=c++17', '-g',
+        '-fPIC',  # Ensure proper position-independent code for shared libraries
+    ],
+    language='c++',
+    # Optionally add separate flags for C compilation (for nauty or other C files)
+    undef_macros=['_Thread_local'],  # This will undefine any conflicting macro definitions if needed
+    extra_link_args=[],
+)
 
 setup(
     name='Grouper',

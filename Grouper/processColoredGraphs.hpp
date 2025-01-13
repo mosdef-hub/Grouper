@@ -14,16 +14,12 @@
 
 #include <libpq-fe.h>
 
-// #define _Thread_local thread_local
 #ifdef __cplusplus
     #define _Thread_local thread_local
 #else
-    // If compiling as C, keep `_Thread_local` as is (for C11 support)
+    #define _Thread_local _Thread_local  // Use C's definition
 #endif
 
-#ifndef _Thread_local
-    #define _Thread_local thread_local
-#endif
 
 
 #include "nauty/nauty.h"
