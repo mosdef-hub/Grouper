@@ -31,6 +31,9 @@ jobs:
 
     - name : Install nauty
       run: micromamba install -n test-env -c conda-forge nauty -y
+
+    - name: List nauty headers
+      run: ls /home/runner/micromamba/envs/test-env/include
   
     - name: List libraries in test-env
       run: ls /home/runner/micromamba/envs/test-env/lib | grep omp
