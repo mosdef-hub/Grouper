@@ -1,0 +1,25 @@
+name: newgrouper39
+channels:
+  - conda-forge
+  - pyg
+dependencies:
+  - python=3.12
+  - boost
+  - cmake
+  - rdkit
+  - librdkit-dev
+  - librdkit
+  - rdkit-dev
+  - rdkit-postgresql
+  - eigen
+  - pybind11
+  - mbuild
+  - nauty
+  - jupyter
+  - jupyter
+  - pytest
+  - seaborn
+  - cairosvg
+  - pyg
+  - pip:
+    - grakel
