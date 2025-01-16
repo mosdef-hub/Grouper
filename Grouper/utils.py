@@ -190,7 +190,7 @@ class nxGroupGraph(nx.Graph):
         """
         return len(self.nodes) > 0 and len(self.edges) > 0
 
-    def add_node(self, nodeID: Any, node_type: str) -> None:
+    def add_node(self, nodeID: Any, node_type: str, smiles: str, hubs: Sequence[int]) -> None:
         """
         Add a node to the GroupGraph.
 
@@ -207,6 +207,8 @@ class nxGroupGraph(nx.Graph):
         super(nxGroupGraph, self).add_node(nodeID)
         self.nodes[nodeID]['type'] = node_type
         self.nodes[nodeID]['ports'] = self.node_types[self.nodes[nodeID]['type']]
+        self.nodes[nodeID]['smiles'] = smiles
+        self.nodes[nodeID]['hubs'] = hubs
     
     def add_edge(self, node_port_1: Tuple[Any, Any], node_port_2: Tuple[Any, Any]) -> None:
         """
@@ -294,47 +296,55 @@ class nxGroupGraph(nx.Graph):
                     occupied_ports += 1
         return len(self.nodes[nodeID]['ports']) - occupied_ports # total number of ports - number of ports with edges
     
-    def to_PyG_Data(self, node_descriptor_generater: Callable[[str], Sequence[float]]) -> torch_geometric.data.Data:
+    def to_PyG_Data(self, node_descriptor_generator: Callable[[str], Sequence[float]], max_ports: int = 0) -> torch_geometric.data.Data:
         """
         Convert the GroupGraph to a PyG Data representation.
 
         Parameters:
-        - node_descriptor_generater (Callable[[str], Sequence[float]]): Callable to generate node descriptors.
+        - node_descriptor_generater (Callable[[str], Sequence[float]]): Callable to generate node descriptors. Takes in a SMILES string and returns a sequence of floats.
 
         Returns:
         - torch_geometric.data.Data: PyG Data representation.
         """
         from torch_geometric.data import Data
         import torch
-        max_n_attachments = max(len(v) for v in self.node_types.values())
         one_hot_vector = lambda index, num_classes : torch.eye(num_classes)[index]
+        max_ports = max(len(v) for v in self.node_types.values()) if max_ports == 0 else max_ports
+
 
         # Create the node features
-        dummy_feature = node_descriptor_generater(list(self.node_types.keys())[0])
-        node_features = torch.zeros(len(self.nodes), len(dummy_feature))
+        dummy_feature = node_descriptor_generator(self.nodes(data=True)[0]['smiles'])
+        node_features = torch.zeros((len(self.nodes), len(dummy_feature))).to(torch.float64)
         for i, n in enumerate(self.nodes(data=True)):
-            node_features[i] = node_descriptor_generater(n[1]['type'])
+            node_features[i] = node_descriptor_generator(n[1]['smiles'])
         
         # Create the edge index
-        edge_index = torch.zeros(2, len(self.edges))
+        edge_index = torch.zeros((2, len(self.edges)), dtype=torch.long)
         for i, e in enumerate(self.edges):
             edge_index[0, i] = list(self.nodes).index(e[0])
             edge_index[1, i] = list(self.nodes).index(e[1])
         
         # Create the edge features
-        edge_features = torch.zeros(len(self.edges), max_n_attachments*2)
+        edge_features = torch.zeros(len(self.edges), max_ports*2)
 
         for i, e in enumerate(self.edges(data=True)):
             
             # get nodes and ports
             node_ports = [node_port.split('.') for node_port in e[2]['ports'][0]]
+
+            # Convert node_ports to int from string
+            node_ports = [(int(node), int(port)) for node, port in node_ports]
+
+            
             # convert the ports to one-hot vectors
-            port_index_s = list(map(str, self.nodes(data=True)[node_ports[0][0]]['ports'])).index(node_ports[0][1])
-            port_index_t = list(map(str, self.nodes(data=True)[node_ports[1][0]]['ports'])).index(node_ports[1][1])
+            port_s = self.nodes(data=True)[node_ports[0][0]]['ports']
+            port_t = self.nodes(data=True)[node_ports[1][0]]['ports']
+            port_index_s = port_s.index(node_ports[0][1])
+            port_index_t = port_t.index(node_ports[1][1])
             edge_features[i] = torch.cat([
-                one_hot_vector(port_index_s, max_n_attachments), 
-                one_hot_vector(port_index_t, max_n_attachments)
-            ])
+                one_hot_vector(port_index_s, max_ports), 
+                one_hot_vector(port_index_t, max_ports)
+            ]).to(torch.float64)
 
         return Data(x=node_features, edge_index=edge_index, edge_attr=edge_features)
     
@@ -357,6 +367,8 @@ def convert_to_nx(G: GroupGraph) -> nxGroupGraph:
         nxG.add_node(
             node_id,
             node.type,
+            node.smiles,
+            node.hubs
         )
     for edge in G.edges:
         src = (edge[0], edge[1])
