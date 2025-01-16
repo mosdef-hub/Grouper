@@ -78,6 +78,7 @@ class TestGroupGraph(BaseTest):
         node_defs['[CX3](=O)[OX2H0]'] = Node(0, 'ester', 'C(=O)O', [0,2])  # Ester group
         node_defs['[NX3]'] = Node(0, 'amine', 'N', [0,0,0])  # Amine group
         node_defs['[CX4]([NX3]([CX4]))'] = Node(0, 'alkene_secondary_amine', 'CNC', [0,0])
+        node_defs['[CX4]'] = Node(0, 'alkene', 'C', [0,0,0])
         
 
         truth = GroupGraph()
@@ -101,5 +102,59 @@ class TestGroupGraph(BaseTest):
         out = fragment('CNCNOC=O', node_defs)
 
         assert out == truth
+
+        truth = GroupGraph()
+        truth.add_node('alkene', 'C', [0, 0, 0])
+        truth.add_node('amine', 'N', [0, 0, 0])
+        truth.add_node('oxyl', 'O', [0, 0])
+        truth.add_edge((0, 1), (1, 0))
+        truth.add_edge((1, 1), (2, 0))
+
+        out = fragment('CNO', node_defs)
+
+        assert out == truth
+
+        truth = GroupGraph()
+        truth.add_node('oxyl', 'O', [0, 0])
+        truth.add_node('oxyl', 'O', [0, 0])
+        truth.add_node('ester', 'C(=O)O', [0, 2])
+        truth.add_edge((0, 1), (1, 0))
+        truth.add_edge((1, 1), (2, 0))
+
+
+        out = fragment('O=C(O)OO', node_defs)
+
+        assert out == truth
+
+
+    def test_nodes_made_of_other_nodes(self):
+        node_defs = {}
+        node_defs['[OX2]'] = Node(0, 'oxyl', 'O', [0,0])  # oxyl group
+        node_defs['[CX3](=O)[OX2H0]'] = Node(0, 'ester', 'C(=O)O', [0,2])  # Ester group
+        node_defs['[NX3]'] = Node(0, 'amine', 'N', [0,0,0])  # Amine group
+        node_defs['[CX4]([NX3]([CX1]))'] = Node(0, 'alkene_secondary_amine', 'CNC', [0,0]) # can be made of amine and alkene
+        node_defs['[CX4]'] = Node(0, 'alkene', 'C', [0,0,0])
+
+        truth = GroupGraph()
+        truth.add_node('alkene_secondary_amine', 'CNC', [0, 0])
+        truth.add_node('alkene', 'C', [0, 0, 0])
+        truth.add_node('amine', 'N', [0, 0, 0])
+        truth.add_node('alkene', 'C', [0, 0, 0])
+        truth.add_node('alkene', 'C', [0, 0, 0])
+        truth.add_node('alkene', 'C', [0, 0, 0])
+        truth.add_node('alkene', 'C', [0, 0, 0])
+        truth.add_edge((0, 1), (1, 0))
+        truth.add_edge((1, 1), (2, 0))
+        truth.add_edge((2, 1), (3, 0))
+        truth.add_edge((3, 1), (4, 0))
+        truth.add_edge((3, 2), (5, 0))
+        truth.add_edge((5,1), (6, 0))
+
+
+        out = fragment('CCC(C)NCCNC', node_defs)
+
+        assert out == truth
+
+
 
 

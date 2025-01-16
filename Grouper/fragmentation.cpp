@@ -57,7 +57,31 @@ namespace std {
         }
 
         return matchingIndices;
+}
+
+std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> determineNodeComposition(const std::unordered_map<std::string, GroupGraph::Node>& nodeDefs){
+    std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> nodeComposition;
+    for (const auto& nodeDef1 : nodeDefs) {
+        const GroupGraph::Node& nodeData = nodeDef1.second;
+        const std::string& smiles = nodeData.smiles; // Need to use smiles because rdkit can't actually do substructure matching with smarts
+        std::unique_ptr<RDKit::ROMol> original(RDKit::SmilesToMol(smiles));
+
+        for (const auto& nodeDef2 : nodeDefs) {
+            const std::string& smarts2 = nodeDef2.first;
+            const GroupGraph::Node& nodeData2 = nodeDef2.second;
+            std::unique_ptr<RDKit::ROMol> query(RDKit::SmartsToMol(smarts2));
+            std::vector<RDKit::MatchVectType> matches;
+            RDKit::SubstructMatch(*original, *query, matches);
+            if (!matches.empty()) {
+                nodeComposition[nodeData].insert(nodeData2);
+            }
+        }
+        if (nodeComposition[nodeData].empty()) {
+            nodeComposition[nodeData].insert(nodeData);
+        }
     }
+    return nodeComposition;
+}
 
 GroupGraph fragment(
     const std::string& smiles, 
@@ -106,6 +130,9 @@ GroupGraph fragment(
     DYNALLSTAT(graph, g, g_sz);
     DYNALLOC2(graph, g, g_sz, n, m, "malloc");
     int lab[n], ptn[n], orbits[n];
+
+    // Determine if nodes can be made by composing other nodes
+    // std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> nodeComposition = determineNodeComposition(nodeDefs);
 
     for (const auto& nodeDef : sortedNodeDefs) {
         const std::string& smarts = nodeDef.first;
@@ -232,10 +259,20 @@ GroupGraph fragment(
     }
 
     // If any atoms are not matched to a node, throw an error
+    std::vector<int> unmatchedAtoms;
+    std::string unmatchedAtomsStr = "";
     for (const auto& atom : mol->atoms()) {
-        if (!atomToNodeid.count(atom->getIdx())) {
-            throw std::invalid_argument("Atom " + std::to_string(atom->getIdx()) +" not matched to any node");
+        int atomIdx = atom->getIdx();
+        if (!atomToNodeid.count(atomIdx)) {
+            unmatchedAtoms.push_back(atomIdx);
         }
+    }
+    if (!unmatchedAtoms.empty()) {
+        for (const auto& atomIdx : unmatchedAtoms) {
+            unmatchedAtomsStr += std::to_string(atomIdx) + " ";
+        }
+        std::cout<<groupGraph.printGraph();
+        throw std::invalid_argument("Atoms not matched to any node: " + unmatchedAtomsStr);
     }
     
     // std::cout<<"atomToOrbit: ";
@@ -272,20 +309,15 @@ GroupGraph fragment(
         int beginAtomIdx = bond->getBeginAtomIdx();
         int endAtomIdx = bond->getEndAtomIdx();
 
-        std::cout<<"beginAtomIdx: "<<beginAtomIdx<< " endAtomIdx: "<<endAtomIdx<<std::endl;
 
         GroupGraph::NodeIDType fromNode = atomToNodeid[beginAtomIdx];
         GroupGraph::NodeIDType toNode = atomToNodeid[endAtomIdx];
         std::string fromSmarts = atomToSmarts[beginAtomIdx];
         std::string toSmarts = atomToSmarts[endAtomIdx];
 
-        std::cout<<"fromNode: "<<fromNode<<" toNode: "<<toNode<<std::endl;
 
         // Check if both atoms are part of the same SMARTS subgraph
         if (fromNode != toNode) {
-
-            std::cout<<"Individuation: "<<atomIndividuation[beginAtomIdx]<<" "<<atomIndividuation[endAtomIdx]<<std::endl;
-
             // see if atoms are individuated
             if (atomIndividuation[beginAtomIdx] && atomIndividuation[endAtomIdx]) {
                 // Get the port numbers for the atoms
@@ -299,6 +331,25 @@ GroupGraph fragment(
                     groupGraph.addEdge({fromNode, fromPort}, {toNode, toPort}, true);
                 }
                 else {
+                    std::cout<<groupGraph.printGraph();
+                    std::cout<<"beginAtomIdx: "<<beginAtomIdx<<" endAtomIdx: "<<endAtomIdx<<std::endl;
+                        // print all maps assoicated with atom index
+                    for (std::size_t atomIdx = 0; atomIdx < mol->getNumAtoms(); atomIdx++) {
+                        printf("atomIdx: %zu ports: ", atomIdx);
+                        for (const auto& port : atomToPorts[atomIdx]) {
+                            printf("%d ", port);
+                        }
+                        printf(" nodeid: %d", atomToNodeid[atomIdx]);
+                        printf(" element: %s", mol->getAtomWithIdx(atomIdx)->getSymbol().c_str());
+                        printf(" individuation: %d", atomIndividuation[atomIdx]);
+                        printf(" smarts: %s", atomToSmarts[atomIdx].c_str());
+                        printf(" atomOrbits: ");
+                        for (const auto& orbit : atomToOrbit[atomIdx]) {
+                            printf("%d ", orbit);
+                        }
+                        printf("\n");
+                    }
+
                     throw std::invalid_argument("Not enough ports for bond");
                 }
             

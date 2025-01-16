@@ -10,6 +10,8 @@ GroupGraph fragment(
 
 std::vector<int> _findMatchingIndices(const int* orbits, int targetOrbit, int numAtoms);
 
+std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> determineNodeComposition(const std::unordered_map<std::string, GroupGraph::Node>& nodeDefs);
+
 
 struct TupleHash {
     template <typename T1, typename T2, typename T3>
