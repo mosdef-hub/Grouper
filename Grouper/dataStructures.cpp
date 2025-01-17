@@ -43,7 +43,7 @@ GroupGraph& GroupGraph::operator=(const GroupGraph& other) {
 bool GroupGraph::Node::operator==(const Node& other) const {
     return id == other.id &&
            ntype == other.ntype &&
-           smiles == other.smiles &&
+           smarts == other.smarts &&
            hubs == other.hubs;
 }
 
@@ -138,7 +138,7 @@ inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortT
 // Operating methods
 void GroupGraph::addNode(
     std::string ntype = "",
-    std::string smiles = "",
+    std::string smarts = "",
     std::vector<NodeIDType> hubs = {}
 ) {
     /*There are 5 ways you can input a node:
@@ -146,17 +146,17 @@ void GroupGraph::addNode(
         2. ntype, hubs
         3. smiles, hubs
         4. ntype if it already exists
-        5. smiles if it already exists
+        5. smarts if it already exists
     */
 
-    // Ensure that either ntype or smiles is provided
-    if (ntype.empty() && smiles.empty()) {
-        throw std::invalid_argument("Either smiles or type must be provided");
+    // Ensure that either ntype or smarts is provided
+    if (ntype.empty() && smarts.empty()) {
+        throw std::invalid_argument("Either smarts or type must be provided");
     }
 
-    // If no ntype is provided, use smiles as the type
+    // If no ntype is provided, use smarts as the type
     if (ntype.empty()) {
-        ntype = smiles;
+        ntype = smarts;
     }
 
     // Initialize id and ports
@@ -170,7 +170,7 @@ void GroupGraph::addNode(
 
     // Case 1: Node type (ntype) is provided
     if (!ntype.empty()) {
-        // If the ntype (or smiles used as ntype) already exists
+        // If the ntype (or smarts used as ntype) already exists
         if (nodetypes.find(ntype) != nodetypes.end()) {
             // Check if hub sizes match the existing node type
             if (hubs.empty()) {
@@ -188,23 +188,23 @@ void GroupGraph::addNode(
         }
     }
 
-    // Case 2: Smiles is provided (and used as ntype if ntype was empty)
-    if (!smiles.empty() && nodetypes.find(smiles) != nodetypes.end()) {
-        // Check if hub sizes match the existing smiles node
-        if (nodetypes[smiles].size() != hubs.size()) {
-            throw std::invalid_argument("Smiles already exists with a different number of hubs");
+    // Case 2: smarts is provided (and used as ntype if ntype was empty)
+    if (!smarts.empty() && nodetypes.find(smarts) != nodetypes.end()) {
+        // Check if hub sizes match the existing smarts node
+        if (nodetypes[smarts].size() != hubs.size()) {
+            throw std::invalid_argument("smarts already exists with a different number of hubs");
         }
-    } else if (!smiles.empty() && nodetypes.find(smiles) == nodetypes.end()) {
-        // New smiles entry
+    } else if (!smarts.empty() && nodetypes.find(smarts) == nodetypes.end()) {
+        // New smarts entry
         if (hubs.empty()) {
             throw std::invalid_argument("Hubs must be provided for a new node type");
         }
         std::iota(ports.begin(), ports.end(), 0);
-        nodetypes[smiles] = ports; // Save the new smiles as a node type
+        nodetypes[smarts] = ports; // Save the new smarts as a node type
     }
 
     // Create the new node and add it to the nodes map
-    nodes[id] = Node(ntype, smiles, hubs);
+    nodes[id] = Node(ntype, smarts, hubs);
 }
 
 
@@ -359,7 +359,7 @@ std::string GroupGraph::printGraph() const {
     std::ostringstream output;
     output << "Nodes:\n";
     for (const auto& entry : nodes) {
-        output << "    Node " << entry.first << " (" << entry.second.ntype << ") (" << entry.second.smiles << ") ";
+        output << "    Node " << entry.first << " (" << entry.second.ntype << ") (" << entry.second.smarts << ") ";
         output<< ": \n        Ports ";
         for (PortType port : entry.second.ports) {
             output << port << " ";
@@ -386,8 +386,8 @@ std::string GroupGraph::toSmiles() const {
     for (const auto& entry : nodes) {
         NodeIDType nodeID = entry.first;
         const Node& node = entry.second;
-        std::string smiles = entry.second.smiles;
-        std::unique_ptr<RDKit::RWMol> subGraph(RDKit::SmilesToMol(smiles));
+        std::string smarts = entry.second.smarts;
+        std::unique_ptr<RDKit::RWMol> subGraph(RDKit::SmartsToMol(smarts));
         nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
         for (size_t i = 0; i < node.ports.size(); ++i) {
             nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
@@ -402,8 +402,8 @@ std::string GroupGraph::toSmiles() const {
         NodeIDType nodeID = entry.first;
         const Node& node = entry.second;
         nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        std::string smiles = node.smiles;
-        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmilesToMol(smiles));
+        std::string smarts = node.smarts;
+        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmartsToMol(smarts));
         for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
@@ -415,8 +415,8 @@ std::string GroupGraph::toSmiles() const {
     for (const auto& entry : nodes) {
         NodeIDType nodeID = entry.first;
         const Node& node = entry.second;
-        std::string smiles = node.smiles;
-        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmilesToMol(smiles));
+        std::string smarts = node.smarts;
+        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmartsToMol(smarts));
         for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             RDKit::Atom newAtom = **atom;
@@ -505,8 +505,8 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
     for (const auto& entry : nodes) {
         NodeIDType nodeID = entry.first;
         const Node& node = entry.second;
-        std::string smiles = entry.second.smiles;
-        std::unique_ptr<RDKit::RWMol> subGraph(RDKit::SmilesToMol(smiles));
+        std::string smarts = entry.second.smarts;
+        std::unique_ptr<RDKit::RWMol> subGraph(RDKit::SmartsToMol(smarts));
         nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
         for (size_t i = 0; i < node.ports.size(); ++i) {
             nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
@@ -522,8 +522,8 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         NodeIDType nodeID = entry.first;
         const Node& node = entry.second;
         nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        std::string smiles = node.smiles;
-        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmilesToMol(smiles));
+        std::string smarts = node.smarts;
+        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmartsToMol(smarts));
         for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
@@ -535,8 +535,8 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
     for (const auto& entry : nodes) {
         NodeIDType nodeID = entry.first;
         const Node& node = entry.second;
-        std::string smiles = node.smiles;
-        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmilesToMol(smiles));
+        std::string smarts = node.smarts;
+        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmartsToMol(smarts));
         for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             // RDKit::Atom newAtom = **atom;
@@ -578,7 +578,7 @@ std::string GroupGraph::serialize() const {
             const Node& node = pair.second;
             oss << "    {\n      \"id\": " << node.id
                 << ",\n      \"ntype\": \"" << node.ntype
-                << "\",\n      \"smiles\": \"" << node.smiles
+                << "\",\n      \"smarts\": \"" << node.smarts
                 << "\",\n      \"ports\": [";
             for (const auto& port : node.ports) {
                 oss << port << ",";
@@ -608,23 +608,23 @@ std::string GroupGraph::serialize() const {
 std::string GroupGraph::Canon() const {
         // TODO: Implement canonicalization algorithm, this doesn't work because the it doesn't account for automorphisms
 
-        // Step 1: Sort nodes based on their attributes (e.g., id, ntype, smiles)
+        // Step 1: Sort nodes based on their attributes (e.g., id, ntype, smarts)
         std::vector<Node> sortedNodes;
         for (const auto& pair : nodes) {
             sortedNodes.push_back(pair.second);
         }
         std::sort(sortedNodes.begin(), sortedNodes.end(), [](const Node& a, const Node& b) {
-            return std::tie(a.ntype, a.smiles, a.id) < std::tie(b.ntype, b.smiles, b.id);
+            return std::tie(a.ntype, a.smarts, a.id) < std::tie(b.ntype, b.smarts, b.id);
         });
 
         // Step 2: Sort edges by connected nodes and ports
         std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType>> sortedEdges = edges;
         std::sort(sortedEdges.begin(), sortedEdges.end());
 
-        // Step 3: Convert sorted nodes and edges to a canonical SMILES or other format
+        // Step 3: Convert sorted nodes and edges to a canonical smarts or other format
         std::stringstream ss;
         for (const auto& node : sortedNodes) {
-            ss << node.ntype << ":" << node.smiles << ";";
+            ss << node.ntype << ":" << node.smarts << ";";
         }
         for (const auto& edge : sortedEdges) {
             ss << std::get<0>(edge) << "-" << std::get<1>(edge) << "-"

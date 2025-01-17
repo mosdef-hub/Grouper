@@ -27,7 +27,7 @@ PYBIND11_MODULE(_Grouper, m) {
         .def(py::init<>())
         .def(py::init<const std::string&, const std::string&, const std::vector<int>&>())
         .def_readwrite("type", &GroupGraph::Node::ntype)
-        .def_readwrite("smiles", &GroupGraph::Node::smiles)
+        .def_readwrite("smarts", &GroupGraph::Node::smarts)
         .def_readwrite("ports", &GroupGraph::Node::ports)
         .def_readwrite("hubs", &GroupGraph::Node::hubs)
         .def("__eq__", &GroupGraph::Node::operator==)
@@ -41,7 +41,7 @@ PYBIND11_MODULE(_Grouper, m) {
         .def_readwrite("node_types", &GroupGraph::nodetypes)
         .def("add_node", &GroupGraph::addNode,
              py::arg("type") = "",
-             py::arg("smiles") = "",
+             py::arg("smarts") = "",
              py::arg("hubs") = std::vector<int>{})
         .def("add_edge", &GroupGraph::addEdge,
              py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},

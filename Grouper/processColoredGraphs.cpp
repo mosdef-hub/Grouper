@@ -254,8 +254,8 @@ void process_nauty_output(
     std::unordered_map<int, std::string> int_to_node_type;
     std::unordered_map<std::string, std::vector<int>> node_types;
     std::unordered_map<std::string, std::vector<int>> node_type_to_hub;
-    std::unordered_map<int, std::string> int_to_smiles;
-    std::unordered_map<std::string, std::string> type_to_smiles;
+    std::unordered_map<int, std::string> int_to_smarts;
+    std::unordered_map<std::string, std::string> type_to_smarts;
     std::vector<GroupGraph> group_graphs_list;
     std::unordered_set<std::string> canon_set;
 
@@ -263,7 +263,7 @@ void process_nauty_output(
     // Create necessary maps
     for (const auto& node : node_defs) {
         node_types[node.ntype] = node.ports;
-        type_to_smiles[node.ntype] = node.smiles;
+        type_to_smarts[node.ntype] = node.smarts;
     }
     for (const auto& node: node_defs) {
         for (const auto& h : node.hubs) {
@@ -273,7 +273,7 @@ void process_nauty_output(
     int i = 0;
     for (const auto& [node_type, ports] : node_types) {
         int_to_node_type[i] = node_type;
-        int_to_smiles[i] = type_to_smiles[node_type];
+        int_to_smarts[i] = type_to_smarts[node_type];
         i++;
     }
     
@@ -308,7 +308,7 @@ void process_nauty_output(
     for (int i = 0; i < n_vertices; ++i) {
         gG.addNode(
             int_to_node_type.at(colors[i]), 
-            int_to_smiles.at(colors[i]), 
+            int_to_smarts.at(colors[i]), 
             node_type_to_hub.at(int_to_node_type.at(colors[i]))
         );
     }

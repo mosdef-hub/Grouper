@@ -5,12 +5,12 @@
 
 GroupGraph fragment(
     const std::string& smiles, 
-    const std::unordered_map<std::string, GroupGraph::Node>& nodeDefs
+    const std::unordered_set<GroupGraph::Node>& nodeDefs
 );
 
 std::vector<int> _findMatchingIndices(const int* orbits, int targetOrbit, int numAtoms);
 
-std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> determineNodeComposition(const std::unordered_map<std::string, GroupGraph::Node>& nodeDefs);
+// std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> determineNodeComposition(const std::unordered_map<std::string, GroupGraph::Node>& nodeDefs);
 
 
 struct TupleHash {

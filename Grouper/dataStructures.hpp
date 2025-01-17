@@ -82,13 +82,13 @@ public:
     struct Node {
         NodeIDType id;
         std::string ntype;
-        std::string smiles;
+        std::string smarts;
         std::vector<NodeIDType> hubs;
         std::vector<PortType> ports;
         bool operator==(const Node& other) const;
-        Node() : ntype(""), smiles(""), hubs(), ports() {}
-        Node(const std::string& ntype, const std::string& smiles, const std::vector<int>& hubs)
-            : ntype(ntype), smiles(smiles), hubs(hubs), ports(hubs.size()) {
+        Node() : ntype(""), smarts(""), hubs(), ports() {}
+        Node(const std::string& ntype, const std::string& smarts, const std::vector<int>& hubs)
+            : ntype(ntype), smarts(smarts), hubs(hubs), ports(hubs.size()) {
             std::iota(ports.begin(), ports.end(), 0);
         }
 
@@ -105,7 +105,7 @@ public:
     // Operating methods
     void addNode(
         std::string ntype,
-        std::string smiles,
+        std::string smarts,
         std::vector<NodeIDType> hubs
     );
     bool addEdge(
@@ -145,7 +145,7 @@ namespace std {
         std::size_t operator()(const GroupGraph::Node& node) const {
             std::size_t h1 = std::hash<int>{}(node.id);
             std::size_t h2 = std::hash<std::string>{}(node.ntype);
-            std::size_t h3 = std::hash<std::string>{}(node.smiles);
+            std::size_t h3 = std::hash<std::string>{}(node.smarts);
             std::size_t h4 = 0;
             for (const auto& port : node.ports) {
                 h4 ^= std::hash<int>{}(port) + 0x9e3779b9 + (h4 << 6) + (h4 >> 2);

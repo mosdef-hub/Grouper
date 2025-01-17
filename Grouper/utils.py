@@ -190,7 +190,7 @@ class nxGroupGraph(nx.Graph):
         """
         return len(self.nodes) > 0 and len(self.edges) > 0
 
-    def add_node(self, nodeID: Any, node_type: str, smiles: str, hubs: Sequence[int]) -> None:
+    def add_node(self, nodeID: Any, node_type: str, smarts: str, hubs: Sequence[int]) -> None:
         """
         Add a node to the GroupGraph.
 
@@ -207,7 +207,7 @@ class nxGroupGraph(nx.Graph):
         super(nxGroupGraph, self).add_node(nodeID)
         self.nodes[nodeID]['type'] = node_type
         self.nodes[nodeID]['ports'] = self.node_types[self.nodes[nodeID]['type']]
-        self.nodes[nodeID]['smiles'] = smiles
+        self.nodes[nodeID]['smarts'] = smarts
         self.nodes[nodeID]['hubs'] = hubs
     
     def add_edge(self, node_port_1: Tuple[Any, Any], node_port_2: Tuple[Any, Any]) -> None:
@@ -301,7 +301,7 @@ class nxGroupGraph(nx.Graph):
         Convert the GroupGraph to a PyG Data representation.
 
         Parameters:
-        - node_descriptor_generater (Callable[[str], Sequence[float]]): Callable to generate node descriptors. Takes in a SMILES string and returns a sequence of floats.
+        - node_descriptor_generater (Callable[[str], Sequence[float]]): Callable to generate node descriptors. Takes in a SMARTS string and returns a sequence of floats.
 
         Returns:
         - torch_geometric.data.Data: PyG Data representation.
@@ -313,10 +313,10 @@ class nxGroupGraph(nx.Graph):
 
 
         # Create the node features
-        dummy_feature = node_descriptor_generator(self.nodes(data=True)[0]['smiles'])
+        dummy_feature = node_descriptor_generator(self.nodes(data=True)[0]['smarts'])
         node_features = torch.zeros((len(self.nodes), len(dummy_feature))).to(torch.float64)
         for i, n in enumerate(self.nodes(data=True)):
-            node_features[i] = node_descriptor_generator(n[1]['smiles'])
+            node_features[i] = node_descriptor_generator(n[1]['smarts'])
         
         # Create the edge index
         edge_index = torch.zeros((2, len(self.edges)), dtype=torch.long)
@@ -367,7 +367,7 @@ def convert_to_nx(G: GroupGraph) -> nxGroupGraph:
         nxG.add_node(
             node_id,
             node.type,
-            node.smiles,
+            node.smarts,
             node.hubs
         )
     for edge in G.edges:
