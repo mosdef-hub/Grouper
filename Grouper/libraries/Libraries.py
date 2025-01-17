@@ -437,7 +437,78 @@ class SaftGammaMie(BasisSet):
     def __init__(self):
         super().__init__()
         self.node_traces = {
-            NodeTrace(Node(0, "-CH3", "CH3", [0]), "", "[CX4H3]", None),
+            NodeTrace(Node(0, "[CX4H3]", "C", [0]), "", "CH3", None),
+            NodeTrace(Node(1, "[!R;CX4H2]", "C", [0, 0]), "", "CH2", None),
+            NodeTrace(Node(2, "[!R;CX4H]", "C", [0, 0, 0]), "", "CH", None),
+            NodeTrace(Node(3, "[!R;CX4H0]", "C", [0, 0, 0, 0]), "", "C", None),
+            NodeTrace(Node(4, "[cX3;H1]", "C(=O)", [0]), "", "aCH", None),
+            NodeTrace(Node(5, "[cX3;H0][CX4;H2]", "CC(=O)", [0]), "", "aCCH2", None),
+            NodeTrace(Node(6, "[cX3;H0][CX4;H1]", "CC(=O)", [0]), "", "aCCH", None),
+            NodeTrace(Node(7, "[CX3H2]", "C", [0]), "", "CH2=", None),
+            NodeTrace(
+                Node(8, "[!R;CX3H1;!$([CX3H1](=O))]", "C", [0, 0]), "", "CH=", None
+            ),  # Note that this is wrong)
+            NodeTrace(Node(9, "[CH2;R]", "C", [0, 0]), "", "cCH2", None),
+            NodeTrace(Node(10, "[OX2H]-[C]=O", "C(=O)O", [0]), "", "COOH", None),
+            NodeTrace(
+                Node(
+                    11,
+                    "[#6X3H0;!$([#6X3H0](~O)(~O)(~O))](=[#8X1])[#8X2H0]",
+                    "C(=O)O",
+                    [0, 2],
+                ),
+                "",
+                "COO",
+                None,
+            ),
+            NodeTrace(
+                Node(12, "[OX2H;!$([OX2H]-[#6]=[O]);!$([OX2H]-a)]", "O", [0]),
+                "",
+                "OH",
+                None,
+            ),
+            NodeTrace(Node(13, "[CX4;H2;!R][OH1]", "CO", [0]), "", "CH2OH", None),
+            NodeTrace(Node(14, "[CX4;H1;!R][OH1]", "CO", [0, 0]), "", "CHOH", None),
+            NodeTrace(Node(15, "[NX3H2]", "N", [0]), "", "NH2", None),
+            NodeTrace(Node(16, "[NX3H1;!R]", "N", [0, 0]), "", "NH", None),
+            NodeTrace(
+                Node(17, "[#7X3H0;!$([#7](~O)~O)]", "N", [0, 0, 0]), "", "N", None
+            ),
+            NodeTrace(Node(18, "[#7X3H1;R]", "N", [0, 0]), "", "cNH", None),
+            NodeTrace(Node(19, "[#7X3H0;R]", "N", [0, 0, 0]), "", "cN", None),
+            NodeTrace(
+                Node(20, "[!R;CX3H0;!$([CX3H0](=O))]", "C", [0, 0, 0]), "", "CH=", None
+            ),
+            NodeTrace(Node(21, "[cX3;H0][CX4;H3]", "C(=O)C", [0]), "", "aCCH3", None),
+            NodeTrace(Node(22, "[cX3;H0;R][OX2;H1]", "C(=O)O", [0]), "", "aCOH", None),
+            NodeTrace(Node(23, "[CH1;R]", "C", [0, 0, 0]), "", "cCH", None),
+            NodeTrace(Node(24, "[CH1;R][NH1;!R]", "CN", [0, 0, 1]), "", "cCHNH", None),
+            NodeTrace(
+                Node(25, "[CH1;R][NH0;!R]", "CN", [0, 0, 1, 1]), "", "cCHN", None
+            ),
+            NodeTrace(
+                Node(26, "[cH0][C;!R](=O)[cH0]", "C(=O)", [0, 0]), "", "aCCOaC", None
+            ),
+            NodeTrace(
+                Node(27, "[OX2H]-[C](=O)[cH0]", "OC(O)", [1]), "", "aCCOOH", None
+            ),
+            NodeTrace(Node(28, "[cH0][NH1;!R][cH0]", "N", [0, 0]), "", "aCNHaC", None),
+            NodeTrace(Node(29, "[CH3][CX3](=O)", "CC=O", [1]), "", "CH3CO", None),
+            NodeTrace(
+                Node(
+                    30, "[OH0;!R;$([OH0;!R][CH3;!R]);$([OH0;!R][CH2;!R])]", "O", [0, 0]
+                ),
+                "",
+                "eO",
+                None,
+            ),
+            NodeTrace(
+                Node(31, "[OH0;!R;$([OH0;!R][CH2;!R])]", "CO", [0, 1]), "", "cO", None
+            ),
+            NodeTrace(Node(32, "[CX4;H3][OX2;H1]", "CO", [0]), "", "CH3OH", None),
+            NodeTrace(Node(33, "[OH2]", "O", []), "", "H2O", None),
+            NodeTrace(Node(34, "[CH4]", "C", []), "", "CH4", None),
+            NodeTrace(Node(35, "[C;X2](=O)(=O)", "C(=O)=O", []), "", "CO2", None),
         }
 
 

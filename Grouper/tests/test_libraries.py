@@ -7,7 +7,8 @@ from Grouper.tests.base_test import BaseTest
 
 class TestLibraries(BaseTest):
     @pytest.mark.parametrize(
-        "library,n_graphs", [("saftgm", 1), ("joback", 41), ("UNIFAC", 89), ("base", 0)]
+        "library,n_graphs",
+        [("saftgm", 36), ("joback", 41), ("UNIFAC", 89), ("base", 0)],
     )
     def test_build_library(self, library, n_graphs):
         if library == "base":
@@ -18,11 +19,11 @@ class TestLibraries(BaseTest):
 
     def test_node_trace(self):
         library = Libraries["saftgm"]()
-        node = Node(0, "-CH3", "CH3", [0])
+        node = Node(1, "[!R;CX4H2]", "C", [0, 0])
         nt = library.query_nodes({"node": node})[0]
 
         assert nt.node == node
-        assert nt.smarts == "[CX4H3]"
+        assert nt.smarts == "CH2"
         assert nt.doi == ""
         assert nt.priority is None
 
