@@ -17,9 +17,10 @@ dependencies:
   - nauty
   - jupyter
   - jupyter
-  - pytest
   - seaborn
   - cairosvg
   - pyg
+  - pytest-benchmark
+  - pytest
   - pip:
     - grakel

@@ -36,7 +36,6 @@ class TestGeneration(BaseTest):
         nauty_path = config.get("nauty_path")
         if not nauty_path:
             raise RuntimeError("Nauty path is not defined in the configuration file.")
-
         # Convert node_defs to the expected format
         node_defs = set(Node(n["type"], n["smiles"], n["hubs"]) for n in node_defs)
 
@@ -60,7 +59,7 @@ class TestGeneration(BaseTest):
             verbose,
         )
         logging.info("Benchmark complete")
-    
+        
     def test_simple_exhaustive_generation(self):
         node_defs = [
             {"type": "t2", "smiles": "N", "hubs": [0, 0, 0]},
@@ -100,4 +99,3 @@ class TestGeneration(BaseTest):
             verbose,
         )
         logging.info("Simple generation complete")
-

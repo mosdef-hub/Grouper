@@ -86,9 +86,9 @@ public:
         std::vector<NodeIDType> hubs;
         std::vector<PortType> ports;
         bool operator==(const Node& other) const;
-        Node() : id(0), ntype(""), smiles(""), hubs(), ports() {}
-        Node(int id, const std::string& ntype, const std::string& smiles, const std::vector<int>& hubs)
-            : id(id), ntype(ntype), smiles(smiles), hubs(hubs), ports(hubs.size()) {
+        Node() : ntype(""), smiles(""), hubs(), ports() {}
+        Node(const std::string& ntype, const std::string& smiles, const std::vector<int>& hubs)
+            : ntype(ntype), smiles(smiles), hubs(hubs), ports(hubs.size()) {
             std::iota(ports.begin(), ports.end(), 0);
         }
 
@@ -104,8 +104,8 @@ public:
     bool operator==(const GroupGraph& other) const;
     // Operating methods
     void addNode(
-        std::string ntype, 
-        std::string smiles, 
+        std::string ntype,
+        std::string smiles,
         std::vector<NodeIDType> hubs
     );
     bool addEdge(
@@ -127,7 +127,7 @@ public:
     std::unique_ptr<AtomGraph> toAtomicGraph() const;
     std::string serialize() const;
     std::string Canon() const;
-    
+
 
 private:
     std::vector<std::vector<int>> toEdgeGraph(const std::vector<std::pair<int, int>>& edge_list) const;

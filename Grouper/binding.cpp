@@ -25,8 +25,7 @@ PYBIND11_MODULE(_Grouper, m) {
     m.doc() = "Grouper bindings for Python";
     py::class_<GroupGraph::Node>(m, "Node")
         .def(py::init<>())
-        .def(py::init<int, const std::string&, const std::string&, const std::vector<int>&>())
-        .def_readwrite("id", &GroupGraph::Node::id)
+        .def(py::init<const std::string&, const std::string&, const std::vector<int>&>())
         .def_readwrite("type", &GroupGraph::Node::ntype)
         .def_readwrite("smiles", &GroupGraph::Node::smiles)
         .def_readwrite("ports", &GroupGraph::Node::ports)
