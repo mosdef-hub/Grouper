@@ -18,7 +18,7 @@ class TestLibraries(BaseTest):
 
     def test_node_trace(self):
         library = Libraries["saftgm"]()
-        node = Node(0, "-CH3", "CH3", [0])
+        node = Node("-CH3", "CH3", [0])
         nt = library.query_nodes({"node": node})[0]
 
         assert nt.node == node
@@ -31,13 +31,13 @@ class TestLibraries(BaseTest):
 
     def test_add_node(self):
         library = BasisSet()
-        library.add_node(Node(0, "-CH3", "CH3", [0]), "", "[CX4H3]", None)
+        library.add_node(Node("-CH3", "CH3", [0]), "", "[CX4H3]", None)
         assert library.n_nodes == 1
 
     def test_query_node(self):
         library = Libraries["joback"]()
         nt = library.query_nodes({"smarts": "[$([!R;#6X3H0]);!$([!R;#6X3H0]=[#8])]"})[0]
-        assert nt.node == Node(6, "=C<", "C", [0, 0, 0])
+        assert nt.node == Node("=C<", "C", [0, 0, 0])
 
     def test_list_nodes(self):
         library = Libraries["joback"]()

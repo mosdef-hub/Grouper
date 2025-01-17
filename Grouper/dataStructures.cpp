@@ -204,7 +204,7 @@ void GroupGraph::addNode(
     }
 
     // Create the new node and add it to the nodes map
-    nodes[id] = Node(id, ntype, smiles, hubs);
+    nodes[id] = Node(ntype, smiles, hubs);
 }
 
 
@@ -301,11 +301,11 @@ int* GroupGraph::computeEdgeOrbits(
 // std::vector<std::vector<int>> GroupGraph::nodeAut() const {
 //     int n = nodes.size();  // Number of vertices
 //     int m = SETWORDSNEEDED(n);  // Size of set words for NAUTY
-    
+
 //     // Dynamically allocate NAUTY structures
 //     DYNALLSTAT(graph, g, g_sz);
 //     DYNALLOC2(graph, g, g_sz, n, m, "malloc");
-    
+
 //     // Initialize the NAUTY graph to be empty
 //     EMPTYGRAPH(g, m, n);
 
@@ -372,7 +372,7 @@ std::string GroupGraph::printGraph() const {
     }
     output << "Edges:\n";
     for (const auto& edge : edges) {
-        output << "    Edge: " << std::get<0>(edge) << "(" << std::get<1>(edge) << ") -> " 
+        output << "    Edge: " << std::get<0>(edge) << "(" << std::get<1>(edge) << ") -> "
                << std::get<2>(edge) << "(" << std::get<3>(edge) << ")\n";
     }
     return output.str();
@@ -419,7 +419,7 @@ std::string GroupGraph::toSmiles() const {
         std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmilesToMol(smiles));
         for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
-            RDKit::Atom newAtom = **atom; 
+            RDKit::Atom newAtom = **atom;
             molecularGraph->addAtom(&newAtom, true);
         }
         for (RDKit::ROMol::BondIterator bond = subGraph->beginBonds(); bond != subGraph->endBonds(); ++bond) {
@@ -441,7 +441,7 @@ std::string GroupGraph::toSmiles() const {
 
         molecularGraph->addBond(fromAtom, toAtom, RDKit::Bond::SINGLE);
     }
-    
+
     return RDKit::MolToSmiles(*molecularGraph);
 }
 
@@ -458,7 +458,7 @@ void toNautyGraph(const std::vector<std::vector<int>>& adjList, graph* g, int n)
 
 std::vector<std::vector<int>> GroupGraph::toEdgeGraph(const std::vector<std::pair<int, int>>& edge_list) const {
     int num_edges = edge_list.size();
-    
+
     // Initialize edge graph as an adjacency matrix where each element is initially 0
     std::vector<std::vector<int>> edge_graph(num_edges, std::vector<int>(num_edges, 0));
 
@@ -539,7 +539,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmilesToMol(smiles));
         for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
-            // RDKit::Atom newAtom = **atom; 
+            // RDKit::Atom newAtom = **atom;
             // molecularGraph->addAtom(&newAtom, true);
             int atomicNumber = (*atom)->getAtomicNum();
             int maxValence = pt->getDefaultValence(atomicNumber);
@@ -567,7 +567,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         atomGraph->addEdge(fromAtom, toAtom);
     }
 
-    
+
     return atomGraph;
 }
 
@@ -576,7 +576,7 @@ std::string GroupGraph::serialize() const {
         oss << "{\n  \"nodes\": [\n";
         for (const auto& pair : nodes) {
             const Node& node = pair.second;
-            oss << "    {\n      \"id\": " << node.id 
+            oss << "    {\n      \"id\": " << node.id
                 << ",\n      \"ntype\": \"" << node.ntype
                 << "\",\n      \"smiles\": \"" << node.smiles
                 << "\",\n      \"ports\": [";
@@ -594,10 +594,10 @@ std::string GroupGraph::serialize() const {
         oss.seekp(-2, oss.cur); // remove the last comma and newline
         oss << "\n  ],\n  \"edges\": [\n";
         for (const auto& edge : edges) {
-            oss << "    [" 
-                << std::get<0>(edge) << "," 
-                << std::get<1>(edge) << "," 
-                << std::get<2>(edge) << "," 
+            oss << "    ["
+                << std::get<0>(edge) << ","
+                << std::get<1>(edge) << ","
+                << std::get<2>(edge) << ","
                 << std::get<3>(edge) << "],\n";
         }
         oss.seekp(-2, oss.cur); // remove the last comma and newline
@@ -607,7 +607,7 @@ std::string GroupGraph::serialize() const {
 
 std::string GroupGraph::Canon() const {
         // TODO: Implement canonicalization algorithm, this doesn't work because the it doesn't account for automorphisms
-        
+
         // Step 1: Sort nodes based on their attributes (e.g., id, ntype, smiles)
         std::vector<Node> sortedNodes;
         for (const auto& pair : nodes) {
@@ -627,7 +627,7 @@ std::string GroupGraph::Canon() const {
             ss << node.ntype << ":" << node.smiles << ";";
         }
         for (const auto& edge : sortedEdges) {
-            ss << std::get<0>(edge) << "-" << std::get<1>(edge) << "-" 
+            ss << std::get<0>(edge) << "-" << std::get<1>(edge) << "-"
                << std::get<2>(edge) << "-" << std::get<3>(edge) << ";";
         }
 
@@ -672,7 +672,7 @@ bool AtomGraph::operator==(const AtomGraph& other) const {
     // Create a vector of node IDs
     std::vector<NodeIDType> nodes_1;
     std::vector<NodeIDType> nodes_2;
-    
+
     for (const auto& node : nodes) {
         nodes_1.push_back(node.first);
     }
@@ -693,7 +693,7 @@ bool AtomGraph::operator==(const AtomGraph& other) const {
         }
 
         bool is_match = true;
-        
+
         for (const auto& entry : adjacency_list_1) {
             NodeIDType node_id_1 = entry.first;
             const auto& neighbors_1 = entry.second;
@@ -724,7 +724,7 @@ bool AtomGraph::operator==(const AtomGraph& other) const {
 void AtomGraph::addNode(const std::string& type, const unsigned int valency) {
     int id = nodes.size();
     nodes[id] = Node(id, type, valency);
-    
+
 }
 
 void AtomGraph::addEdge(NodeIDType src, NodeIDType dst) {
@@ -774,7 +774,3 @@ std::string AtomGraph::printGraph() const {
 // std::string AtomGraph::toSmiles(
 // ) const {
 // }
-
-
-
-
