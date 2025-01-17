@@ -281,6 +281,7 @@ class Unifac(BasisSet):
                 None,
             ),
             NodeTrace(
+
                 Node("[CX4;H0]([Cl])([Cl])([Cl])([Cl])", "C(Cl)(Cl)(Cl)(Cl", []),
                 "",
                 "CCL4",
@@ -288,6 +289,7 @@ class Unifac(BasisSet):
             ),
             NodeTrace(Node("[c][Cl]", "C(=O)(Cl)", [0]), "", "ACCL", None),
             NodeTrace(
+
                 Node("[CX4;H3][NX3](=[OX1])([OX1])", "CN(=O)O", []),
                 "",
                 "CH3NO2",
