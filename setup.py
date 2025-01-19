@@ -6,6 +6,14 @@ import pybind11
 
 condabase = os.environ['CONDA_PREFIX']
 
+# Platform-specific compiler and linker flags
+platform_compile_args = ['-std=c++17', '-fPIC', '-Xpreprocessor', '-fopenmp']
+platform_link_args = []
+if sys.platform == 'darwin':  # macOS
+    platform_compile_args += ['-arch', 'arm64']  # Ensure architecture compatibility
+elif sys.platform.startswith('linux'):  # Linux
+    platform_compile_args.append('-pthread')
+
 # Define the extension module
 molgrouper_module = Extension(
     'Grouper._Grouper',
@@ -17,7 +25,7 @@ molgrouper_module = Extension(
         'Grouper/fragmentation.cpp',
         'Grouper/autUtils.cpp',
     ],
-    include_dirs = [
+    include_dirs=[
         os.path.join(condabase, 'include'),
         os.path.join(condabase, "include/cairo"),
         os.path.join(condabase, "include/boost"),
@@ -29,27 +37,22 @@ molgrouper_module = Extension(
         pybind11.get_include(user=True),
         'Grouper',
     ],
-    library_dirs = [
+    library_dirs=[
         os.path.join(condabase, 'lib'),
         os.path.join(condabase, "lib/cairo"),
     ],
-    libraries = [
+    libraries=[
         'RDKitFileParsers', 
         'RDKitSmilesParse', 
         'RDKitGraphMol', 
         'RDKitRDGeneral', 
         'omp', 
         'nauty', 
-        'pq'
+        'pq',
     ],
-    extra_compile_args = [
-        '-Xpreprocessor', '-fopenmp', '-std=c++17', '-g',
-        '-fPIC',  # Ensure proper position-independent code for shared libraries
-    ],
+    extra_compile_args=platform_compile_args,
+    extra_link_args=platform_link_args,
     language='c++',
-    # Optionally add separate flags for C compilation (for nauty or other C files)
-    undef_macros=['_Thread_local'],  # This will undefine any conflicting macro definitions if needed
-    extra_link_args=[],
 )
 
 setup(
