@@ -149,12 +149,24 @@ void GroupGraph::addNode(
         5. smarts if it already exists
     */
 
-    // Ensure that either ntype or smarts is provided
+    // Error handling
     if (ntype.empty() && smarts.empty()) {
-        throw std::invalid_argument("Either smarts or type must be provided");
+        throw std::invalid_argument("Either SMARTS or type must be provided");
+    }
+    std::unique_ptr<RDKit::RWMol> mol(RDKit::SmartsToMol(smarts));
+    if (!mol) {
+        throw std::invalid_argument("Invalid SMARTS pattern for node definition: " + smarts);
+    }
+    for (NodeIDType hub : hubs) {
+        if (hub < 0) {
+            throw std::invalid_argument("Hub ID must be greater than or equal to 0");
+        }
     }
 
-    // If no ntype is provided, use smarts as the type
+
+
+
+    // Check if the node type already exists
     if (ntype.empty()) {
         ntype = smarts;
     }
@@ -214,11 +226,28 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
     NodeIDType to = std::get<0>(toNodePort);
     PortType toPort = std::get<1>(toNodePort);
 
+
+    // Error handling
     if (n_free_ports(from) <= 0) {
         throw std::invalid_argument("Source node doesn't have enough ports!");
     }
     if (n_free_ports(to) <= 0) {
         throw std::invalid_argument("Destination node doesn't have enough ports!");
+    }
+    if (from == to) {
+        throw std::invalid_argument("Source and destination nodes are the same");
+    }
+    if (nodes.find(from) == nodes.end()) {
+        throw std::invalid_argument("Source node does not exist");
+    }
+    if (nodes.find(to) == nodes.end()) {
+        throw std::invalid_argument("Destination node does not exist");
+    }
+    if (std::find(nodes[from].ports.begin(), nodes[from].ports.end(), fromPort) == nodes[from].ports.end()) {
+        throw std::invalid_argument("Source port does not exist");
+    }
+    if (std::find(nodes[to].ports.begin(), nodes[to].ports.end(), toPort) == nodes[to].ports.end()) {
+        throw std::invalid_argument("Destination port does not exist");
     }
     const std::tuple<NodeIDType, PortType, NodeIDType, PortType> edge = std::make_tuple(from, fromPort, to, toPort);
     if (std::find(edges.begin(), edges.end(), edge) != edges.end()) {
@@ -232,23 +261,8 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
             throw std::invalid_argument("Destination port already in use");
         }
     }
-    if (nodes.find(from) == nodes.end() || nodes.find(to) == nodes.end()) {
-        throw std::invalid_argument("Node does not exist");
-    }
-    if (std::find(nodes[from].ports.begin(), nodes[from].ports.end(), fromPort) == nodes[from].ports.end()) {
-        std::string ports_string = "";
-        for (const auto& port : nodes[from].ports) {
-            ports_string += std::to_string(port) + " ";
-        }
-        std::cout<< "Node " << from << " has ports: " << ports_string << std::endl;
 
-        ports_string = "";
-        for (const auto& port : nodes[to].ports) {
-            ports_string += std::to_string(port) + " ";
-        }
-        std::cout<< "Node " << to << " has ports: " << ports_string << std::endl;
-        throw std::invalid_argument("Port does not exist");
-    }
+    // Add the edge
     edges.push_back(std::make_tuple(from, fromPort, to, toPort));
     return true;
 }

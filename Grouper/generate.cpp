@@ -85,6 +85,36 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     if (num_procs <= -1){
         num_procs = omp_get_max_threads();
     }
+    for (const auto& node : node_defs) {
+        std::unique_ptr<RDKit::RWMol> mol(RDKit::SmartsToMol(node.smarts));
+        if (!mol) {
+            throw std::invalid_argument("Invalid SMARTS pattern for node definition: " + node.smarts);
+        }
+    }
+    if (nauty_path.empty()) {
+        throw std::invalid_argument("Nauty path must not be empty...");
+    }
+    if (!std::filesystem::exists(nauty_path)) {
+        throw std::invalid_argument("Nauty path does not exist...");
+    }
+    if (!std::filesystem::is_directory(nauty_path)) {
+        throw std::invalid_argument("Nauty path is not a directory...");
+    }
+    for (const auto& constraint : positiveConstraints) {
+        if (constraint.second < 0) {
+            throw std::invalid_argument("Positive constraint value must be greater than or equal to 0...");
+        }
+    }
+    for (const auto& constraint : negativeConstraints) {
+        std::unique_ptr<RDKit::RWMol> mol(RDKit::SmartsToMol(constraint));
+        if (!mol) {
+            throw std::invalid_argument("Invalid SMARTS pattern used in negative constraints: " + constraint);
+        }
+    }
+
+
+
+
     if (verbose) {
         std::cout << "Number of nodes: " << n_nodes << std::endl;
         std::cout << "Number of node definitions: " << node_defs.size() << std::endl;

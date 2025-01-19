@@ -160,8 +160,8 @@ class TestGroupGraph(BaseTest):
 
     def test_n_free_ports(self):
         graph = GroupGraph()
-        graph.add_node("node1", "type1", [0, 0])
-        graph.add_node("node2", "type2", [0, 0, 1])
+        graph.add_node("node1", "[C]", [0, 0])
+        graph.add_node("node2", "[CX4]", [0, 0, 1])
         assert graph.n_free_ports(0) == 2
 
         # Connect a edge and recheck
