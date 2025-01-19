@@ -59,33 +59,33 @@ namespace std {
         return matchingIndices;
 }
 
-std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> determineNodeComposition(const std::unordered_map<std::string, GroupGraph::Node>& nodeDefs){
-    std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> nodeComposition;
-    for (const auto& nodeDef1 : nodeDefs) {
-        const GroupGraph::Node& nodeData = nodeDef1.second;
-        const std::string& smiles = nodeData.smiles; // Need to use smiles because rdkit can't actually do substructure matching with smarts
-        std::unique_ptr<RDKit::ROMol> original(RDKit::SmilesToMol(smiles));
+// std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> determineNodeComposition(const std::unordered_map<std::string, GroupGraph::Node>& nodeDefs){
+//     std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> nodeComposition;
+//     for (const auto& nodeDef1 : nodeDefs) {
+//         const GroupGraph::Node& nodeData = nodeDef1.second;
+//         const std::string& smiles = nodeData.smiles; // Need to use smiles because rdkit can't actually do substructure matching with smarts
+//         std::unique_ptr<RDKit::ROMol> original(RDKit::SmilesToMol(smiles));
 
-        for (const auto& nodeDef2 : nodeDefs) {
-            const std::string& smarts2 = nodeDef2.first;
-            const GroupGraph::Node& nodeData2 = nodeDef2.second;
-            std::unique_ptr<RDKit::ROMol> query(RDKit::SmartsToMol(smarts2));
-            std::vector<RDKit::MatchVectType> matches;
-            RDKit::SubstructMatch(*original, *query, matches);
-            if (!matches.empty()) {
-                nodeComposition[nodeData].insert(nodeData2);
-            }
-        }
-        if (nodeComposition[nodeData].empty()) {
-            nodeComposition[nodeData].insert(nodeData);
-        }
-    }
-    return nodeComposition;
-}
+//         for (const auto& nodeDef2 : nodeDefs) {
+//             const std::string& smarts2 = nodeDef2.first;
+//             const GroupGraph::Node& nodeData2 = nodeDef2.second;
+//             std::unique_ptr<RDKit::ROMol> query(RDKit::SmartsToMol(smarts2));
+//             std::vector<RDKit::MatchVectType> matches;
+//             RDKit::SubstructMatch(*original, *query, matches);
+//             if (!matches.empty()) {
+//                 nodeComposition[nodeData].insert(nodeData2);
+//             }
+//         }
+//         if (nodeComposition[nodeData].empty()) {
+//             nodeComposition[nodeData].insert(nodeData);
+//         }
+//     }
+//     return nodeComposition;
+// }
 
 GroupGraph fragment(
     const std::string& smiles, 
-    const std::unordered_map<std::string, GroupGraph::Node>& nodeDefs
+    const std::unordered_set<GroupGraph::Node>& nodeDefs
 ) {
 
     GroupGraph groupGraph;
@@ -98,18 +98,18 @@ GroupGraph fragment(
         throw std::invalid_argument("Invalid SMILES string");
     }
     for (const auto& nodeDef: nodeDefs) {
-        std::unique_ptr<RDKit::ROMol> subgraph(RDKit::SmartsToMol(nodeDef.first));
+        std::unique_ptr<RDKit::RWMol> subgraph(RDKit::SmartsToMol(nodeDef.smarts));
         if (!subgraph) {
-            throw std::invalid_argument("Invalid SMARTS pattern: " + nodeDef.first);
+            throw std::invalid_argument("Invalid SMARTS pattern: " + nodeDef.smarts);
         }
     }
 
     // Create a vector of node types sorted by the number of atoms in descending order
-    std::vector<std::pair<std::string, GroupGraph::Node>> sortedNodeDefs(nodeDefs.begin(), nodeDefs.end());
+    std::vector<GroupGraph::Node> sortedNodeDefs(nodeDefs.begin(), nodeDefs.end());
     std::sort(sortedNodeDefs.begin(), sortedNodeDefs.end(), 
         [](const auto& a, const auto& b) { 
-            std::unique_ptr<RDKit::ROMol> molA(RDKit::SmartsToMol(a.first));
-            std::unique_ptr<RDKit::ROMol> molB(RDKit::SmartsToMol(b.first));
+            std::unique_ptr<RDKit::RWMol> molA(RDKit::SmartsToMol(a.smarts));
+            std::unique_ptr<RDKit::RWMol> molB(RDKit::SmartsToMol(b.smarts));
             return molA->getNumAtoms() > molB->getNumAtoms(); 
         });
 
@@ -135,10 +135,9 @@ GroupGraph fragment(
     // std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> nodeComposition = determineNodeComposition(nodeDefs);
 
     for (const auto& nodeDef : sortedNodeDefs) {
-        const std::string& smarts = nodeDef.first;
-        const GroupGraph::Node& nodeData = nodeDef.second;
+        const std::string& smarts = nodeDef.smarts;
         
-        std::unique_ptr<RDKit::ROMol> query(RDKit::SmartsToMol(smarts));
+        std::unique_ptr<RDKit::RWMol> query(RDKit::SmartsToMol(smarts));
 
         std::vector<RDKit::MatchVectType> matches;
         RDKit::SubstructMatch(*mol, *query, matches);
@@ -185,9 +184,9 @@ GroupGraph fragment(
 
             // Add the node to the graph
             groupGraph.addNode(
-                nodeData.ntype, 
-                nodeData.smiles, 
-                nodeData.hubs
+                nodeDef.ntype, 
+                nodeDef.smarts, 
+                nodeDef.hubs
             );
             GroupGraph::NodeIDType currentId = nodeId++;
 
@@ -247,8 +246,8 @@ GroupGraph fragment(
                 atomToSmarts[atomIdx] = smarts;  // Track which SMARTS pattern the atom belongs to
                 // check if atom is associated with multiple ports
                 std::vector<int> hubIndices;
-                for (size_t idx = 0; idx < nodeData.hubs.size(); ++idx) {
-                    const auto& hub = nodeData.hubs[idx];
+                for (size_t idx = 0; idx < nodeDef.hubs.size(); ++idx) {
+                    const auto& hub = nodeDef.hubs[idx];
                     if (hub == atomMatch.first) {
                         hubIndices.push_back(idx);
                     }
@@ -267,7 +266,7 @@ GroupGraph fragment(
             unmatchedAtoms.push_back(atomIdx);
         }
     }
-    if (!unmatchedAtoms.empty()) {
+    if (!unmatchedAtoms.empty()) { // TODO: Maybe should be a warning instead of an error
         for (const auto& atomIdx : unmatchedAtoms) {
             unmatchedAtomsStr += std::to_string(atomIdx) + " ";
         }
