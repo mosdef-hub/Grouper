@@ -12,7 +12,7 @@ platform_link_args = []
 if sys.platform == 'darwin':  # macOS
     platform_compile_args += ['-arch', 'arm64']  # Ensure architecture compatibility
 elif sys.platform.startswith('linux'):  # Linux
-    platform_compile_args.append('-pthread')
+    platform_compile_args.append('-D_Thread_local=thread_local')
 
 # Define the extension module
 molgrouper_module = Extension(

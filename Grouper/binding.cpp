@@ -5,7 +5,10 @@
 #include "generate.hpp"
 #include "autUtils.hpp"
 #include "fragmentation.hpp"
-#include "nauty/nauty.h"
+#include <nauty/nauty.h>
+#include <pybind11/stl.h>
+
+#include <iostream>
 
 
 
@@ -14,6 +17,7 @@ namespace py = pybind11;
 
 // Function to convert std::set<GroupGraph> to py::set
 py::set convert_unordered_set(const std::unordered_set<GroupGraph>& cpp_set) {
+    std::cout << "Converting unordered set" << std::endl;
     py::set py_set;
     for (const auto& item : cpp_set) {
         py_set.add(item);
@@ -91,7 +95,9 @@ PYBIND11_MODULE(_Grouper, m) {
                                     const std::unordered_set<std::string>& negative_constraints,
                                     const std::string& config_path,
                                     bool verbose) {
+        std::cout<<"Exhaustive generate"<<std::endl;
         std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, nauty_path, input_file_path, num_procs, positive_constraints, negative_constraints, config_path, verbose);
+        std::cout<<"Exhaustive generate done"<<std::endl;
         return convert_unordered_set(result);
     },
         py::arg("n_nodes"),

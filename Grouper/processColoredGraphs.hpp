@@ -14,15 +14,7 @@
 
 #include <libpq-fe.h>
 
-#ifdef __cplusplus
-    #define _Thread_local thread_local
-#else
-    #define _Thread_local _Thread_local  // Use C's definition
-#endif
-
-
-
-#include "nauty/nauty.h"
+#include <nauty/nauty.h>
 
 #include "dataStructures.hpp"
 

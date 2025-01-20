@@ -17,7 +17,6 @@
 #include <GraphMol/AtomIterators.h>
 #include <GraphMol/BondIterators.h>
 
-
 #include <nauty/nauty.h>
 #include <nauty/naututil.h>
 

@@ -24,6 +24,30 @@
 #include <nauty/naututil.h>
 
 
+// Define structures as thread-local using thread_local
+thread_local std::vector<setword> g;         // For the nauty graph
+thread_local std::vector<int> lab;          // For the label array
+thread_local std::vector<int> ptn;          // For the partition array
+thread_local std::vector<int> orbits;       // For the orbits array
+thread_local DEFAULTOPTIONS_GRAPH(options); // Default nauty options
+thread_local statsblk stats;                // Nauty stats structure
+
+// Function to initialize the thread-local nauty structures
+void initializeNautyStructures(int n) {
+    int m = SETWORDSNEEDED(n);
+
+    // Resize the vectors based on the required size
+    g.resize(m * n); // The nauty graph requires m * n words
+    lab.resize(n);   // Label array size is n
+    ptn.resize(n);   // Partition array size is n
+    orbits.resize(n); // Orbit array size is n
+
+    // Clear the graph
+    std::fill(g.begin(), g.end(), 0);
+}
+
+
+
 // Core methods
 GroupGraph::GroupGraph()
     : nodes(), edges(), nodetypes() {}
@@ -55,6 +79,7 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
     if (nodes.empty() || other.nodes.empty()) {
         return false;
     }
+
     // Convert GroupGraph to AtomGraph
     std::unique_ptr<AtomGraph> atomGraph1 = this->toAtomicGraph();
     std::unique_ptr<AtomGraph> atomGraph2 = other.toAtomicGraph();
@@ -78,49 +103,51 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
     // Convert AtomGraph to nauty graph
     int n = atomGraph1->nodes.size(); // Assuming the number of nodes is the same for both graphs
     int m = SETWORDSNEEDED(n);
-    DYNALLSTAT(graph, g1, g1_sz);
-    DYNALLSTAT(graph, g2, g2_sz);
-    DYNALLOC2(graph, g1, g1_sz, n, m, "malloc");
-    DYNALLOC2(graph, g2, g2_sz, n, m, "malloc");
+
+    // Use std::vector instead of DYNALLSTAT and DYNALLOC
+    std::vector<setword> g1(m * n, 0); // Initialize graph 1
+    std::vector<setword> g2(m * n, 0); // Initialize graph 2
+    std::vector<int> lab1(n), ptn1(n), orbits1(n); // Label, partition, and orbits for graph 1
+    std::vector<int> lab2(n), ptn2(n), orbits2(n); // Label, partition, and orbits for graph 2
+    std::vector<setword> canong1(m * n, 0); // Canonical form for graph 1
+    std::vector<setword> canong2(m * n, 0); // Canonical form for graph 2
+    setword workspace[160]; // Workspace for nauty
 
     // Initialize nauty structures
     static DEFAULTOPTIONS_GRAPH(options);
     statsblk stats;
-    int lab1[n], ptn1[n], orbits1[n];
-    int lab2[n], ptn2[n], orbits2[n];
-    setword workspace[160];
-    graph canong1[g1_sz], canong2[g2_sz];  // Canonical forms
 
-    // Convert AtomGraph to nauty graph
-    EMPTYGRAPH(g1, m, n);
+    // Convert AtomGraph to nauty graph for g1
+    EMPTYGRAPH(g1.data(), m, n);
     for (const auto& id_node : atomGraph1->edges) {
-        if (id_node.second.size() != 0){
+        if (!id_node.second.empty()) {
             for (const auto& dest : id_node.second) {
                 int from = id_node.first;
                 int to = dest;
-                ADDONEEDGE(g1, from, to, m);
+                ADDONEEDGE(g1.data(), from, to, m);
             }
         }
     }
 
-    EMPTYGRAPH(g2, m, n);
+    // Convert AtomGraph to nauty graph for g2
+    EMPTYGRAPH(g2.data(), m, n);
     for (const auto& id_node : atomGraph2->edges) {
-        if (id_node.second.size() != 0){
+        if (!id_node.second.empty()) {
             for (const auto& dest : id_node.second) {
                 int from = id_node.first;
                 int to = dest;
-                ADDONEEDGE(g2, from, to, m);
+                ADDONEEDGE(g2.data(), from, to, m);
             }
         }
     }
 
     // Call nauty to canonicalize the graphs
     options.getcanon = TRUE;
-    nauty(g1, lab1, ptn1, NULL, orbits1, &options, &stats, workspace, 160, m, n, canong1);
-    nauty(g2, lab2, ptn2, NULL, orbits2, &options, &stats, workspace, 160, m, n, canong2);
+    nauty(g1.data(), lab1.data(), ptn1.data(), nullptr, orbits1.data(), &options, &stats, workspace, 160, m, n, canong1.data());
+    nauty(g2.data(), lab2.data(), ptn2.data(), nullptr, orbits2.data(), &options, &stats, workspace, 160, m, n, canong2.data());
 
     // Compare the canonical forms to determine isomorphism
-    if (memcmp(canong1, canong2, sizeof(set) * n * m) != 0) {
+    if (memcmp(canong1.data(), canong2.data(), sizeof(setword) * m * n) != 0) {
         return false;
     }
 
@@ -133,8 +160,6 @@ inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortT
     return std::tie(lhs) < std::tie(rhs);
 }
 
-
-// Operating methods
 // Operating methods
 void GroupGraph::addNode(
     std::string ntype = "",
@@ -649,6 +674,8 @@ std::string GroupGraph::Canon() const {
         return ss.str();
     }
 
+//#############################################################################################################
+//#############################################################################################################
 //#############################################################################################################
 
 AtomGraph::AtomGraph()
