@@ -62,10 +62,10 @@ class TestGeneration(BaseTest):
         
     def test_simple_exhaustive_generation(self):
         node_defs = [
-            {"type": "t2", "smiles": "N", "hubs": [0, 0, 0]},
-            {"type": "Methyl", "smiles": "C", "hubs": [0, 0, 0]},
-            {"type": "ester", "smiles": "C(=O)O", "hubs": [0, 2]},
-            {"type": "extra1", "smiles": "O", "hubs": [0, 0]},
+            {"type": "t2", "smarts": "[N]", "hubs": [0, 0, 0]},
+            {"type": "Methyl", "smarts": "[CX3]", "hubs": [0, 0, 0]},
+            {"type": "ester", "smarts": "[CX3](=[OX1])([OX2])", "hubs": [0, 2]},
+            {"type": "extra1", "smarts": "[O]", "hubs": [0, 0]},
         ]
         # Load nauty path from config file
         import json
@@ -78,7 +78,9 @@ class TestGeneration(BaseTest):
             raise RuntimeError("Nauty path is not defined in the configuration file.")
         
         # Convert node_defs to the expected format
-        node_defs = set(Node(n["type"], n["smiles"], n["hubs"]) for n in node_defs)
+        node_defs = set(Node(n["type"], n["smarts"], n["hubs"]) for n in node_defs)
+
+        logging.info("Created node_defs")
 
         verbose = False
         input_file_path = ""
@@ -86,16 +88,17 @@ class TestGeneration(BaseTest):
         negative_constraints = set()
 
         logging.info("Starting simple generation")
-
+        print("Starting simple generation")
         exhaustive_generate(
             2,
             node_defs,
             nauty_path,
             input_file_path,
-            -1, # num_procs
+            1, # num_procs
             positive_constraints,
             negative_constraints,
             "",
             verbose,
         )
+        print("Simple generation complete")
         logging.info("Simple generation complete")

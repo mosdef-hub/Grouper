@@ -10,12 +10,13 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <filesystem>
 
 #include <libpq-fe.h>
 #include <omp.h>
 #include <stdio.h>
 
-#include "nauty/nauty.h"
+#include <nauty/nauty.h>
 
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
@@ -76,6 +77,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 ) {
 
     // Error handling
+    // std::filesystem::path nauty_path_fs(nauty_path);
     if (n_nodes < 1) {
         throw std::invalid_argument("Number of nodes must be greater than 0...");
     }
@@ -94,15 +96,17 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     if (nauty_path.empty()) {
         throw std::invalid_argument("Nauty path must not be empty...");
     }
-    if (!std::filesystem::exists(nauty_path)) {
-        throw std::invalid_argument("Nauty path does not exist...");
-    }
-    if (!std::filesystem::is_directory(nauty_path)) {
-        throw std::invalid_argument("Nauty path is not a directory...");
-    }
-    for (const auto& constraint : positiveConstraints) {
-        if (constraint.second < 0) {
-            throw std::invalid_argument("Positive constraint value must be greater than or equal to 0...");
+    // if (!std::filesystem::exists(nauty_path_fs)) {
+    //     throw std::invalid_argument("Nauty path does not exist...");
+    // }
+    // if (!std::filesystem::is_directory(nauty_path_fs)) {
+    //     throw std::invalid_argument("Nauty path is not a directory...");
+    // }
+    if (!positiveConstraints.empty()){
+        for (const auto& constraint : positiveConstraints) {
+            if (constraint.second < 0) {
+                throw std::invalid_argument("Positive constraint value must be greater than or equal to 0...");
+            }
         }
     }
     for (const auto& constraint : negativeConstraints) {
@@ -111,9 +115,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
             throw std::invalid_argument("Invalid SMARTS pattern used in negative constraints: " + constraint);
         }
     }
-
-
-
 
     if (verbose) {
         std::cout << "Number of nodes: " << n_nodes << std::endl;
@@ -169,25 +170,18 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
     std::cout<< "Using "<<num_procs << " processors" << std::endl;
 
+    
     #pragma omp parallel
     {
-        // Thread-local nauty structures
-        DYNALLSTAT(graph, g, g_sz);
-        DYNALLSTAT(int, lab, lab_sz);
-        DYNALLSTAT(int, ptn, ptn_sz);
-        DYNALLSTAT(int, orbits, orbits_sz);
+        // Thread-local nauty structures using std::vector
+        int n = 20; // Max number of nodes (adjustable)
+        int m = SETWORDSNEEDED(n);
+
+        std::vector<setword> g(m * n, 0);
+        std::vector<int> lab(n, 0), ptn(n, 0), orbits(n, 0);
+
         DEFAULTOPTIONS_GRAPH(options);
         statsblk stats;
-
-        // Initialize thread-local nauty structures
-        int n = 20; // Maximum number of nodes we are going to make this 20 for now, should be larger than the largest graph we are going to generate
-        int m = SETWORDSNEEDED(n);
-        DYNALLOC2(graph, g, g_sz, m, n, "malloc");
-        DYNALLOC1(int, lab, lab_sz, n, "malloc");
-        DYNALLOC1(int, ptn, ptn_sz, n, "malloc");
-        DYNALLOC1(int, orbits, orbits_sz, n, "malloc");
-
-        std::fill(orbits, orbits + n, -1);
 
         std::unordered_set<GroupGraph> local_basis;
 
@@ -200,7 +194,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 positiveConstraints, 
                 negativeConstraints, 
                 verbose,
-                g, lab, ptn, orbits, &options, &stats // Pass nauty structures
+                g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
             );
 
             #pragma omp critical
@@ -208,15 +202,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 update_progress(i + 1, total_lines);
             }
         }
-
-        // Free thread-local nauty resources
-        DYNFREE(g, g_sz);
-        DYNFREE(lab, lab_sz);
-        DYNFREE(ptn, ptn_sz);
-        DYNFREE(orbits, orbits_sz);
-        nauty_freedyn();
-        nautil_freedyn();
-        naugraph_freedyn();
 
         #pragma omp critical
         {
@@ -319,6 +304,8 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
             PQfinish(conn);
             std::cout << "Connection closed." << std::endl;
     }
+    
+    std::cout<< "Number of unique graphs: " << global_basis.size() << std::endl;
 
     return global_basis;
 }
