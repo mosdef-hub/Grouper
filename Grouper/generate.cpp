@@ -305,16 +305,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
             std::cout << "Connection closed." << std::endl;
     }
     
-
-    for (const auto& graph : global_basis) {
-        std::cout << graph.toSmiles() << std::endl;
-    }
-    for (const auto& graph : global_basis) {
-        std::cout << graph.printGraph() << std::endl;
-    }
-
     std::cout<< "Number of unique graphs: " << global_basis.size() << std::endl;
-
 
     return global_basis;
 }

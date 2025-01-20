@@ -95,9 +95,7 @@ PYBIND11_MODULE(_Grouper, m) {
                                     const std::unordered_set<std::string>& negative_constraints,
                                     const std::string& config_path,
                                     bool verbose) {
-        std::cout<<"Exhaustive generate"<<std::endl;
         std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, nauty_path, input_file_path, num_procs, positive_constraints, negative_constraints, config_path, verbose);
-        std::cout<<"Exhaustive generate done"<<std::endl;
         return convert_unordered_set(result);
     },
         py::arg("n_nodes"),
