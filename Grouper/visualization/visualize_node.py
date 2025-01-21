@@ -60,7 +60,7 @@ def visualize_node_trace(
     # initialize SMARTS and SMILES objects for molecule
     # note, sanitize can sometimes improve the implicit/explicit hydrogens found in RDKit. Only turn on if you verify the SMARTS string is matched properly
     smarts_subgraph = Chem.MolFromSmiles(
-        node_trace.node.smiles, sanitize=sanitize_smiles
+        node_trace.node.smarts, sanitize=sanitize_smiles
     )
     if not smarts_subgraph:
         raise ValueError(f"Could not parse SMILES: {node_trace.node.smiles}")
