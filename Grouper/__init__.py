@@ -6,4 +6,5 @@ from Grouper._Grouper import (
     exhaustive_generate,
     fragment,
     process_nauty_output,
+    Sampler,
 )

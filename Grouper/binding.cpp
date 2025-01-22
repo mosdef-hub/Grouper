@@ -1,14 +1,15 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <nauty/nauty.h>
+#include <pybind11/stl.h>
+#include <iostream>
+
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
 #include "generate.hpp"
 #include "autUtils.hpp"
 #include "fragmentation.hpp"
-#include <nauty/nauty.h>
-#include <pybind11/stl.h>
-
-#include <iostream>
+#include "sampler.hpp"
 
 
 
@@ -110,4 +111,11 @@ PYBIND11_MODULE(_Grouper, m) {
     m.def("fragment", &fragment,
         py::arg("smiles"),
         py::arg("node_defs"));
+    py::class_<GroupGraphSampler>(m, "Sampler")
+        .def(py::init<double, int>(),
+             py::arg("temperature") = 1.0,
+             py::arg("max_iterations") = 1000)
+        .def("sample", &GroupGraphSampler::sample)
+        .def("set_temperature", &GroupGraphSampler::setTemperature)
+        .def("set_max_iterations", &GroupGraphSampler::setMaxIterations);
 }
