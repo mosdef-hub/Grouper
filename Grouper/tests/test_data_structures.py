@@ -203,6 +203,14 @@ class TestGroupGraph(BaseTest):
         # Benchmark the add_node method
         benchmark(benchmark_add_node)
 
+    def test_substructure_search(self):
+        from Grouper import AtomGraph
+        graph = AtomGraph()
+        graph.from_smiles("C1CCCC1")
+        sub = AtomGraph()
+        sub.from_smiles("C")
+        graph.substructure_search(sub, [0,0,0,0])
+
     # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()
     #     for i in range(100):
@@ -213,13 +221,3 @@ class TestGroupGraph(BaseTest):
 
     #     # Benchmark the add_edge method
     #     benchmark(benchmark_add_edge)
-
-    # @pytest.mark.skipif(not has_torch, reason="torch package not installed")
-    # def test_group_graph_to_pyG(self, basic_graph):
-    #     import torch
-    #     group_featurizer = lambda node: torch.tensor([1, 0])
-
-    #     data = basic_graph.to_PyG_Data(group_featurizer)
-    #     assert torch.equal(data.x, torch.tensor([ [1,0], [1,0] ], dtype=torch.float32)) # node features should just be identity
-    #     assert torch.equal(data.edge_index, torch.tensor([ [0], [1] ], dtype=torch.float32)) # graph is directed, node1 -> node2
-    #     assert torch.equal(data.edge_attr, torch.tensor([ [1.,0.,0.,1.] ], dtype=torch.float32)) # edge features are one-hot encoded port

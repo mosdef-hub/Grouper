@@ -5,6 +5,8 @@
 #include <sstream>
 #include <algorithm>
 #include <cstring>
+#include <queue>
+#include <stack>
 
 #include "dataStructures.hpp"
 #include "autUtils.hpp"
@@ -45,8 +47,6 @@ void initializeNautyStructures(int n) {
     // Clear the graph
     std::fill(g.begin(), g.end(), 0);
 }
-
-
 
 // Core methods
 GroupGraph::GroupGraph()
@@ -336,62 +336,6 @@ int* GroupGraph::computeEdgeOrbits(
 
     return result;
 }
-
-// std::vector<std::vector<int>> GroupGraph::nodeAut() const {
-//     int n = nodes.size();  // Number of vertices
-//     int m = SETWORDSNEEDED(n);  // Size of set words for NAUTY
-
-//     // Dynamically allocate NAUTY structures
-//     DYNALLSTAT(graph, g, g_sz);
-//     DYNALLOC2(graph, g, g_sz, n, m, "malloc");
-
-//     // Initialize the NAUTY graph to be empty
-//     EMPTYGRAPH(g, m, n);
-
-//     // Convert the adjacency matrix to the NAUTY graph representation
-//     for (const auto& edge : edges) {
-//         int u = std::get<0>(edge);
-//         int v = std::get<2>(edge);
-//         ADDELEMENT(GRAPHROW(g, u, m), v);
-//         ADDELEMENT(GRAPHROW(g, v, m), u);
-//     }
-
-//     // NAUTY variables
-//     int lab[MAXN], ptn[MAXN], orbits[MAXN];
-//     optionblk options_struct;  // Define options structure
-//     statsblk stats;
-
-//     // Initialize options manually
-//     options_struct.getcanon = FALSE;  // We only need automorphisms, not a canonical form
-//     options_struct.defaultptn = TRUE;
-
-//     // Workspace array for nauty
-//     static set workspace[160 * MAXN];
-
-//     // Active set (can be nullptr if not needed)
-//     set *active = nullptr;
-
-//     // Canonical form (not needed, so we set it to nullptr)
-//     graph *canong = nullptr;
-
-//     // Call NAUTY to compute automorphisms
-//     nauty(g, lab, ptn, active, orbits, &options_struct, &stats, workspace, 160 * MAXN, m, n, canong);
-
-//     // Collect results
-//     std::vector<std::vector<int>> automorphisms;
-//     for (int i = 0; i < stats.numorbits; ++i) {
-//         std::vector<int> perm(n);
-//         for (int j = 0; j < n; ++j) {
-//             perm[j] = lab[j];
-//         }
-//         automorphisms.push_back(perm);
-//     }
-
-//     // Free dynamically allocated memory
-//     DYNFREE(g, g_sz);
-
-//     return automorphisms;
-// }
 
 // Conversion methods
 std::string GroupGraph::printGraph() const {
@@ -785,6 +729,163 @@ void AtomGraph::addEdge(NodeIDType src, NodeIDType dst) {
         throw std::invalid_argument("Edge already exists");
     }
     edges[src].insert(dst);
+}
+
+std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::substructureSearch(const AtomGraph& query, const std::vector<int> hubs) const {
+    std::vector<std::vector<NodeIDType>> matches; // To store all matches
+
+    // Step 1: Pre-filter nodes in the graph based on query node attributes
+    std::unordered_map<NodeIDType, std::vector<NodeIDType>> candidateNodes; // Maps query nodes to possible candidates in the main graph
+    for (const auto& queryNodePair : query.nodes) {
+        const auto& queryNode = queryNodePair.second;
+        for (const auto& graphNodePair : nodes) {
+            const auto& graphNode = graphNodePair.second;
+
+            // Match based on node type and valency
+            if (queryNode.ntype == graphNode.ntype && queryNode.valency <= graphNode.valency) {
+                candidateNodes[queryNode.id].push_back(graphNode.id);
+            }
+        }
+    }
+
+
+    // Step 2: Backtracking function to explore mappings
+    std::function<void(std::unordered_map<NodeIDType, NodeIDType>&, std::unordered_set<NodeIDType>&)> backtrack =
+        [&](std::unordered_map<NodeIDType, NodeIDType>& currentMapping, std::unordered_set<NodeIDType>& usedNodes) {
+            // If all query nodes are mapped, we found a match
+            if (currentMapping.size() == query.nodes.size()) {
+                std::vector<NodeIDType> match;
+                for (const auto& mapping : currentMapping) {
+                    match.push_back(mapping.second);
+                }
+                matches.push_back(match);
+                return;
+            }
+
+            // Select the next unmapped query node
+            NodeIDType nextQueryNode = -1;
+            for (const auto& queryNodePair : query.nodes) {
+                if (currentMapping.find(queryNodePair.first) == currentMapping.end()) {
+                    nextQueryNode = queryNodePair.first;
+                    break;
+                }
+            }
+
+            if (nextQueryNode == -1) return; // No unmapped node found (shouldn't happen)
+
+            // Try each candidate node for the selected query node
+            for (NodeIDType candidate : candidateNodes[nextQueryNode]) {
+                if (usedNodes.count(candidate)) continue;
+
+                // Check edge consistency and hub bonding
+                bool valid = true;
+
+                // Check edges for regular node bonding
+                for (const auto& [queryNeighbor, graphNeighbor] : currentMapping) {
+                    if (query.edges.at(nextQueryNode).count(queryNeighbor) > 0) {
+                        if (edges.at(candidate).count(graphNeighbor) == 0) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                }
+
+                // Check for hub bonding consistency (do not allow extra bonds in hubs)
+                if (valid && std::find(hubs.begin(), hubs.end(), nextQueryNode) != hubs.end()) {
+                    // If the query node is a hub, ensure that the candidate node has the same number of bonds
+                    // and that no extra bonds are added that aren't part of the substructure
+                    if (edges.at(candidate).size() != query.edges.at(nextQueryNode).size()) {
+                        valid = false;
+                    } else {
+                        // Ensure that the bonds are consistent with the hub
+                        for (NodeIDType queryHubNeighbor : query.edges.at(nextQueryNode)) {
+                            bool foundMatchingBond = false;
+                            for (NodeIDType graphHubNeighbor : edges.at(candidate)) {
+                                if (currentMapping.count(queryHubNeighbor) > 0 &&
+                                    currentMapping.at(queryHubNeighbor) == graphHubNeighbor) {
+                                    foundMatchingBond = true;
+                                    break;
+                                }
+                            }
+                            if (!foundMatchingBond) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!valid) continue;
+
+                // Temporarily map the query node to the candidate
+                currentMapping[nextQueryNode] = candidate;
+                usedNodes.insert(candidate);
+
+                // Recurse
+                backtrack(currentMapping, usedNodes);
+
+                // Backtrack
+                currentMapping.erase(nextQueryNode);
+                usedNodes.erase(candidate);
+            }
+        };
+
+    // Step 3: Initialize and start the backtracking process
+    std::unordered_map<NodeIDType, NodeIDType> currentMapping; // Maps query node IDs to graph node IDs
+    std::unordered_set<NodeIDType> usedNodes; // Tracks already used graph nodes
+    backtrack(currentMapping, usedNodes);
+
+    return matches;
+}
+
+
+void AtomGraph::fromSmiles(const std::string& smiles) {
+    nodes.clear();
+    edges.clear();
+        
+    std::stack<NodeIDType> nodeStack; // Stack to handle branching
+    std::unordered_map<int, NodeIDType> ringClosures; // Map for ring closure indices
+    NodeIDType lastNode = -1;
+
+    for (size_t i = 0; i < smiles.size(); ++i) {
+        char c = smiles[i];
+
+        if (std::isalpha(c)) {
+            // Add a new node for the atom
+            addNode(std::string(1, c), 4); // Assuming valency 4 (e.g., Carbon)
+            NodeIDType currentNode = nodes.size() - 1;
+
+            // If there's a previous node, add an edge
+            if (lastNode != -1) {
+                addEdge(lastNode, currentNode);
+            }
+
+            lastNode = currentNode;
+            nodeStack.push(currentNode);
+        } else if (c == '(') {
+            // Start a branch, keep the last node on the stack
+            nodeStack.push(-1); // Marker for a branch point
+        } else if (c == ')') {
+            // End a branch, pop until a valid node is found
+            while (!nodeStack.empty() && nodeStack.top() == -1) {
+                nodeStack.pop();
+            }
+            if (!nodeStack.empty()) {
+                lastNode = nodeStack.top();
+            }
+        } else if (std::isdigit(c)) {
+            // Handle ring closure
+            int ringIndex = c - '0';
+            if (ringClosures.count(ringIndex)) {
+                // Connect the current node to the ring closure
+                addEdge(lastNode, ringClosures[ringIndex]);
+                ringClosures.erase(ringIndex);
+            } else {
+                // Store the current node as the ring closure point
+                ringClosures[ringIndex] = lastNode;
+            }
+        }
+    }
 }
 
 int AtomGraph::getFreeValency(NodeIDType nodeID) const {

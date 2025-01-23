@@ -56,6 +56,7 @@ public:
     std::unordered_map<NodeIDType, Node> nodes; ///< Map of node IDs to their respective nodes.
     std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> edges; ///< Map of node IDs to sets of connected node IDs.
 
+
     AtomGraph();
     AtomGraph(const AtomGraph& other);
     AtomGraph& operator=(const AtomGraph& other);
@@ -67,9 +68,10 @@ public:
     std::string printGraph() const;
     std::vector<std::vector<int>> Aut() const; // Returns the automorphism group of the graph
     void toNautyFormat(int *n, int *m, int *adj) const;
+    void fromSmiles(const std::string& smiles);
+    std::vector<std::vector<NodeIDType>> substructureSearch(const AtomGraph& query, const std::vector<int> hubs) const;
 
 private:
-    // Helper methods or additional private members can be declared here if needed
 };
 
 class GroupGraph {

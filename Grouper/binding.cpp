@@ -70,6 +70,8 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("add_edge", &AtomGraph::addEdge,
              py::arg("src"),
              py::arg("dst"))
+        .def("from_smiles", &AtomGraph::fromSmiles)
+        .def("substructure_search", &AtomGraph::substructureSearch)
         .def("free_valency", &AtomGraph::getFreeValency)
         .def("__str__", &AtomGraph::printGraph)
         .def("__eq__", &AtomGraph::operator==);

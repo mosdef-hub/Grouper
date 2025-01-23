@@ -156,3 +156,20 @@ class TestGroupGraph(BaseTest):
         out = fragment("CCC(C)NCCNC", node_defs)
 
         assert out == truth
+
+
+    def test_other_edge_cases(self):
+        node1 = Node("1methyl", "[C;X1]", [0])
+        node2 = Node("2methyl", "[C;X2]", [0,0])
+
+        truth = GroupGraph()
+        truth.add_node("1methyl", "[C;X1]", [0])
+        truth.add_node("1methyl", "[C;X1]", [0])
+        truth.add_node('2methyl', '[C;X2]', [0, 0])
+        truth.add_edge((0, 0), (2, 0))
+        truth.add_edge((1, 0), (2, 1))
+
+        node_defs = {node2, node1} # {node2}
+        out = fragment("CCC", node_defs)
+
+        assert out == truth
