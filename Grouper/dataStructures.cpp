@@ -119,10 +119,10 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
 
     // Convert AtomGraph to nauty graph for g1
     EMPTYGRAPH(g1.data(), m, n);
-    for (const auto& id_node : atomGraph1->edges) {
-        if (!id_node.second.empty()) {
-            for (const auto& dest : id_node.second) {
-                int from = id_node.first;
+    for (const auto& [id, dst_order] : atomGraph1->edges) {
+        if (!dst_order.empty()) {
+            for (const auto& [dest,order] : dst_order) {
+                int from = id;
                 int to = dest;
                 ADDONEEDGE(g1.data(), from, to, m);
             }
@@ -131,10 +131,10 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
 
     // Convert AtomGraph to nauty graph for g2
     EMPTYGRAPH(g2.data(), m, n);
-    for (const auto& id_node : atomGraph2->edges) {
-        if (!id_node.second.empty()) {
-            for (const auto& dest : id_node.second) {
-                int from = id_node.first;
+    for (const auto& [id, dst_order] : atomGraph2->edges) {
+        if (!dst_order.empty()) {
+            for (const auto& [dest,order] : dst_order) {
+                int from = id;
                 int to = dest;
                 ADDONEEDGE(g2.data(), from, to, m);
             }
@@ -637,82 +637,83 @@ AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
 }
 
 bool AtomGraph::operator==(const AtomGraph& other) const {
-    // Check if both graphs have the same number of nodes and edges
-    if (nodes.size() != other.nodes.size() || edges.size() != other.edges.size()) {
+    // Check if the number of nodes and edges are the same
+    if (this->nodes.size() != other.nodes.size()) {
+        return false;
+    }
+    int edgeCount1 = 0;
+    int edgeCount2 = 0;
+    for (const auto& node : this->edges) {
+        edgeCount1 += node.second.size();
+    }
+    for (const auto& node : other.edges) {
+        edgeCount2 += node.second.size();
+    }
+    if (edgeCount1 != edgeCount2) {
         return false;
     }
 
-    // Create adjacency lists for comparison using unordered_map and unordered_set
-    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> adjacency_list_1;
-    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> adjacency_list_2;
+    // Convert AtomGraph to nauty graph
+    int n = this->nodes.size(); // Assuming the number of nodes is the same for both graphs
+    int m = SETWORDSNEEDED(n);
 
-    for (const auto& node : edges) {
-        adjacency_list_1[node.first] = node.second;
-    }
+    // Use std::vector instead of DYNALLSTAT and DYNALLOC
+    std::vector<setword> g1(m * n, 0); // Initialize graph 1
+    std::vector<setword> g2(m * n, 0); // Initialize graph 2
+    std::vector<int> lab1(n), ptn1(n), orbits1(n); // Label, partition, and orbits for graph 1
+    std::vector<int> lab2(n), ptn2(n), orbits2(n); // Label, partition, and orbits for graph 2
+    std::vector<setword> canong1(m * n, 0); // Canonical form for graph 1
+    std::vector<setword> canong2(m * n, 0); // Canonical form for graph 2
+    setword workspace[160]; // Workspace for nauty
 
-    for (const auto& node : other.edges) {
-        adjacency_list_2[node.first] = node.second;
-    }
+    // Initialize nauty structures
+    static DEFAULTOPTIONS_GRAPH(options);
+    statsblk stats;
 
-    // Create a vector of node IDs
-    std::vector<NodeIDType> nodes_1;
-    std::vector<NodeIDType> nodes_2;
-
-    for (const auto& node : nodes) {
-        nodes_1.push_back(node.first);
-    }
-
-    for (const auto& node : other.nodes) {
-        nodes_2.push_back(node.first);
-    }
-
-    // Try all permutations of node mappings
-    std::sort(nodes_1.begin(), nodes_1.end());
-    std::sort(nodes_2.begin(), nodes_2.end());
-
-    do {
-        std::unordered_map<NodeIDType, NodeIDType> node_mapping;
-
-        for (size_t i = 0; i < nodes_1.size(); ++i) {
-            node_mapping[nodes_1[i]] = nodes_2[i];
-        }
-
-        bool is_match = true;
-
-        for (const auto& entry : adjacency_list_1) {
-            NodeIDType node_id_1 = entry.first;
-            const auto& neighbors_1 = entry.second;
-
-            NodeIDType node_id_2 = node_mapping[node_id_1];
-            const auto& neighbors_2 = adjacency_list_2[node_id_2];
-
-            std::unordered_set<NodeIDType> mapped_neighbors_1;
-            for (NodeIDType neighbor : neighbors_1) {
-                mapped_neighbors_1.insert(node_mapping[neighbor]);
-            }
-
-            if (mapped_neighbors_1 != neighbors_2) {
-                is_match = false;
-                break;
+    // Convert AtomGraph to nauty graph for g1
+    EMPTYGRAPH(g1.data(), m, n);
+    for (const auto& [id, dst_order] : this->edges) {
+        if (!dst_order.empty()) {
+            for (const auto& [dest,order] : dst_order) {
+                int from = id;
+                int to = dest;
+                ADDONEEDGE(g1.data(), from, to, m);
             }
         }
+    }
 
-        if (is_match) {
-            return true;
+    // Convert AtomGraph to nauty graph for g2
+    EMPTYGRAPH(g2.data(), m, n);
+    for (const auto& [id, dst_order] : other.edges) {
+        if (!dst_order.empty()) {
+            for (const auto& [dest,order] : dst_order) {
+                int from = id;
+                int to = dest;
+                ADDONEEDGE(g2.data(), from, to, m);
+            }
         }
+    }
 
-    } while (std::next_permutation(nodes_2.begin(), nodes_2.end()));
+    // Call nauty to canonicalize the graphs
+    options.getcanon = TRUE;
+    nauty(g1.data(), lab1.data(), ptn1.data(), nullptr, orbits1.data(), &options, &stats, workspace, 160, m, n, canong1.data());
+    nauty(g2.data(), lab2.data(), ptn2.data(), nullptr, orbits2.data(), &options, &stats, workspace, 160, m, n, canong2.data());
 
-    return false;
+    // Compare the canonical forms to determine isomorphism
+    if (memcmp(canong1.data(), canong2.data(), sizeof(setword) * m * n) != 0) {
+        return false;
+    }
+
+    return true;
 }
 
 void AtomGraph::addNode(const std::string& type, const unsigned int valency) {
     int id = nodes.size();
-    nodes[id] = Node(id, type, valency);
+    nodes[id] = Atom(id, type, valency);
 
 }
 
-void AtomGraph::addEdge(NodeIDType src, NodeIDType dst) {
+void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
     if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end()) {
         throw std::invalid_argument("Node does not exist");
     }
@@ -725,14 +726,27 @@ void AtomGraph::addEdge(NodeIDType src, NodeIDType dst) {
     if (getFreeValency(dst) <= 0) {
         throw std::invalid_argument("Adding this edge would exceed the valency for the destination node");
     }
-    if (edges[src].find(dst) != edges[src].end()) {
+    if (edges[src].find(std::make_pair(dst, order)) != edges[src].end() || edges[dst].find(std::make_pair(src, order)) != edges[dst].end()) {
         throw std::invalid_argument("Edge already exists");
     }
-    edges[src].insert(dst);
+    if (order > 4 || order < 1) {
+        throw std::invalid_argument("Invalid bond order");
+    }
+    edges[src].insert(std::make_pair(dst, order));
+    edges[dst].insert(std::make_pair(src, order));
 }
 
-std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::substructureSearch(const AtomGraph& query, const std::vector<int> hubs) const {
+std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const {
     std::vector<std::vector<NodeIDType>> matches; // To store all matches
+    std::unordered_map<NodeIDType, int> queryHubCounts; // To store the number of hubs for each query node
+
+    // Step 0: Pre-process query hubs
+    for (const auto& node : query.nodes) {
+        queryHubCounts[node.first] = 0;
+    }
+    for (const auto& h : hubs) {
+        queryHubCounts[h]++;
+    }
 
     // Step 1: Pre-filter nodes in the graph based on query node attributes
     std::unordered_map<NodeIDType, std::vector<NodeIDType>> candidateNodes; // Maps query nodes to possible candidates in the main graph
@@ -748,12 +762,30 @@ std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::substructureSearch(co
         }
     }
 
-
     // Step 2: Backtracking function to explore mappings
     std::function<void(std::unordered_map<NodeIDType, NodeIDType>&, std::unordered_set<NodeIDType>&)> backtrack =
         [&](std::unordered_map<NodeIDType, NodeIDType>& currentMapping, std::unordered_set<NodeIDType>& usedNodes) {
-            // If all query nodes are mapped, we found a match
+            // Debug: Print the current mapping
+            std::cout << "Current Mapping: ";
+            for (const auto& mapping : currentMapping) {
+                std::cout << "(" << mapping.first << " -> " << mapping.second << ") ";
+            }
+            std::cout << std::endl;
+            // If all query nodes are mapped, validate hubs
             if (currentMapping.size() == query.nodes.size()) {
+                // Check hub criteria
+                for (size_t i = 0; i < hubs.size(); ++i) {
+                    NodeIDType queryHubNode = i;
+                    auto it = currentMapping.find(queryHubNode);
+                    if (it != currentMapping.end()) {
+                        NodeIDType graphHubNode = it->second;
+                        if (static_cast<int>(edges.at(graphHubNode).size()) != queryHubCounts[queryHubNode]) {
+                            return; // Hub criteria not met
+                        }
+                    }
+                }
+
+                // Add the valid match
                 std::vector<NodeIDType> match;
                 for (const auto& mapping : currentMapping) {
                     match.push_back(mapping.second);
@@ -777,45 +809,36 @@ std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::substructureSearch(co
             for (NodeIDType candidate : candidateNodes[nextQueryNode]) {
                 if (usedNodes.count(candidate)) continue;
 
-                // Check edge consistency and hub bonding
+                // Check edge consistency
                 bool valid = true;
-
-                // Check edges for regular node bonding
                 for (const auto& [queryNeighbor, graphNeighbor] : currentMapping) {
-                    if (query.edges.at(nextQueryNode).count(queryNeighbor) > 0) {
-                        if (edges.at(candidate).count(graphNeighbor) == 0) {
+                    // Check if the query graph has an edge between nextQueryNode and queryNeighbor
+                    bool edgeExists = false;
+                    for (const auto& edgePair : query.edges.at(nextQueryNode)) {
+                        if (edgePair.first == queryNeighbor) {
+                            edgeExists = true;
+                            break;
+                        }
+                    }
+
+                    if (edgeExists) {
+                        // Verify the corresponding edge exists in the main graph
+                        bool graphEdgeExists = false;
+                        for (const auto& edgePair : edges.at(candidate)) {
+                            if (edgePair.first == graphNeighbor) {
+                                graphEdgeExists = true;
+                                break;
+                            }
+                        }
+                        if (!graphEdgeExists) {
                             valid = false;
                             break;
                         }
                     }
                 }
 
-                // Check for hub bonding consistency (do not allow extra bonds in hubs)
-                if (valid && std::find(hubs.begin(), hubs.end(), nextQueryNode) != hubs.end()) {
-                    // If the query node is a hub, ensure that the candidate node has the same number of bonds
-                    // and that no extra bonds are added that aren't part of the substructure
-                    if (edges.at(candidate).size() != query.edges.at(nextQueryNode).size()) {
-                        valid = false;
-                    } else {
-                        // Ensure that the bonds are consistent with the hub
-                        for (NodeIDType queryHubNeighbor : query.edges.at(nextQueryNode)) {
-                            bool foundMatchingBond = false;
-                            for (NodeIDType graphHubNeighbor : edges.at(candidate)) {
-                                if (currentMapping.count(queryHubNeighbor) > 0 &&
-                                    currentMapping.at(queryHubNeighbor) == graphHubNeighbor) {
-                                    foundMatchingBond = true;
-                                    break;
-                                }
-                            }
-                            if (!foundMatchingBond) {
-                                valid = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-
                 if (!valid) continue;
+
 
                 // Temporarily map the query node to the candidate
                 currentMapping[nextQueryNode] = candidate;
@@ -837,7 +860,6 @@ std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::substructureSearch(co
 
     return matches;
 }
-
 
 void AtomGraph::fromSmiles(const std::string& smiles) {
     nodes.clear();
@@ -892,10 +914,17 @@ int AtomGraph::getFreeValency(NodeIDType nodeID) const {
     if (nodes.find(nodeID) == nodes.end()) {
         throw std::invalid_argument("Node does not exist");
     }
-    const Node& node = nodes.at(nodeID);
-    int occupied_electrons = edges.find(nodeID) != edges.end() ?  edges.at(nodeID).size() : 0;
-
-    return node.valency - occupied_electrons;
+    const Atom& node = nodes.at(nodeID);
+    if (edges.find(nodeID) == edges.end()) {
+        return node.valency;
+    }
+    else{
+        int occupied_electrons = 0;
+        for (const auto& edge : edges.at(nodeID)) {
+            occupied_electrons += std::get<1>(edge);
+        }
+        return node.valency - occupied_electrons;
+    }
 }
 
 std::string AtomGraph::printGraph() const {
@@ -906,8 +935,8 @@ std::string AtomGraph::printGraph() const {
     }
     output << "Edges:\n";
     for (const auto& edge : edges) {
-        for (const auto& dst : edge.second) {
-            output << "    Edge: " << edge.first << " -> " << dst << "\n";
+        for (const auto& [dst, order] : edge.second) {
+            output << "    Edge: " << edge.first << " -> " << dst <<"(" <<order<<")"<<"\n";
         }
     }
     return output.str();

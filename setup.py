@@ -7,7 +7,7 @@ import pybind11
 condabase = os.environ['CONDA_PREFIX']
 
 # Platform-specific compiler and linker flags
-platform_compile_args = ['-std=c++17', '-fPIC', '-Xpreprocessor', '-fopenmp']
+platform_compile_args = ['-std=c++17', '-fPIC', '-Xpreprocessor', '-fopenmp', '-g', '-O3']
 platform_link_args = []
 if sys.platform == 'darwin':  # macOS
     platform_compile_args += ['-arch', 'arm64']  # Ensure architecture compatibility
