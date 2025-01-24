@@ -159,13 +159,13 @@ class TestGroupGraph(BaseTest):
 
 
     def test_other_edge_cases(self):
-        node1 = Node("1methyl", "[C;X1]", [0])
-        node2 = Node("2methyl", "[C;X2]", [0,0])
+        node1 = Node("1methyl", "[CH3;X4]", [0])
+        node2 = Node("2methyl", "[CH2;X4]", [0,0])
 
         truth = GroupGraph()
-        truth.add_node("1methyl", "[C;X1]", [0])
-        truth.add_node("1methyl", "[C;X1]", [0])
-        truth.add_node('2methyl', '[C;X2]', [0, 0])
+        truth.add_node("1methyl", "[CH3;X4]", [0])
+        truth.add_node("1methyl", "[CH3;X4]", [0])
+        truth.add_node('2methyl', '[CH2;X4]', [0, 0])
         truth.add_edge((0, 0), (2, 0))
         truth.add_edge((1, 0), (2, 1))
 
@@ -173,3 +173,19 @@ class TestGroupGraph(BaseTest):
         out = fragment("CCC", node_defs)
 
         assert out == truth
+
+        truth = GroupGraph()
+        truth.add_node("carbon", "[C;X4]", [0,0,0,0])
+        truth.add_node("ether", "[CH3;X4][OH;X2]", [0, 1])
+        truth.add_node("ether", "[CH3;X4][OH;X2]", [0, 1])
+        truth.add_edge((0, 0), (2, 0))
+        truth.add_edge((2, 1), (1, 0))
+
+        node1 = Node("4methyl", "[C;X4]", [0,0,0,0])
+        node2 = Node("methanol", "[CH3;X4][O;X1]", [0]) # methanol
+        node3 = Node("ether", "[CH2][O]", [0,1]) # ether
+
+        node_defs = {node3, node2, node1} # {node2}
+        graph = fragment("CCOCO", node_defs)
+
+        assert graph == truth
