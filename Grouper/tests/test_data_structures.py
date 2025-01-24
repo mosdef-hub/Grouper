@@ -203,6 +203,55 @@ class TestGroupGraph(BaseTest):
         # Benchmark the add_node method
         benchmark(benchmark_add_node)
 
+    def test_substructure_search(self):
+        from Grouper import AtomGraph
+        graph = AtomGraph()
+        graph.add_node("C", 4)
+        graph.add_node("C", 4)
+        graph.add_node("C", 4)
+        graph.add_edge(0, 1)
+        graph.add_edge(1, 2)
+        sub = AtomGraph()
+        sub.add_node("C", 4)
+        matches = graph.substructure_search(sub, [0])
+        set_matches = set(tuple(m) for m in matches)
+        assert set_matches == {(0,), (2,)}
+
+        matches = graph.substructure_search(sub, [0,0])
+        set_matches = set(tuple(m) for m in matches)
+        assert set_matches == {(1,)}
+
+        matches = graph.substructure_search(sub, [0,0,0])
+        set_matches = set(tuple(m) for m in matches)
+        assert set_matches == set()
+
+        graph = AtomGraph() # "CCOCO"
+        graph.add_node("C", 4)
+        graph.add_node("C", 4)
+        graph.add_node("O", 2)
+        graph.add_node("C", 4)
+        graph.add_node("O", 2)
+        graph.add_edge(0, 1)
+        graph.add_edge(1, 2)
+        graph.add_edge(2, 3)
+        graph.add_edge(3, 4)
+        methanol = AtomGraph()
+        methanol.add_node("C", 4)
+        methanol.add_node("O", 2)
+        methanol.add_edge(0, 1)
+        matches = graph.substructure_search(methanol, [0])
+        set_matches = set(tuple(m) for m in matches)
+        assert set_matches == {(3,4)}
+        ether = AtomGraph()
+        ether.add_node("C", 4)
+        ether.add_node("O", 2)
+        ether.add_edge(0, 1)
+        matches = graph.substructure_search(ether, [0,1])
+        set_matches = set(tuple(m) for m in matches)
+
+
+
+
     # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()
     #     for i in range(100):
@@ -213,13 +262,3 @@ class TestGroupGraph(BaseTest):
 
     #     # Benchmark the add_edge method
     #     benchmark(benchmark_add_edge)
-
-    # @pytest.mark.skipif(not has_torch, reason="torch package not installed")
-    # def test_group_graph_to_pyG(self, basic_graph):
-    #     import torch
-    #     group_featurizer = lambda node: torch.tensor([1, 0])
-
-    #     data = basic_graph.to_PyG_Data(group_featurizer)
-    #     assert torch.equal(data.x, torch.tensor([ [1,0], [1,0] ], dtype=torch.float32)) # node features should just be identity
-    #     assert torch.equal(data.edge_index, torch.tensor([ [0], [1] ], dtype=torch.float32)) # graph is directed, node1 -> node2
-    #     assert torch.equal(data.edge_attr, torch.tensor([ [1.,0.,0.,1.] ], dtype=torch.float32)) # edge features are one-hot encoded port

@@ -5,6 +5,8 @@
 #include <sstream>
 #include <algorithm>
 #include <cstring>
+#include <queue>
+#include <stack>
 
 #include "dataStructures.hpp"
 #include "autUtils.hpp"
@@ -45,8 +47,6 @@ void initializeNautyStructures(int n) {
     // Clear the graph
     std::fill(g.begin(), g.end(), 0);
 }
-
-
 
 // Core methods
 GroupGraph::GroupGraph()
@@ -119,10 +119,10 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
 
     // Convert AtomGraph to nauty graph for g1
     EMPTYGRAPH(g1.data(), m, n);
-    for (const auto& id_node : atomGraph1->edges) {
-        if (!id_node.second.empty()) {
-            for (const auto& dest : id_node.second) {
-                int from = id_node.first;
+    for (const auto& [id, dst_order] : atomGraph1->edges) {
+        if (!dst_order.empty()) {
+            for (const auto& [dest,order] : dst_order) {
+                int from = id;
                 int to = dest;
                 ADDONEEDGE(g1.data(), from, to, m);
             }
@@ -131,10 +131,10 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
 
     // Convert AtomGraph to nauty graph for g2
     EMPTYGRAPH(g2.data(), m, n);
-    for (const auto& id_node : atomGraph2->edges) {
-        if (!id_node.second.empty()) {
-            for (const auto& dest : id_node.second) {
-                int from = id_node.first;
+    for (const auto& [id, dst_order] : atomGraph2->edges) {
+        if (!dst_order.empty()) {
+            for (const auto& [dest,order] : dst_order) {
+                int from = id;
                 int to = dest;
                 ADDONEEDGE(g2.data(), from, to, m);
             }
@@ -336,62 +336,6 @@ int* GroupGraph::computeEdgeOrbits(
 
     return result;
 }
-
-// std::vector<std::vector<int>> GroupGraph::nodeAut() const {
-//     int n = nodes.size();  // Number of vertices
-//     int m = SETWORDSNEEDED(n);  // Size of set words for NAUTY
-
-//     // Dynamically allocate NAUTY structures
-//     DYNALLSTAT(graph, g, g_sz);
-//     DYNALLOC2(graph, g, g_sz, n, m, "malloc");
-
-//     // Initialize the NAUTY graph to be empty
-//     EMPTYGRAPH(g, m, n);
-
-//     // Convert the adjacency matrix to the NAUTY graph representation
-//     for (const auto& edge : edges) {
-//         int u = std::get<0>(edge);
-//         int v = std::get<2>(edge);
-//         ADDELEMENT(GRAPHROW(g, u, m), v);
-//         ADDELEMENT(GRAPHROW(g, v, m), u);
-//     }
-
-//     // NAUTY variables
-//     int lab[MAXN], ptn[MAXN], orbits[MAXN];
-//     optionblk options_struct;  // Define options structure
-//     statsblk stats;
-
-//     // Initialize options manually
-//     options_struct.getcanon = FALSE;  // We only need automorphisms, not a canonical form
-//     options_struct.defaultptn = TRUE;
-
-//     // Workspace array for nauty
-//     static set workspace[160 * MAXN];
-
-//     // Active set (can be nullptr if not needed)
-//     set *active = nullptr;
-
-//     // Canonical form (not needed, so we set it to nullptr)
-//     graph *canong = nullptr;
-
-//     // Call NAUTY to compute automorphisms
-//     nauty(g, lab, ptn, active, orbits, &options_struct, &stats, workspace, 160 * MAXN, m, n, canong);
-
-//     // Collect results
-//     std::vector<std::vector<int>> automorphisms;
-//     for (int i = 0; i < stats.numorbits; ++i) {
-//         std::vector<int> perm(n);
-//         for (int j = 0; j < n; ++j) {
-//             perm[j] = lab[j];
-//         }
-//         automorphisms.push_back(perm);
-//     }
-
-//     // Free dynamically allocated memory
-//     DYNFREE(g, g_sz);
-
-//     return automorphisms;
-// }
 
 // Conversion methods
 std::string GroupGraph::printGraph() const {
@@ -693,82 +637,83 @@ AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
 }
 
 bool AtomGraph::operator==(const AtomGraph& other) const {
-    // Check if both graphs have the same number of nodes and edges
-    if (nodes.size() != other.nodes.size() || edges.size() != other.edges.size()) {
+    // Check if the number of nodes and edges are the same
+    if (this->nodes.size() != other.nodes.size()) {
+        return false;
+    }
+    int edgeCount1 = 0;
+    int edgeCount2 = 0;
+    for (const auto& node : this->edges) {
+        edgeCount1 += node.second.size();
+    }
+    for (const auto& node : other.edges) {
+        edgeCount2 += node.second.size();
+    }
+    if (edgeCount1 != edgeCount2) {
         return false;
     }
 
-    // Create adjacency lists for comparison using unordered_map and unordered_set
-    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> adjacency_list_1;
-    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> adjacency_list_2;
+    // Convert AtomGraph to nauty graph
+    int n = this->nodes.size(); // Assuming the number of nodes is the same for both graphs
+    int m = SETWORDSNEEDED(n);
 
-    for (const auto& node : edges) {
-        adjacency_list_1[node.first] = node.second;
-    }
+    // Use std::vector instead of DYNALLSTAT and DYNALLOC
+    std::vector<setword> g1(m * n, 0); // Initialize graph 1
+    std::vector<setword> g2(m * n, 0); // Initialize graph 2
+    std::vector<int> lab1(n), ptn1(n), orbits1(n); // Label, partition, and orbits for graph 1
+    std::vector<int> lab2(n), ptn2(n), orbits2(n); // Label, partition, and orbits for graph 2
+    std::vector<setword> canong1(m * n, 0); // Canonical form for graph 1
+    std::vector<setword> canong2(m * n, 0); // Canonical form for graph 2
+    setword workspace[160]; // Workspace for nauty
 
-    for (const auto& node : other.edges) {
-        adjacency_list_2[node.first] = node.second;
-    }
+    // Initialize nauty structures
+    static DEFAULTOPTIONS_GRAPH(options);
+    statsblk stats;
 
-    // Create a vector of node IDs
-    std::vector<NodeIDType> nodes_1;
-    std::vector<NodeIDType> nodes_2;
-
-    for (const auto& node : nodes) {
-        nodes_1.push_back(node.first);
-    }
-
-    for (const auto& node : other.nodes) {
-        nodes_2.push_back(node.first);
-    }
-
-    // Try all permutations of node mappings
-    std::sort(nodes_1.begin(), nodes_1.end());
-    std::sort(nodes_2.begin(), nodes_2.end());
-
-    do {
-        std::unordered_map<NodeIDType, NodeIDType> node_mapping;
-
-        for (size_t i = 0; i < nodes_1.size(); ++i) {
-            node_mapping[nodes_1[i]] = nodes_2[i];
-        }
-
-        bool is_match = true;
-
-        for (const auto& entry : adjacency_list_1) {
-            NodeIDType node_id_1 = entry.first;
-            const auto& neighbors_1 = entry.second;
-
-            NodeIDType node_id_2 = node_mapping[node_id_1];
-            const auto& neighbors_2 = adjacency_list_2[node_id_2];
-
-            std::unordered_set<NodeIDType> mapped_neighbors_1;
-            for (NodeIDType neighbor : neighbors_1) {
-                mapped_neighbors_1.insert(node_mapping[neighbor]);
-            }
-
-            if (mapped_neighbors_1 != neighbors_2) {
-                is_match = false;
-                break;
+    // Convert AtomGraph to nauty graph for g1
+    EMPTYGRAPH(g1.data(), m, n);
+    for (const auto& [id, dst_order] : this->edges) {
+        if (!dst_order.empty()) {
+            for (const auto& [dest,order] : dst_order) {
+                int from = id;
+                int to = dest;
+                ADDONEEDGE(g1.data(), from, to, m);
             }
         }
+    }
 
-        if (is_match) {
-            return true;
+    // Convert AtomGraph to nauty graph for g2
+    EMPTYGRAPH(g2.data(), m, n);
+    for (const auto& [id, dst_order] : other.edges) {
+        if (!dst_order.empty()) {
+            for (const auto& [dest,order] : dst_order) {
+                int from = id;
+                int to = dest;
+                ADDONEEDGE(g2.data(), from, to, m);
+            }
         }
+    }
 
-    } while (std::next_permutation(nodes_2.begin(), nodes_2.end()));
+    // Call nauty to canonicalize the graphs
+    options.getcanon = TRUE;
+    nauty(g1.data(), lab1.data(), ptn1.data(), nullptr, orbits1.data(), &options, &stats, workspace, 160, m, n, canong1.data());
+    nauty(g2.data(), lab2.data(), ptn2.data(), nullptr, orbits2.data(), &options, &stats, workspace, 160, m, n, canong2.data());
 
-    return false;
+    // Compare the canonical forms to determine isomorphism
+    if (memcmp(canong1.data(), canong2.data(), sizeof(setword) * m * n) != 0) {
+        return false;
+    }
+
+    return true;
 }
 
 void AtomGraph::addNode(const std::string& type, const unsigned int valency) {
     int id = nodes.size();
-    nodes[id] = Node(id, type, valency);
+    nodes[id] = Atom(id, type, valency);
 
 }
 
-void AtomGraph::addEdge(NodeIDType src, NodeIDType dst) {
+void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
     if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end()) {
         throw std::invalid_argument("Node does not exist");
     }
@@ -781,20 +726,205 @@ void AtomGraph::addEdge(NodeIDType src, NodeIDType dst) {
     if (getFreeValency(dst) <= 0) {
         throw std::invalid_argument("Adding this edge would exceed the valency for the destination node");
     }
-    if (edges[src].find(dst) != edges[src].end()) {
+    if (edges[src].find(std::make_pair(dst, order)) != edges[src].end() || edges[dst].find(std::make_pair(src, order)) != edges[dst].end()) {
         throw std::invalid_argument("Edge already exists");
     }
-    edges[src].insert(dst);
+    if (order > 4 || order < 1) {
+        throw std::invalid_argument("Invalid bond order");
+    }
+    edges[src].insert(std::make_pair(dst, order));
+    edges[dst].insert(std::make_pair(src, order));
+}
+
+std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const {
+    std::vector<std::vector<NodeIDType>> matches; // To store all matches
+    std::unordered_map<NodeIDType, int> queryHubCounts; // To store the number of hubs for each query node
+
+    // Step 0: Pre-process query hubs
+    for (const auto& node : query.nodes) {
+        queryHubCounts[node.first] = 0;
+    }
+    for (const auto& h : hubs) {
+        queryHubCounts[h]++;
+    }
+
+    // Step 1: Pre-filter nodes in the graph based on query node attributes
+    std::unordered_map<NodeIDType, std::vector<NodeIDType>> candidateNodes; // Maps query nodes to possible candidates in the main graph
+    for (const auto& queryNodePair : query.nodes) {
+        const auto& queryNode = queryNodePair.second;
+        for (const auto& graphNodePair : nodes) {
+            const auto& graphNode = graphNodePair.second;
+
+            // Match based on node type and valency
+            if (queryNode.ntype == graphNode.ntype && queryNode.valency <= graphNode.valency) {
+                candidateNodes[queryNode.id].push_back(graphNode.id);
+            }
+        }
+    }
+
+    // Step 2: Backtracking function to explore mappings
+    std::function<void(std::unordered_map<NodeIDType, NodeIDType>&, std::unordered_set<NodeIDType>&)> backtrack =
+        [&](std::unordered_map<NodeIDType, NodeIDType>& currentMapping, std::unordered_set<NodeIDType>& usedNodes) {
+            // Debug: Print the current mapping
+            std::cout << "Current Mapping: ";
+            for (const auto& mapping : currentMapping) {
+                std::cout << "(" << mapping.first << " -> " << mapping.second << ") ";
+            }
+            std::cout << std::endl;
+            // If all query nodes are mapped, validate hubs
+            if (currentMapping.size() == query.nodes.size()) {
+                // Check hub criteria
+                for (size_t i = 0; i < hubs.size(); ++i) {
+                    NodeIDType queryHubNode = i;
+                    auto it = currentMapping.find(queryHubNode);
+                    if (it != currentMapping.end()) {
+                        NodeIDType graphHubNode = it->second;
+                        if (static_cast<int>(edges.at(graphHubNode).size()) != queryHubCounts[queryHubNode]) {
+                            return; // Hub criteria not met
+                        }
+                    }
+                }
+
+                // Add the valid match
+                std::vector<NodeIDType> match;
+                for (const auto& mapping : currentMapping) {
+                    match.push_back(mapping.second);
+                }
+                matches.push_back(match);
+                return;
+            }
+
+            // Select the next unmapped query node
+            NodeIDType nextQueryNode = -1;
+            for (const auto& queryNodePair : query.nodes) {
+                if (currentMapping.find(queryNodePair.first) == currentMapping.end()) {
+                    nextQueryNode = queryNodePair.first;
+                    break;
+                }
+            }
+
+            if (nextQueryNode == -1) return; // No unmapped node found (shouldn't happen)
+
+            // Try each candidate node for the selected query node
+            for (NodeIDType candidate : candidateNodes[nextQueryNode]) {
+                if (usedNodes.count(candidate)) continue;
+
+                // Check edge consistency
+                bool valid = true;
+                for (const auto& [queryNeighbor, graphNeighbor] : currentMapping) {
+                    // Check if the query graph has an edge between nextQueryNode and queryNeighbor
+                    bool edgeExists = false;
+                    for (const auto& edgePair : query.edges.at(nextQueryNode)) {
+                        if (edgePair.first == queryNeighbor) {
+                            edgeExists = true;
+                            break;
+                        }
+                    }
+
+                    if (edgeExists) {
+                        // Verify the corresponding edge exists in the main graph
+                        bool graphEdgeExists = false;
+                        for (const auto& edgePair : edges.at(candidate)) {
+                            if (edgePair.first == graphNeighbor) {
+                                graphEdgeExists = true;
+                                break;
+                            }
+                        }
+                        if (!graphEdgeExists) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (!valid) continue;
+
+
+                // Temporarily map the query node to the candidate
+                currentMapping[nextQueryNode] = candidate;
+                usedNodes.insert(candidate);
+
+                // Recurse
+                backtrack(currentMapping, usedNodes);
+
+                // Backtrack
+                currentMapping.erase(nextQueryNode);
+                usedNodes.erase(candidate);
+            }
+        };
+
+    // Step 3: Initialize and start the backtracking process
+    std::unordered_map<NodeIDType, NodeIDType> currentMapping; // Maps query node IDs to graph node IDs
+    std::unordered_set<NodeIDType> usedNodes; // Tracks already used graph nodes
+    backtrack(currentMapping, usedNodes);
+
+    return matches;
+}
+
+void AtomGraph::fromSmiles(const std::string& smiles) {
+    nodes.clear();
+    edges.clear();
+        
+    std::stack<NodeIDType> nodeStack; // Stack to handle branching
+    std::unordered_map<int, NodeIDType> ringClosures; // Map for ring closure indices
+    NodeIDType lastNode = -1;
+
+    for (size_t i = 0; i < smiles.size(); ++i) {
+        char c = smiles[i];
+
+        if (std::isalpha(c)) {
+            // Add a new node for the atom
+            addNode(std::string(1, c), 4); // Assuming valency 4 (e.g., Carbon)
+            NodeIDType currentNode = nodes.size() - 1;
+
+            // If there's a previous node, add an edge
+            if (lastNode != -1) {
+                addEdge(lastNode, currentNode);
+            }
+
+            lastNode = currentNode;
+            nodeStack.push(currentNode);
+        } else if (c == '(') {
+            // Start a branch, keep the last node on the stack
+            nodeStack.push(-1); // Marker for a branch point
+        } else if (c == ')') {
+            // End a branch, pop until a valid node is found
+            while (!nodeStack.empty() && nodeStack.top() == -1) {
+                nodeStack.pop();
+            }
+            if (!nodeStack.empty()) {
+                lastNode = nodeStack.top();
+            }
+        } else if (std::isdigit(c)) {
+            // Handle ring closure
+            int ringIndex = c - '0';
+            if (ringClosures.count(ringIndex)) {
+                // Connect the current node to the ring closure
+                addEdge(lastNode, ringClosures[ringIndex]);
+                ringClosures.erase(ringIndex);
+            } else {
+                // Store the current node as the ring closure point
+                ringClosures[ringIndex] = lastNode;
+            }
+        }
+    }
 }
 
 int AtomGraph::getFreeValency(NodeIDType nodeID) const {
     if (nodes.find(nodeID) == nodes.end()) {
         throw std::invalid_argument("Node does not exist");
     }
-    const Node& node = nodes.at(nodeID);
-    int occupied_electrons = edges.find(nodeID) != edges.end() ?  edges.at(nodeID).size() : 0;
-
-    return node.valency - occupied_electrons;
+    const Atom& node = nodes.at(nodeID);
+    if (edges.find(nodeID) == edges.end()) {
+        return node.valency;
+    }
+    else{
+        int occupied_electrons = 0;
+        for (const auto& edge : edges.at(nodeID)) {
+            occupied_electrons += std::get<1>(edge);
+        }
+        return node.valency - occupied_electrons;
+    }
 }
 
 std::string AtomGraph::printGraph() const {
@@ -805,8 +935,8 @@ std::string AtomGraph::printGraph() const {
     }
     output << "Edges:\n";
     for (const auto& edge : edges) {
-        for (const auto& dst : edge.second) {
-            output << "    Edge: " << edge.first << " -> " << dst << "\n";
+        for (const auto& [dst, order] : edge.second) {
+            output << "    Edge: " << edge.first << " -> " << dst <<"(" <<order<<")"<<"\n";
         }
     }
     return output.str();

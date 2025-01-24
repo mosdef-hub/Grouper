@@ -27,34 +27,42 @@ class AtomGraph {
 public:
     using NodeIDType = int;
 
-    struct Node {
+    struct Atom {
         NodeIDType id;
         std::string ntype;
         unsigned int valency;
 
         // Need to define comparison operators for Node to be used in unordered_map
-        bool operator==(const Node& other) const {
+        bool operator==(const Atom& other) const {
             return id == other.id && ntype == other.ntype && valency == other.valency;
         }
-        bool operator!=(const Node& other) const {
+        bool operator!=(const Atom& other) const {
             return !(*this == other);
         }
-        Node() : id(0), ntype(""), valency(0) {}
+        Atom() : id(0), ntype(""), valency(0) {}
 
-        Node(int id, const std::string& ntype, const unsigned int valency)
+        Atom(int id, const std::string& ntype, const unsigned int valency)
             : id(id), ntype(ntype), valency(valency) {}
 
     };
 
     // Custom hash function for the Node struct
     struct NodeHasher {
-        std::size_t operator()(const Node& node) const {
+        std::size_t operator()(const Atom& node) const {
             return std::hash<NodeIDType>()(node.id) ^ std::hash<std::string>()(node.ntype) ^ std::hash<unsigned int>()(node.valency);
         }
     };
 
-    std::unordered_map<NodeIDType, Node> nodes; ///< Map of node IDs to their respective nodes.
-    std::unordered_map<NodeIDType, std::unordered_set<NodeIDType>> edges; ///< Map of node IDs to sets of connected node IDs.
+    // Tuple hasher
+    struct PairHasher {
+        template <class T1, class T2>
+        std::size_t operator()(const std::pair<T1, T2>& t) const {
+            return std::hash<T1>{}(t.first) ^ std::hash<T2>{}(t.second);
+        }
+    };
+
+    std::unordered_map<NodeIDType, Atom> nodes; ///< Map of node IDs to their respective nodes.
+    std::unordered_map<NodeIDType, std::unordered_set<std::pair<NodeIDType, unsigned int>, PairHasher>> edges; ///< Map of node IDs to their respective neighbors.
 
     AtomGraph();
     AtomGraph(const AtomGraph& other);
@@ -62,14 +70,15 @@ public:
     bool operator==(const AtomGraph& other) const;
 
     void addNode(const std::string& ntype = "", unsigned int valency = 0);
-    void addEdge(NodeIDType src, NodeIDType dst);
+    void addEdge(NodeIDType src, NodeIDType dst, unsigned int order = 1);
     int getFreeValency(NodeIDType nid) const;
     std::string printGraph() const;
     std::vector<std::vector<int>> Aut() const; // Returns the automorphism group of the graph
     void toNautyFormat(int *n, int *m, int *adj) const;
+    void fromSmiles(const std::string& smiles);
+    std::vector<std::vector<AtomGraph::NodeIDType>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;
 
 private:
-    // Helper methods or additional private members can be declared here if needed
 };
 
 class GroupGraph {

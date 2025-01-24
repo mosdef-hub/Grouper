@@ -64,12 +64,17 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("__eq__", &GroupGraph::operator==);
     py::class_<AtomGraph>(m, "AtomGraph")
         .def(py::init<>())
+        .def_readwrite("nodes", &AtomGraph::nodes)
+        .def_readwrite("edges", &AtomGraph::edges)
         .def("add_node", &AtomGraph::addNode,
              py::arg("type"),
              py::arg("valency") = 0)
         .def("add_edge", &AtomGraph::addEdge,
              py::arg("src"),
-             py::arg("dst"))
+             py::arg("dst"),
+             py::arg("order") = 1)
+        .def("from_smiles", &AtomGraph::fromSmiles)
+        .def("substructure_search", &AtomGraph::substructureSearch)
         .def("free_valency", &AtomGraph::getFreeValency)
         .def("__str__", &AtomGraph::printGraph)
         .def("__eq__", &AtomGraph::operator==);
