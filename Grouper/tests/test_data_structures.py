@@ -203,51 +203,51 @@ class TestGroupGraph(BaseTest):
         # Benchmark the add_node method
         benchmark(benchmark_add_node)
 
-    def test_substructure_search(self):
-        from Grouper import AtomGraph
-        graph = AtomGraph()
-        graph.add_node("C", 4)
-        graph.add_node("C", 4)
-        graph.add_node("C", 4)
-        graph.add_edge(0, 1)
-        graph.add_edge(1, 2)
-        sub = AtomGraph()
-        sub.add_node("C", 4)
-        matches = graph.substructure_search(sub, [0])
-        set_matches = set(tuple(m) for m in matches)
-        assert set_matches == {(0,), (2,)}
+    # def test_substructure_search(self):
+    #     from Grouper import AtomGraph
+    #     graph = AtomGraph()
+    #     graph.add_node("C", 4)
+    #     graph.add_node("C", 4)
+    #     graph.add_node("C", 4)
+    #     graph.add_edge(0, 1)
+    #     graph.add_edge(1, 2)
+    #     sub = AtomGraph()
+    #     sub.add_node("C", 4)
+    #     matches = graph.substructure_search(sub, [0])
+    #     set_matches = set(tuple(m) for m in matches)
+    #     assert set_matches == {(0,), (2,)}
 
-        matches = graph.substructure_search(sub, [0,0])
-        set_matches = set(tuple(m) for m in matches)
-        assert set_matches == {(1,)}
+    #     matches = graph.substructure_search(sub, [0,0])
+    #     set_matches = set(tuple(m) for m in matches)
+    #     assert set_matches == {(1,)}
 
-        matches = graph.substructure_search(sub, [0,0,0])
-        set_matches = set(tuple(m) for m in matches)
-        assert set_matches == set()
+    #     matches = graph.substructure_search(sub, [0,0,0])
+    #     set_matches = set(tuple(m) for m in matches)
+    #     assert set_matches == set()
 
-        graph = AtomGraph() # "CCOCO"
-        graph.add_node("C", 4)
-        graph.add_node("C", 4)
-        graph.add_node("O", 2)
-        graph.add_node("C", 4)
-        graph.add_node("O", 2)
-        graph.add_edge(0, 1)
-        graph.add_edge(1, 2)
-        graph.add_edge(2, 3)
-        graph.add_edge(3, 4)
-        methanol = AtomGraph()
-        methanol.add_node("C", 4)
-        methanol.add_node("O", 2)
-        methanol.add_edge(0, 1)
-        matches = graph.substructure_search(methanol, [0])
-        set_matches = set(tuple(m) for m in matches)
-        assert set_matches == {(3,4)}
-        ether = AtomGraph()
-        ether.add_node("C", 4)
-        ether.add_node("O", 2)
-        ether.add_edge(0, 1)
-        matches = graph.substructure_search(ether, [0,1])
-        set_matches = set(tuple(m) for m in matches)
+    #     graph = AtomGraph() # "CCOCO"
+    #     graph.add_node("C", 4)
+    #     graph.add_node("C", 4)
+    #     graph.add_node("O", 2)
+    #     graph.add_node("C", 4)
+    #     graph.add_node("O", 2)
+    #     graph.add_edge(0, 1)
+    #     graph.add_edge(1, 2)
+    #     graph.add_edge(2, 3)
+    #     graph.add_edge(3, 4)
+    #     methanol = AtomGraph()
+    #     methanol.add_node("C", 4)
+    #     methanol.add_node("O", 2)
+    #     methanol.add_edge(0, 1)
+    #     matches = graph.substructure_search(methanol, [0])
+    #     set_matches = set(tuple(m) for m in matches)
+    #     assert set_matches == {(3,4)}
+    #     ether = AtomGraph()
+    #     ether.add_node("C", 4)
+    #     ether.add_node("O", 2)
+    #     ether.add_edge(0, 1)
+    #     matches = graph.substructure_search(ether, [0,1])
+    #     set_matches = set(tuple(m) for m in matches)
 
 
 

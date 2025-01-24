@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 from PIL import Image, ImageDraw, ImageFont
 from rdkit import Chem
@@ -10,7 +10,7 @@ from Grouper.libraries.Libraries import NodeTrace
 
 def visualize_node_trace(
     node_trace: NodeTrace,
-    text: Optional[str | bool] = "Matching Subgraph",
+    text: Optional[Union[str, bool]] = "Matching Subgraph",
     sanitize_smiles: bool = False,
     highlight_color: Tuple[float, float, float, float] = (1.0, 0.5, 0.5, 1.0),
     draw_options: dict = None,

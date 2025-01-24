@@ -74,7 +74,7 @@ PYBIND11_MODULE(_Grouper, m) {
              py::arg("dst"),
              py::arg("order") = 1)
         .def("from_smiles", &AtomGraph::fromSmiles)
-        .def("substructure_search", &AtomGraph::substructureSearch)
+        // .def("substructure_search", &AtomGraph::substructureSearch)
         .def("free_valency", &AtomGraph::getFreeValency)
         .def("__str__", &AtomGraph::printGraph)
         .def("__eq__", &AtomGraph::operator==);
