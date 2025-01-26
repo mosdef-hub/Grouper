@@ -73,10 +73,11 @@ public:
     void addEdge(NodeIDType src, NodeIDType dst, unsigned int order = 1);
     int getFreeValency(NodeIDType nid) const;
     std::string printGraph() const;
-    std::vector<std::vector<int>> Aut() const; // Returns the automorphism group of the graph
-    void toNautyFormat(int *n, int *m, int *adj) const;
+    std::vector<std::vector<NodeIDType>> nodeAut() const;
+    std::vector<NodeIDType> nodeOrbits() const;
+    std::vector<setword> toNautyGraph() const;
     void fromSmiles(const std::string& smiles);
-    std::vector<std::vector<AtomGraph::NodeIDType>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;
+    std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;
 
 private:
 };
@@ -94,11 +95,14 @@ public:
         std::vector<NodeIDType> hubs;
         std::vector<PortType> ports;
         bool operator==(const Node& other) const;
+        bool operator!=(const Node& other) const;
         Node() : ntype(""), smarts(""), hubs(), ports() {}
         Node(const std::string& ntype, const std::string& smarts, const std::vector<int>& hubs)
             : ntype(ntype), smarts(smarts), hubs(hubs), ports(hubs.size()) {
             std::iota(ports.begin(), ports.end(), 0);
         }
+
+        std::vector<int> hubOrbits() const;
 
     };
     std::unordered_map<NodeIDType, Node> nodes; ///< Map of node IDs to their respective nodes.

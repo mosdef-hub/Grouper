@@ -8,11 +8,11 @@ from Grouper.tests.base_test import BaseTest
 class TestGroupGraph(BaseTest):
     def test_fragment(self):
         node_defs = set()
-        node_defs.add(Node("hydroxyl", "[OX2H]", [0]))
+        node_defs.add(Node("hydroxyl", "O", [0]))
         node_defs.add(Node("alkene", "C=C", [0, 0, 1, 1]))
 
         truth = GroupGraph()
-        truth.add_node("hydroxyl", "[OH]", [0])
+        truth.add_node("hydroxyl", "O", [0])
         truth.add_node("alkene", "C=C", [0, 0, 1, 1])
         truth.add_edge((0, 0), (1, 0))
 
@@ -24,15 +24,15 @@ class TestGroupGraph(BaseTest):
 
     def test_fragment_2(self):
         node_defs = set()
-        node_defs.add(Node("amine", "[NH2]", [0, 0]))
+        node_defs.add(Node("amine", "N", [0, 0]))
         node_defs.add(Node("alkene", "C=C", [0, 0, 1, 1]))
 
         truth = GroupGraph()
-        truth.add_node("amine", "[NH2]", [0, 0])
+        truth.add_node("amine", "N", [0, 0])
         truth.add_node("alkene", "C=C", [0, 0, 1, 1])
         truth.add_edge((0, 0), (1, 0))
 
-        smiles = "C=C[NH2]"
+        smiles = "C=CN"
 
         out = fragment(smiles, node_defs)
 
@@ -59,18 +59,18 @@ class TestGroupGraph(BaseTest):
 
     def test_multiple_bonds(self):
         node_defs = set()
-        node_defs.add(Node("amine", "[NX3]", [0, 0]))
+        node_defs.add(Node("amine", "N", [0, 0]))
         node_defs.add(Node("alkene", "C=C", [0, 0, 1, 1]))
-        node_defs.add(Node('oxygen', '[O]', [0, 0]))
+        node_defs.add(Node('oxygen', 'O', [0, 0]))
 
         truth = GroupGraph()
-        truth.add_node("oxygen", "[O]", [0, 0])
+        truth.add_node("oxygen", "O", [0, 0])
         truth.add_node("alkene", "C=C", [0, 0, 1, 1])
-        truth.add_node("amine", "[NX3]", [0])
+        truth.add_node("amine", "N", [0])
         truth.add_edge((0, 0), (1, 0))
         truth.add_edge((0, 1), (2, 0))
 
-        smiles = "C=CO[NH2]"
+        smiles = "C=CON"
 
         out = fragment(smiles, node_defs)
 
@@ -78,16 +78,16 @@ class TestGroupGraph(BaseTest):
 
     def test_triple_node(self):
         node_defs = set()
-        node_defs.add(Node("oxyl", "[O]", [0, 0]))  # oxyl group
-        node_defs.add(Node("ester", "[CX3](=O)[OX2H0]", [0, 2]))  # Ester group
-        node_defs.add(Node("amine", "[NX3]", [0, 0, 0]))  # Amine group
-        node_defs.add(Node("alkene_secondary_amine", "[CX4]([NX3]([CX1]))", [0, 0]))
-        node_defs.add(Node("alkene", "[CX4]", [0, 0, 0]))
+        node_defs.add(Node("oxyl", "O", [0, 0]))  # oxyl group
+        node_defs.add(Node("ester", "C(=O)(O)", [0, 2]))  # Ester group
+        node_defs.add(Node("amine", "N", [0, 0, 0]))  # Amine group
+        node_defs.add(Node("alkene_secondary_amine", "CNC", [0, 0]))
+        node_defs.add(Node("alkene", "C", [0, 0, 0]))
 
         truth = GroupGraph()
-        truth.add_node("ester", "[CX3](=O)[OX2H0]", [0, 2])
-        truth.add_node("oxyl", "[O]", [0, 0])
-        truth.add_node("ester", "[CX3](=O)[OX2H0]", [0, 2])
+        truth.add_node("ester", "C(=O)O", [0, 2])
+        truth.add_node("oxyl", "O", [0, 0])
+        truth.add_node("ester", "C(=O)(O)", [0, 2])
         truth.add_edge((0, 1), (1, 0))
         truth.add_edge((1, 1), (2, 0))
 
@@ -96,8 +96,8 @@ class TestGroupGraph(BaseTest):
         assert out == truth
 
         truth = GroupGraph()
-        truth.add_node("ester", "[CX3](=O)[OX2H0]", [0, 2])
-        truth.add_node("alkene_secondary_amine", "[CX4]([NX3]([CX1]))", [0, 0])
+        truth.add_node("ester", "C(=O)O", [0, 2])
+        truth.add_node("alkene_secondary_amine", "C(N(C))", [0, 0])
         truth.add_node("amine", "N", [0, 0, 0])
         truth.add_edge((0, 1), (2, 0))
         truth.add_edge((1, 1), (2, 1))
@@ -107,9 +107,9 @@ class TestGroupGraph(BaseTest):
         assert out == truth
 
         truth = GroupGraph()
-        truth.add_node("alkene", "[CX4]", [0, 0, 0])
-        truth.add_node("amine", "[NX3]", [0, 0, 0])
-        truth.add_node("oxyl", "[O]", [0, 0])
+        truth.add_node("alkene", "C", [0, 0, 0])
+        truth.add_node("amine", "N", [0, 0, 0])
+        truth.add_node("oxyl", "O", [0, 0])
         truth.add_edge((0, 1), (1, 0))
         truth.add_edge((1, 1), (2, 0))
 
@@ -118,9 +118,9 @@ class TestGroupGraph(BaseTest):
         assert out == truth
 
         truth = GroupGraph()
-        truth.add_node("oxyl", "[O]", [0, 0])
-        truth.add_node("oxyl", "[O]", [0, 0])
-        truth.add_node("ester", "[CX3](=O)[OX2H0]", [0, 2])
+        truth.add_node("oxyl", "O", [0, 0])
+        truth.add_node("oxyl", "O", [0, 0])
+        truth.add_node("ester", "C(=O)O", [0, 2])
         truth.add_edge((0, 1), (1, 0))
         truth.add_edge((1, 1), (2, 0))
 
@@ -130,22 +130,22 @@ class TestGroupGraph(BaseTest):
 
     def test_nodes_made_of_other_nodes(self):
         node_defs = set()
-        node_defs.add(Node("oxyl", "[OX2]", [0, 0]))  # oxyl group
-        node_defs.add(Node("ester", "[CX3](=O)[OX2H0]", [0, 2]))  # Ester group
-        node_defs.add(Node("amine", "[NX3]", [0, 0, 0]))  # Amine group
+        node_defs.add(Node("oxyl", "O", [0, 0]))  # oxyl group
+        node_defs.add(Node("ester", "C(=O)O", [0, 2]))  # Ester group
+        node_defs.add(Node("amine", "N", [0, 0, 0]))  # Amine group
         node_defs.add(Node(
-            "alkene_secondary_amine", "[CX4]([NX3]([CX1]))", [0, 0]
+            "alkene_secondary_amine", "C(N(C))", [0, 0]
         ))  # can be made of amine and alkene
-        node_defs.add(Node("alkene", "[CX4]", [0, 0, 0]))
+        node_defs.add(Node("alkene", "C", [0, 0, 0]))
 
         truth = GroupGraph()
-        truth.add_node("alkene_secondary_amine", "[CX4]([NX3]([CX1]))", [0, 0])
-        truth.add_node("alkene", "[CX4]", [0, 0, 0])
-        truth.add_node("amine", "[NX3]", [0, 0, 0])
-        truth.add_node("alkene", "[CX4]", [0, 0, 0])
-        truth.add_node("alkene", "[CX4]", [0, 0, 0])
-        truth.add_node("alkene", "[CX4]", [0, 0, 0])
-        truth.add_node("alkene", "[CX4]", [0, 0, 0])
+        truth.add_node("alkene_secondary_amine", "C(N(C))", [0, 0])
+        truth.add_node("alkene", "C", [0, 0, 0])
+        truth.add_node("amine", "N", [0, 0, 0])
+        truth.add_node("alkene", "C", [0, 0, 0])
+        truth.add_node("alkene", "C", [0, 0, 0])
+        truth.add_node("alkene", "C", [0, 0, 0])
+        truth.add_node("alkene", "C", [0, 0, 0])
         truth.add_edge((0, 1), (1, 0))
         truth.add_edge((1, 1), (2, 0))
         truth.add_edge((2, 1), (3, 0))
@@ -159,13 +159,13 @@ class TestGroupGraph(BaseTest):
 
 
     def test_other_edge_cases(self):
-        node1 = Node("1methyl", "[CH3;X4]", [0])
-        node2 = Node("2methyl", "[CH2;X4]", [0,0])
+        node1 = Node("1methyl", "C", [0])
+        node2 = Node("2methyl", "C", [0,0])
 
         truth = GroupGraph()
-        truth.add_node("1methyl", "[CH3;X4]", [0])
-        truth.add_node("1methyl", "[CH3;X4]", [0])
-        truth.add_node('2methyl', '[CH2;X4]', [0, 0])
+        truth.add_node("1methyl", "C", [0])
+        truth.add_node("1methyl", "C", [0])
+        truth.add_node('2methyl', 'C', [0, 0])
         truth.add_edge((0, 0), (2, 0))
         truth.add_edge((1, 0), (2, 1))
 
@@ -175,15 +175,15 @@ class TestGroupGraph(BaseTest):
         assert out == truth
 
         truth = GroupGraph()
-        truth.add_node("carbon", "[C;X4]", [0,0,0,0])
-        truth.add_node("ether", "[CH3;X4][OH;X2]", [0, 1])
-        truth.add_node("ether", "[CH3;X4][OH;X2]", [0, 1])
+        truth.add_node("carbon", "C", [0,0,0,0])
+        truth.add_node("ether", "CO", [0, 1])
+        truth.add_node("ether", "CO", [0, 1])
         truth.add_edge((0, 0), (2, 0))
         truth.add_edge((2, 1), (1, 0))
 
-        node1 = Node("4methyl", "[C;X4]", [0,0,0,0])
-        node2 = Node("methanol", "[CH3;X4][O;X1]", [0]) # methanol
-        node3 = Node("ether", "[CH2][O]", [0,1]) # ether
+        node1 = Node("4methyl", "C", [0,0,0,0])
+        node2 = Node("methanol", "CO", [0]) # methanol
+        node3 = Node("ether", "CO", [0,1]) # ether
 
         node_defs = {node3, node2, node1} # {node2}
         graph = fragment("CCOCO", node_defs)
