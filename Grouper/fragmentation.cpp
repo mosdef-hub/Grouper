@@ -76,74 +76,35 @@ std::unordered_set<GroupGraph::Node> possibleValencyNode(const GroupGraph::Node&
         Ex. C=C, [0,0,1,1] -> C=C, [0,0,1,1], C=C, [0,0,1], C=C, [0,1], C=C, [0,0], C=C, [0], C=C []
     */
 
-
+    // Resulting set of nodes
     std::unordered_set<GroupGraph::Node> possibleNodes;
-    AtomGraph nodeGraph;
-    nodeGraph.fromSmiles(node.smarts);
 
-    // Get node orbits
-    std::vector<int> orbits = nodeGraph.nodeOrbits();
+    // Get the total number of hubs
+    size_t hubCount = node.hubs.size();
 
-    // Group hubs by their orbits
-    std::unordered_map<int, std::vector<int>> orbitGroups;
-    for (int hub : node.hubs) {
-        orbitGroups[orbits[hub]].push_back(hub);
-    }
+    // Generate all subsets of hubs (2^hubCount subsets)
+    size_t subsetCount = 1 << hubCount; // 2^hubCount
 
-    // Generate all combinations of hubs for each orbit
-    std::vector<std::vector<std::vector<int>>> orbitCombinations;
-    for (const auto& [orbit, hubs] : orbitGroups) {
-        std::vector<std::vector<int>> combinations;
-
-        // Generate subsets of hubs in the current orbit
-        size_t subsetCount = hubs.size();
-        for (size_t n = 1; n <= subsetCount; ++n) { // Avoid empty subset
-            std::function<void(size_t, std::vector<int>)> generateSubset = 
-                [&](size_t index, std::vector<int> currentSubset) {
-                    if (currentSubset.size() == n) {
-                        combinations.push_back(currentSubset);
-                        return;
-                    }
-                    for (size_t i = index; i < hubs.size(); ++i) {
-                        currentSubset.push_back(hubs[i]);
-                        generateSubset(i + 1, currentSubset);
-                        currentSubset.pop_back();
-                    }
-                };
-            generateSubset(0, {});
-        }
-
-        orbitCombinations.push_back(combinations);
-    }
-
-    // Combine combinations across orbits
-    std::vector<std::vector<int>> combinedHubs = {{}};
-    for (const auto& combinations : orbitCombinations) {
-        std::vector<std::vector<int>> newCombinations;
-
-        for (const auto& existing : combinedHubs) {
-            for (const auto& subset : combinations) {
-                std::vector<int> newCombination = existing;
-                newCombination.insert(newCombination.end(), subset.begin(), subset.end());
-                newCombinations.push_back(newCombination);
+    for (size_t mask = 0; mask < subsetCount; ++mask) {
+        // Create a subset of hubs based on the current mask
+        std::vector<int> subset;
+        for (size_t i = 0; i < hubCount; ++i) {
+            if (mask & (1 << i)) {
+                subset.push_back(node.hubs[i]);
             }
         }
 
-        combinedHubs = std::move(newCombinations);
-    }
-
-    // Create nodes with the combined hub configurations
-    for (const auto& hubs : combinedHubs) {
+        // Create a new node with this subset of hubs
         GroupGraph::Node newNode = node;
-        newNode.hubs = hubs;
+        newNode.hubs = subset;
+        newNode.ports.resize(subset.size());
+        std::iota(newNode.ports.begin(), newNode.ports.end(), 0);
+
         possibleNodes.insert(newNode);
     }
 
-    // add the null node
-    GroupGraph::Node nullNode = GroupGraph::Node(node.ntype, node.smarts, {});
-    possibleNodes.insert(nullNode);
-
     return possibleNodes;
+
 }
 
 GroupGraph fragment(
@@ -152,8 +113,6 @@ GroupGraph fragment(
 ) {
 
     GroupGraph groupGraph;
-
-    printf("Got here\n");
 
     // Parse the SMILES string to an AtomGraph
     AtomGraph mol;
@@ -181,7 +140,23 @@ GroupGraph fragment(
     //         }
     //     }
     // }
-
+    // Sort the nodes by the number of atoms and hubs
+    std::vector<GroupGraph::Node> nodesVec;
+    for (const auto& [node, possibleNodeSet] : possibleNodes) {
+        nodesVec.push_back(node);
+    }
+    std::sort(nodesVec.begin(), nodesVec.end(), 
+        [](const GroupGraph::Node& a, const GroupGraph::Node& b) {
+            AtomGraph aGraph;
+            aGraph.fromSmiles(a.smarts);
+            AtomGraph bGraph;
+            bGraph.fromSmiles(b.smarts);
+            if (aGraph.nodes.size() != bGraph.nodes.size()) {
+                return aGraph.nodes.size() > bGraph.nodes.size();
+            }
+            return a.hubs.size() > b.hubs.size();
+            }
+        );
     // Sort the possible nodes by the number of atoms and hubs
     for (auto& [node, nodeCompositionVec] : possibleNodesVec) {
         std::sort(nodeCompositionVec.begin(), nodeCompositionVec.end(), 
@@ -191,9 +166,9 @@ GroupGraph fragment(
             AtomGraph bGraph;
             bGraph.fromSmiles(b.smarts);
             if (aGraph.nodes.size() != bGraph.nodes.size()) {
-                return aGraph.nodes.size() < bGraph.nodes.size();
+                return aGraph.nodes.size() > bGraph.nodes.size();
             }
-            return a.hubs.size() < b.hubs.size();
+            return a.hubs.size() > b.hubs.size();
             }
         );
     }
@@ -207,13 +182,18 @@ GroupGraph fragment(
 
     // Determine if nodes can be made by composing other nodes
     // std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> nodeComposition = determineNodeComposition(nodeDefs);
-    for (const auto& [node, nodeCompositionsVec] : possibleNodesVec) {
-        for (const auto& compNodeDef : nodeCompositionsVec) {
+    for (const auto& node: nodesVec) {
+        for (const auto& compNodeDef : possibleNodesVec[node]) {
             const std::string& smarts = compNodeDef.smarts;
             AtomGraph query;
             query.fromSmiles(smarts);
 
             printf("Query: %s\n", smarts.c_str());
+            printf("Hubs: ");
+            for (const auto& hub : compNodeDef.hubs) {
+                printf("%d ", hub);
+            }
+            printf("\n");
             
             std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> matches = mol.substructureSearch(query, compNodeDef.hubs);
 
@@ -301,6 +281,8 @@ GroupGraph fragment(
     printf("Got here\n");
     printf("Group Graph: \n");
     printf("%s\n", groupGraph.printGraph().c_str());
+    printf("Mol Graph: \n");
+    printf("%s\n", mol.printGraph().c_str());
 
     // Add edges based on connectivity in the original molecule
     for (const auto& [nodeid, dstSet] : mol.edges) {
@@ -329,16 +311,24 @@ GroupGraph fragment(
                     int src_port = -1;
                     int dst_port = -1;
                     // select first available port for both nodes
-                    if (groupGraph.n_free_ports(fromNode) > 0) {
-                        src_port = atomToPorts[beginAtomIdx][0];
+                    for (const auto& port : atomToPorts[beginAtomIdx]) { // Find the first available port
+                        if (groupGraph.isPortFree(fromNode, port)) {
+                            src_port = port;
+                            break;
+                        }
                     }
-                    if (groupGraph.n_free_ports(toNode) > 0) {
-                        dst_port = atomToPorts[endAtomIdx][0];
+                    for (const auto& port : atomToPorts[endAtomIdx]) {
+                        if (groupGraph.isPortFree(toNode, port)) {
+                            dst_port = port;
+                            break;
+                        }
                     }
                     printf("Adding edge from %s to %s\n", fromSmarts.c_str(), toSmarts.c_str());
                     printf("Adding edge from %d to %d\n", fromNode, toNode);
                     printf("    from port: %d\n", src_port);
                     printf("    to port: %d\n", dst_port);
+                    printf("    edge: (%d, %d, %d, %d)\n", fromNode, src_port, toNode, dst_port);
+                    printf("    index: (%d, %d)\n", beginAtomIdx, endAtomIdx);
 
                     if (src_port == -1 || dst_port == -1) {
                         throw std::invalid_argument("No free ports available for edge, occured while adding edge from " + fromSmarts + " to " + toSmarts);

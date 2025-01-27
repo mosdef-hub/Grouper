@@ -193,27 +193,27 @@ class TestGroupGraph(BaseTest):
             assert graph.to_smiles() == "C1CCCC1"
 
     def test_from_smiles(self):
-        # graph = AtomGraph()
-        # graph.from_smiles("CN")
-        # truth = AtomGraph()
-        # truth.add_node("C", 4)
-        # truth.add_node("N", 3)
-        # truth.add_edge(0,1,1)
-        # assert graph == truth
+        graph = AtomGraph()
+        graph.from_smiles("CN")
+        truth = AtomGraph()
+        truth.add_node("C", 4)
+        truth.add_node("N", 3)
+        truth.add_edge(0,1,1)
+        assert graph == truth
 
-        # graph = AtomGraph()
-        # graph.from_smiles("C")
-        # truth = AtomGraph()
-        # truth.add_node("C", 4)
-        # assert graph == truth
+        graph = AtomGraph()
+        graph.from_smiles("C")
+        truth = AtomGraph()
+        truth.add_node("C", 4)
+        assert graph == truth
 
-        # graph = AtomGraph()
-        # graph.from_smiles("CC")
-        # truth = AtomGraph()
-        # truth.add_node("C", 4)
-        # truth.add_node("C", 4)
-        # truth.add_edge(0,1)
-        # assert graph == truth
+        graph = AtomGraph()
+        graph.from_smiles("CC")
+        truth = AtomGraph()
+        truth.add_node("C", 4)
+        truth.add_node("C", 4)
+        truth.add_edge(0,1)
+        assert graph == truth
 
         graph = AtomGraph()
         graph.from_smiles("O=COOC(=O)O")
@@ -221,15 +221,16 @@ class TestGroupGraph(BaseTest):
         truth.add_node('O',2)
         truth.add_node('C',4)
         truth.add_node('O',2)
+        truth.add_node('O',2)
         truth.add_node('C',4)
         truth.add_node('O',2)
         truth.add_node('O',2)
-        truth.add_edge(0,1,2)
-        truth.add_edge(1,2,1)
-        truth.add_edge(2,3,1)
-        truth.add_edge(3,4,1)
-        truth.add_edge(4,5,2)
-        truth.add_edge(4,6,1)
+        truth.add_edge(0,1, 2)
+        truth.add_edge(1,2, 1)
+        truth.add_edge(2, 3, 1)
+        truth.add_edge(3, 4, 1)
+        truth.add_edge(4, 5, 2)
+        truth.add_edge(4, 6, 1)
         assert graph == truth
 
     def test_add_node_performance(self, benchmark):
@@ -315,8 +316,20 @@ class TestGroupGraph(BaseTest):
         matches = graph.substructure_search(oxyl, [0])
         assert to_set_of_sets(matches) == {frozenset({(0,2)})}
 
+    def test_substructure_search_2(self):
+        from Grouper import AtomGraph
+        truth = AtomGraph()
+        truth.from_smiles("CNCNOC=O")
 
+        sub = AtomGraph()
+        sub.add_node("C", 4)
+        sub.add_node("O", 2)
+        sub.add_node("O", 2)
+        sub.add_edge(0, 1)
+        sub.add_edge(0, 2, 2)
 
+        matches = truth.substructure_search(sub, [0])
+        assert len(matches) == 1
 
     # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()

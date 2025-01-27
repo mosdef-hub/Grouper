@@ -159,7 +159,7 @@ class TestGroupGraph(BaseTest):
 
 
     def test_other_edge_cases(self):
-        node1 = Node("1methyl", "C", [0])
+        node1 = Node("1methyl", "C", [0,0,0])
         node2 = Node("2methyl", "C", [0,0])
 
         truth = GroupGraph()
@@ -189,3 +189,21 @@ class TestGroupGraph(BaseTest):
         graph = fragment("CCOCO", node_defs)
 
         assert graph == truth
+
+    def test_larger_mols(self):
+        node_defs = set()
+        node_defs.add(Node('hydroxyl', 'O', [0]))
+        node_defs.add(Node('keto', 'O', [0,0]))
+        node_defs.add(Node('ester', 'C(=O)O', [0,2]))
+        node_defs.add(Node('methyl', 'C', [0,0,0]))
+        node_defs.add(Node('t2', 'N', [0,0,0]))
+        node_defs.add(Node('secondary_amine', 'CNC', [0,0, 1]))
+
+        truth = GroupGraph()
+        truth.add_node("secondary_amine", "CNC", [0, 0])
+        truth.add_node("t2", "N", [0, 0, 0])
+        truth.add_node("ester", "C(=O)O", [0, 2])
+        truth.add_edge((0, 0), (1, 0))
+        truth.add_edge((1, 0), (2, 0))
+
+        graph = fragment("CNCNOC=O", node_defs)

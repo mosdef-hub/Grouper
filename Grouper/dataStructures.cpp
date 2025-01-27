@@ -186,18 +186,11 @@ void GroupGraph::addNode(
     if (ntype.empty() && smarts.empty()) {
         throw std::invalid_argument("Either SMARTS or type must be provided");
     }
-    std::unique_ptr<RDKit::RWMol> mol(RDKit::SmartsToMol(smarts));
-    if (!mol) {
-        throw std::invalid_argument("Invalid SMARTS pattern for node definition: " + smarts);
-    }
     for (NodeIDType hub : hubs) {
         if (hub < 0) {
             throw std::invalid_argument("Hub ID must be greater than or equal to 0");
         }
     }
-
-
-
 
     // Check if the node type already exists
     if (ntype.empty()) {
@@ -231,7 +224,7 @@ void GroupGraph::addNode(
     }
 
     // Case 2: smarts is provided (and used as ntype if ntype was empty)
-    if (!smarts.empty() && nodetypes.find(smarts) != nodetypes.end()) {
+    if (ntype.empty() && !smarts.empty() && nodetypes.find(smarts) != nodetypes.end()) {
         // Check if hub sizes match the existing smarts node
         if (nodetypes[smarts].size() != hubs.size()) {
             throw std::invalid_argument("smarts already exists with a different number of hubs");
@@ -305,6 +298,22 @@ int GroupGraph::n_free_ports(NodeIDType nodeID) const {
         }
     }
     return node.ports.size() - occupied_ports;
+}
+
+bool GroupGraph::isPortFree(NodeIDType nodeID, PortType port) const {
+    if (nodes.find(nodeID) == nodes.end()) {
+        throw std::invalid_argument("Node does not exist");
+    }
+    if (std::find(nodes.at(nodeID).ports.begin(), nodes.at(nodeID).ports.end(), port) == nodes.at(nodeID).ports.end()) {
+        throw std::invalid_argument("Port does not exist");
+    }
+    for (const auto& edge : edges) {
+        if ((std::get<0>(edge) == nodeID && std::get<1>(edge) == port) ||
+            (std::get<2>(edge) == nodeID && std::get<3>(edge) == port)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void GroupGraph::clearEdges() {
@@ -408,9 +417,10 @@ std::string GroupGraph::toSmiles() const {
         }
         for (RDKit::ROMol::BondIterator bond = subGraph->beginBonds(); bond != subGraph->endBonds(); ++bond) {
             RDKit::Bond newBond = **bond;
+            RDKit::Bond::BondType bondType = (*bond)->getBondType();
             int atomIdx1 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getBeginAtomIdx()];
             int atomIdx2 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getEndAtomIdx()];
-            molecularGraph->addBond(atomIdx1, atomIdx2, newBond.getBondType());
+            molecularGraph->addBond(atomIdx1, atomIdx2, bondType);
         }
     }
 
@@ -423,7 +433,7 @@ std::string GroupGraph::toSmiles() const {
         int fromAtom = nodePortToAtomIndex[std::to_string(from)][fromPort];
         int toAtom = nodePortToAtomIndex[std::to_string(to)][toPort];
 
-        molecularGraph->addBond(fromAtom, toAtom, RDKit::Bond::SINGLE);
+        molecularGraph->addBond(fromAtom, toAtom, RDKit::Bond::SINGLE); // Add a single bond for now, TODO: Add bond type
     }
 
     return RDKit::MolToSmiles(*molecularGraph);
@@ -811,8 +821,19 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
                     if(this->getFreeValency(graphNodeid) != count) { // Check if number of bonds for query node matches the number of hubs
                         return;
                     }
-
                 }
+
+                // Check if the bonds are the same
+                for (const auto& [queryNodeid, dstSet] : query.edges) {
+                    for (const auto& [dst, order] : dstSet) {
+                        NodeIDType graphNodeid = currentMapping[queryNodeid];
+                        auto it = edges.find(graphNodeid);
+                        if (it == edges.end() || it->second.find(std::make_pair(currentMapping[dst], order)) == it->second.end()) {
+                            return;
+                        }
+                    }
+                }
+
 
                 // Add the valid match
                 std::vector<std::pair<NodeIDType, NodeIDType>> match;
@@ -906,72 +927,45 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
     for (size_t i = 0; i < smiles.size(); ++i) {
         char c = smiles[i];
 
-        std::cout << "Processing character: " << c << " at index " << i << std::endl;
-
         if (std::isalpha(c)) {
             // Handle atom
             int valency = standardElementValency[std::string(1, c)];
             addNode(std::string(1, c), valency);
             NodeIDType currentNode = nodes.size() - 1;
 
-            std::cout << "Added node for atom: " << c 
-                      << ", Current node: " << currentNode 
-                      << ", Last node: " << lastNode << std::endl;
-
             // If there's a previous node, add an edge with the current bond order
             if (lastNode != -1) {
-                std::cout << "Attempting to add edge from " << lastNode 
-                          << " to " << currentNode 
-                          << " with bond order " << bondOrder << std::endl;
-
                 addEdge(lastNode, currentNode, bondOrder);
             }
 
             lastNode = currentNode;
-            nodeStack.push(currentNode);
             bondOrder = 1; // Reset bond order to single after use
         } else if (c == '(') {
-            // Start a branch, keep the last node on the stack
-            std::cout << "Starting a branch, pushing last node: " << lastNode << std::endl;
-            nodeStack.push(-1); // Marker for a branch point
+            // Start a branch, push the current last node onto the stack
+            nodeStack.push(lastNode);
         } else if (c == ')') {
-            // End a branch, pop nodes until reaching a valid branch point
-            std::cout << "Ending a branch, popping nodes until valid" << std::endl;
-            while (!nodeStack.empty() && nodeStack.top() == -1) {
-                nodeStack.pop(); // Remove branch markers
-            }
+            // End a branch, pop the last node from the stack
             if (!nodeStack.empty()) {
-                // Restore the central atom (parent node)
                 lastNode = nodeStack.top();
-                std::cout << "Branch ended, setting last node to central atom: " << lastNode << std::endl;
+                nodeStack.pop();
             } else {
                 throw std::runtime_error("Unmatched closing parenthesis in SMILES string.");
             }
         } else if (std::isdigit(c)) {
             // Handle ring closure
             int ringIndex = c - '0';
-            std::cout << "Handling ring closure for index: " << ringIndex << std::endl;
-
             if (ringClosures.count(ringIndex)) {
                 // Connect the current node to the ring closure with the current bond order
-                std::cout << "Closing ring between " << lastNode 
-                          << " and " << ringClosures[ringIndex] 
-                          << " with bond order " << bondOrder << std::endl;
-
                 addEdge(lastNode, ringClosures[ringIndex], bondOrder);
                 ringClosures.erase(ringIndex);
             } else {
                 // Store the current node as the ring closure point
-                std::cout << "Storing ring closure point for index " << ringIndex 
-                          << ", Current node: " << lastNode << std::endl;
-
                 ringClosures[ringIndex] = lastNode;
             }
             bondOrder = 1; // Reset bond order to single after use
         } else if (c == '=') {
             // Set bond order to double
             bondOrder = 2;
-            std::cout << "Setting bond order to double (2)" << std::endl;
         } else {
             // Handle unsupported characters (e.g., invalid SMILES)
             throw std::invalid_argument("Unsupported character in SMILES: " + std::string(1, c));
@@ -988,7 +982,6 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
         throw std::runtime_error("Unclosed ring detected in SMILES string.");
     }
 
-    std::cout << "Finished processing SMILES string: " << smiles << std::endl;
 }
 
 

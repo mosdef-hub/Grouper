@@ -132,6 +132,7 @@ public:
         optionblk* options, statsblk* stats
         ) const;
     void clearEdges();
+    bool isPortFree(NodeIDType nodeID, PortType port) const;
     // Conversion methods
     std::string printGraph() const;
     std::unordered_map<std::string, int> toVector() const;
