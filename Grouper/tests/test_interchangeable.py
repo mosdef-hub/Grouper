@@ -152,7 +152,7 @@ class TestConversion(BaseTest):
         node_defs.add(Node('ester', 'C(=O)O', [0,0,2]))
         node_defs.add(Node('methyl', 'C', [0,0,0]))
         node_defs.add(Node('t2', 'N', [0,0,0]))
-        node_defs.add(Node('secondary_amine', 'CNC', [0,0,1, 2,2,2]))
+        node_defs.add(Node('secondary_amine', 'CNC', [0,0,1]))
 
         for smiles in test_cases:
             print(smiles)

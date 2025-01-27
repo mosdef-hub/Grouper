@@ -331,6 +331,7 @@ class TestGroupGraph(BaseTest):
         matches = truth.substructure_search(sub, [0])
         assert len(matches) == 1
 
+
     # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()
     #     for i in range(100):
