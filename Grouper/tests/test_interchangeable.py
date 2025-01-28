@@ -146,13 +146,16 @@ class TestConversion(BaseTest):
             # "CNCN(C(=O)OC)C(=O)OOC(C)=O",
             "CN1COC(=O)COC(=O)OC1=O",
         ]
+        # test_cases = [
+        #     'CNCNC(=O)O' # CNC - N - C(=O)-O
+        # ] 
         node_defs = set()
         node_defs.add(Node('hydroxyl', 'O', [0]))
         node_defs.add(Node('keto', 'O', [0,0]))
-        node_defs.add(Node('ester', 'C(=O)O', [0,0,2]))
+        node_defs.add(Node('ester', 'C(=O)O', [0,2]))   # - C=OO, -C=OO-,-C=OO-, C=OO-
         node_defs.add(Node('methyl', 'C', [0,0,0]))
         node_defs.add(Node('t2', 'N', [0,0,0]))
-        node_defs.add(Node('secondary_amine', 'CNC', [0,0,1]))
+        node_defs.add(Node('secondary_amine', 'CNC', [0,0,1,2,2,2]))
 
         for smiles in test_cases:
             print(smiles)

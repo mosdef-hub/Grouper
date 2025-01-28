@@ -5,6 +5,9 @@ from Grouper.tests.base_test import BaseTest
 
 
 class TestGroupGraph(BaseTest):
+    def __init(self):
+        self.to_set_of_sets = lambda matches: {frozenset(match) for match in matches}
+
     def test_add_node(self):
         # Basic node addition
         graph = GroupGraph()
@@ -331,6 +334,22 @@ class TestGroupGraph(BaseTest):
         matches = truth.substructure_search(sub, [0])
         assert len(matches) == 1
 
+    def test_substructure_search_3(self):
+        to_set_of_sets = lambda matches: {frozenset(match) for match in matches}
+        from Grouper import AtomGraph
+        truth = AtomGraph()
+        truth.from_smiles("CNCNC(=O)O")
+
+        sub = AtomGraph()
+        sub.add_node("C", 4)
+        sub.add_node("N", 3)
+        sub.add_node("C", 4)
+        sub.add_edge(0, 1)
+        sub.add_edge(1, 2)
+
+        matches = truth.substructure_search(sub, [0,0,0,1, 2,2])
+        # matches = truth.substructure_search(sub, [2,2,2, 1, 0, 0])
+        assert to_set_of_sets(matches) == {frozenset({(0,0),(1,1),(2,2)})}
 
     # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()
