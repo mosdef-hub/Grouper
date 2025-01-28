@@ -113,11 +113,12 @@ GroupGraph fragment(
     const std::unordered_set<GroupGraph::Node>& nodeDefs
 ) {
     GroupGraph groupGraph;
+    std::vector<GroupGraph::Node> finalNodeDefinitions;
 
     // Parse the SMILES string to an AtomGraph
     AtomGraph mol;
     mol.fromSmiles(smiles);
-    std::cout << mol.printGraph();
+    // std::cout << mol.printGraph();
 
     // Calculate possible nodes for each node definition
     std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> possibleNodes;
@@ -169,19 +170,23 @@ GroupGraph fragment(
             sortedNodes.push_back(possibleNode);
         }
     }
-    printf("Sorted possible nodes\n");
+    // printf("Sorted possible nodes\n");
+
+    for(const auto& node : sortedNodes) {
+        printf("Node sorted: %s\n", node.smarts.c_str());
+    }
 
     // Recursive function for tree-like fragmentation
     std::function<bool(const std::vector<GroupGraph::Node>&, 
-                std::unordered_map<int, GroupGraph::NodeIDType>&, 
-                std::unordered_map<int, std::vector<int>>&, 
-                std::unordered_map<int, std::string>&, 
-                int)>
+                   std::unordered_map<int, GroupGraph::NodeIDType>&, 
+                   std::unordered_map<int, std::vector<int>>&, 
+                   std::unordered_map<int, std::string>&, 
+                   int)>
     attemptFragmentation = [&](const std::vector<GroupGraph::Node>& candidates, 
-                                std::unordered_map<int, GroupGraph::NodeIDType>& atomToNodeid, 
-                                std::unordered_map<int, std::vector<int>>& atomToPorts, 
-                                std::unordered_map<int, std::string>& atomToSmarts, 
-                                int startIdx) -> bool {
+                            std::unordered_map<int, GroupGraph::NodeIDType>& atomToNodeid, 
+                            std::unordered_map<int, std::vector<int>>& atomToPorts, 
+                            std::unordered_map<int, std::string>& atomToSmarts, 
+                            int startIdx) -> bool {
         if (atomToNodeid.size() == mol.nodes.size()) {
             return true; // Fully fragmented
         }
@@ -191,17 +196,25 @@ GroupGraph fragment(
             AtomGraph query;
             query.fromSmiles(node.smarts);
 
+            printf("Node: %s\n", node.smarts.c_str());
+            printf("Hubs: ");
+            for (int hub : node.hubs) {
+                printf("%d ", hub);
+            }
+            printf("\n");
+
             // Substructure search
             auto matches = mol.substructureSearch(query, node.hubs);
             if (matches.empty()) {
                 continue;
             }
 
-            // Attempt to apply this node
             std::unordered_map<int, GroupGraph::NodeIDType> tempAtomToNodeid = atomToNodeid;
             std::unordered_map<int, std::vector<int>> tempAtomToPorts = atomToPorts;
             std::unordered_map<int, std::string> tempAtomToSmarts = atomToSmarts;
             GroupGraph::NodeIDType currentId = groupGraph.nodes.size();
+
+            // std::string smarts = node.smarts;
 
             bool applied = false;
             for (const auto& match : matches) {
@@ -214,47 +227,64 @@ GroupGraph fragment(
                 }
                 if (alreadyMatched) continue;
 
-                // Apply the match
-                // // Get the parent node
-                auto parent = std::find_if(nodeDefs.begin(), nodeDefs.end(), 
+                auto parent = std::find_if(
+                    nodeDefs.begin(), 
+                    nodeDefs.end(),
                     [&](const GroupGraph::Node& n) {
                         return n.smarts == node.smarts && n.ntype == node.ntype;
                     }
                 );
+
                 if (parent == nodeDefs.end()) {
                     throw std::invalid_argument("Parent node not found.");
                 }
+                
                 groupGraph.addNode(parent->ntype, parent->smarts, parent->hubs);
                 applied = true;
+
+
+                // Keep track of the added node definition
+                finalNodeDefinitions.push_back(node);
+
                 for (const auto& [queryid, molid] : match) {
                     tempAtomToNodeid[molid] = currentId;
                     tempAtomToSmarts[molid] = node.smarts;
 
-                    // Map ports
                     std::vector<int> hubIndices;
                     for (size_t idx = 0; idx < node.hubs.size(); ++idx) {
                         if (node.hubs[idx] == queryid) {
                             hubIndices.push_back(idx);
                         }
                     }
-                    tempAtomToPorts[molid] = hubIndices;
+
+                    if (!hubIndices.empty()) {
+                        tempAtomToPorts[molid] = hubIndices;
+                    } else {
+                        tempAtomToPorts[molid] = std::vector<int>(parent->hubs.size());
+                        std::iota(tempAtomToPorts[molid].begin(), tempAtomToPorts[molid].end(), 0);
+                    }
                 }
                 break;
             }
 
             if (applied) {
-                // Recur with all nodes, including smaller and larger nodes
                 if (attemptFragmentation(candidates, tempAtomToNodeid, tempAtomToPorts, tempAtomToSmarts, 0)) {
+                    atomToNodeid = std::move(tempAtomToNodeid);
+                    atomToPorts = std::move(tempAtomToPorts);
+                    atomToSmarts = std::move(tempAtomToSmarts);
                     return true;
                 }
 
-                // Backtrack
-                groupGraph.nodes.erase(groupGraph.nodes.size() - 1);
+                groupGraph.nodes.erase(currentId);
+
+                // Remove the last added node definition (backtracking)
+                finalNodeDefinitions.pop_back();
             }
         }
 
         return false;
     };
+
 
     // Attempt to fragment using the sorted nodes
     std::unordered_map<int, GroupGraph::NodeIDType> atomToNodeid;
@@ -265,9 +295,70 @@ GroupGraph fragment(
         throw std::invalid_argument("Failed to fully fragment the molecule.");
     }
 
-    printf("Fragmentation successful\n");
+    // Identify atom to ports
+    atomToPorts.clear();
+    atomToSmarts.clear();
+    atomToNodeid.clear();
+    GroupGraph::NodeIDType currentId = -1;
+    for (const auto& node : finalNodeDefinitions) {
+        // printf("Node: %s\n", node.smarts.c_str());
+        AtomGraph query;
+        query.fromSmiles(node.smarts);
+        auto matches = mol.substructureSearch(query, node.hubs);
+        if (matches.empty()) {
+            throw std::invalid_argument("Failed to find a match for node definition.");
+        }
+        for (const auto& match : matches) {
+            bool alreadyMatched = false;
+            for (const auto& [queryid, molid] : match) {
+                if (atomToNodeid.count(molid)) {
+                    alreadyMatched = true;
+                    break;
+                }
+            }
+            if (alreadyMatched) continue;
+            currentId += 1;
+            for (const auto& queryid_thisid : match) {
+                // printf("queryid: %d, thisid: %d\n", queryid_thisid.first, queryid_thisid.second);
+                atomToNodeid[queryid_thisid.second] = currentId;
+                atomToSmarts[queryid_thisid.second] = node.smarts;
+                std::vector<int> hubIndices;
+                auto parent = std::find_if(
+                    nodeDefs.begin(), 
+                    nodeDefs.end(),
+                    [&](const GroupGraph::Node& n) {
+                        return n.smarts == node.smarts && n.ntype == node.ntype;
+                    }
+                );
+                for (size_t idx = 0; idx < parent->hubs.size(); ++idx) {
+                    const auto& hub = parent->hubs[idx];
+                    if (hub == queryid_thisid.first) {
+                        hubIndices.push_back(idx);
+                    }
+                }
+                atomToPorts[queryid_thisid.second] = hubIndices;
+            }
+        }
+    }
+
+    
+
+    
+
+
+    // printf("Fragmentation successful\n");
+    // printf("size of atomToNodeid: %d\n", atomToNodeid.size());
     printf("Group graph:\n");
     printf("%s\n", groupGraph.printGraph().c_str());
+    for (const auto& [atom, nodeid] : atomToNodeid) {
+        printf("Atom %d Node %d", atom, nodeid);
+        printf("    Ports: ");
+        for (int port : atomToPorts[atom]) {
+            printf("%d ", port);
+        }
+        printf("Smarts: %s", atomToSmarts[atom].c_str());
+        printf("Element: %s\n", mol.nodes[atom].ntype.c_str());
+    }
 
     // Add edges to the group graph based on molecular connectivity
     for (const auto& [src, dstSet] : mol.edges) {
@@ -276,6 +367,15 @@ GroupGraph fragment(
             GroupGraph::NodeIDType dstNode = atomToNodeid[dst];
             if (srcNode == dstNode) continue;
 
+            // Check if the edge already exists
+            bool edgeExists = false;
+            for (const auto& edge : groupGraph.edges) {
+                if ((std::get<0>(edge) == srcNode && std::get<2>(edge) == dstNode) || (std::get<0>(edge) == dstNode && std::get<2>(edge) == srcNode)) {
+                    edgeExists = true;
+                    break;
+                }
+            }
+            if (edgeExists) continue;
             // Find available ports
             int srcPort = -1, dstPort = -1;
             for (int port : atomToPorts[src]) {
@@ -292,11 +392,12 @@ GroupGraph fragment(
             }
 
             if (srcPort == -1 || dstPort == -1) {
-                throw std::invalid_argument("No free ports available for edge.");
+                throw std::invalid_argument("No free ports available for " + std::string(atomToSmarts[src]) +  " (" + std::to_string(src) + " )"+ " -> " + std::string(atomToSmarts[dst]) + " (" + std::to_string(dst) + ")");
             }
 
-            printf("Adding edge: %d-%d\n", srcNode, dstNode);
-            printf("Ports: %d-%d\n", srcPort, dstPort);
+            // printf("Adding edge: %d-%d\n", srcNode, dstNode);
+            // printf("Ports: %d-%d\n", srcPort, dstPort);
+            // printf("Smarts: %s-%s\n", atomToSmarts[src].c_str(), atomToSmarts[dst].c_str());
 
             groupGraph.addEdge(
                 std::make_tuple(srcNode, srcPort),
