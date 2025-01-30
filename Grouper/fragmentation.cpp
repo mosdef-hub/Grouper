@@ -266,7 +266,6 @@ std::vector<GroupGraph> fragment(
             std::unordered_map<int, std::string> tempAtomToSmarts = atomToSmarts;
             GroupGraph tempGraph = currentGraph;  // Copy to maintain independent states
             GroupGraph::NodeIDType currentId = tempGraph.nodes.size();
-            bool applied = false;
 
             for (const auto& match : matches) {
                 bool alreadyMatched = false;
