@@ -8,7 +8,7 @@ void update_progress(int current, int total);
 
 std::unordered_set<GroupGraph> exhaustiveGenerate(
     int n_nodes, 
-    std::unordered_set<GroupGraph::Node> node_defs, 
+    std::unordered_set<GroupGraph::Group> node_defs, 
     std::string nauty_path,
     std::string input_file_path,
     int num_procs = 32,

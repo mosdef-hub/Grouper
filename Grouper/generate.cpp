@@ -66,7 +66,7 @@ void executeQuery(PGconn* conn, const std::string& query, const std::vector<std:
 
 std::unordered_set<GroupGraph> exhaustiveGenerate(
     int n_nodes, 
-    std::unordered_set<GroupGraph::Node> node_defs, 
+    std::unordered_set<GroupGraph::Group> node_defs, 
     std::string nauty_path,
     std::string input_file_path = "",
     int num_procs = -1,
@@ -82,7 +82,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         throw std::invalid_argument("Number of nodes must be greater than 0...");
     }
     if (node_defs.size() < 1) {
-        throw std::invalid_argument("Node definitions must not be empty...");
+        throw std::invalid_argument("Group definitions must not be empty...");
     }
     if (num_procs <= -1){
         num_procs = omp_get_max_threads();

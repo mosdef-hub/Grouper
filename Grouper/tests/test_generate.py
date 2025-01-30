@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from Grouper import Node, exhaustive_generate
+from Grouper import Group, exhaustive_generate
 from Grouper.tests.base_test import BaseTest
 
 
@@ -37,7 +37,7 @@ class TestGeneration(BaseTest):
         if not nauty_path:
             raise RuntimeError("Nauty path is not defined in the configuration file.")
         # Convert node_defs to the expected format
-        node_defs = set(Node(n["type"], n["smiles"], n["hubs"]) for n in node_defs)
+        node_defs = set(Group(n["type"], n["smiles"], n["hubs"]) for n in node_defs)
 
         verbose = False
         input_file_path = ""
@@ -78,7 +78,7 @@ class TestGeneration(BaseTest):
             raise RuntimeError("Nauty path is not defined in the configuration file.")
         
         # Convert node_defs to the expected format
-        node_defs = set(Node(n["type"], n["smarts"], n["hubs"]) for n in node_defs)
+        node_defs = set(Group(n["type"], n["smarts"], n["hubs"]) for n in node_defs)
 
         logging.info("Created node_defs")
 

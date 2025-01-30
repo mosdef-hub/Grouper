@@ -37,10 +37,10 @@ class TestGroupGraph(BaseTest):
         graph.add_node("type1", "", [0, 0])
 
         graph.add_edge((0, 0), (1, 0))
-        assert (0, 0, 1, 0) in graph.edges
+        assert (0, 0, 1, 0, 1) in graph.edges
 
         graph.add_edge((2, 1), (1, 1))
-        assert (2, 1, 1, 1) in graph.edges
+        assert (2, 1, 1, 1, 1) in graph.edges
 
     def test_add_edge_with_invalid_nodes(self):
         graph = GroupGraph()

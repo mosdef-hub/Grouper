@@ -3,14 +3,14 @@
 #include "dataStructures.hpp"
 
 
-GroupGraph fragment(
+std::vector<GroupGraph> fragment(
     const std::string& smiles, 
-    const std::unordered_set<GroupGraph::Node>& nodeDefs
+    const std::unordered_set<GroupGraph::Group>& nodeDefs
 );
 
 std::vector<int> _findMatchingIndices(const int* orbits, int targetOrbit, int numAtoms);
 
-// std::unordered_map<GroupGraph::Node, std::unordered_set<GroupGraph::Node>> determineNodeComposition(const std::unordered_map<std::string, GroupGraph::Node>& nodeDefs);
+// std::unordered_map<GroupGraph::Group, std::unordered_set<GroupGraph::Group>> determineNodeComposition(const std::unordered_map<std::string, GroupGraph::Group>& nodeDefs);
 
 
 struct TupleHash {

@@ -42,7 +42,7 @@ std::pair<int, int> color_to_ports(int color, const std::vector<int>& src_ports,
     return {src_port, dst_port};
 }
 
-std::tuple< int, std::vector<int>, std::vector<std::pair<int, int>> > parse_nauty_graph_line(const std::string& line, const std::unordered_set<GroupGraph::Node>& node_defs) {
+std::tuple< int, std::vector<int>, std::vector<std::pair<int, int>> > parse_nauty_graph_line(const std::string& line, const std::unordered_set<GroupGraph::Group>& node_defs) {
     // Split the line into node_description and edge_description
     size_t split_pos = line.find("  ");
     if (split_pos == std::string::npos) {
@@ -236,7 +236,7 @@ std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings(
 
 void process_nauty_output(
     const std::string& line, 
-    const std::unordered_set<GroupGraph::Node>& node_defs,
+    const std::unordered_set<GroupGraph::Group>& node_defs,
     std::unordered_set<GroupGraph>* graph_basis,
     const std::unordered_map<std::string, int> positiveConstraints,
     const std::unordered_set<std::string> negativeConstraints,
