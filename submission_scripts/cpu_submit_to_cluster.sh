@@ -11,19 +11,20 @@
 
 
 
-source /raid6/homes/kierannp/.bashrc
-load
+
+module load anaconda/3.9
 conda activate genGrouper
-# micromamba activate /raid6/homes/kierannp/y/envs/pureGrouper
+echo $CONDA_PREFIX
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 
 echo "--> Activated conda environment"
 
 cd /raid6/homes/kierannp/projects/genGrouper
 python setup.py clean --all
 python setup.py build_ext --inplace
-python setup.py install
+python setup.py install --user
 
 echo "--> Compiled genGrouper"
 
-python run_exhaustive_generate.py --n 7 --n_cpus 30 --config_path /raid6/homes/kierannp/projects/genGrouper/dfconfig.cfg
+python run_exhaustive_generate.py --n 7 --n_cpus 30
 
