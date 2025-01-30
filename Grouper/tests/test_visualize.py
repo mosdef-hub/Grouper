@@ -1,7 +1,7 @@
 import networkx as nx
 import pytest
 
-from Grouper import Node
+from Grouper import Group
 from Grouper.libraries.Libraries import NodeTrace
 from Grouper.tests.base_test import BaseTest
 from Grouper.utils import convert_to_nx
@@ -41,7 +41,7 @@ class TestGroupGraph(BaseTest):
         ),
     )
     def test_visualize_node(self, smarts, smiles, hubs):
-        nt = NodeTrace(Node("desc", smiles, hubs), "", smarts, None)
+        nt = NodeTrace(Group("desc", smiles, hubs), "", smarts, None)
         img = visualize_node_trace(nt)
         assert img
 
@@ -75,7 +75,7 @@ class TestGroupGraph(BaseTest):
         # smartsList = ["[C](-[C])(-[C])(-[C])", "[NX3](-[C])(-[O-])(-[O-])", "[CX3]([C])(-[H])(-[H])","c1ccccc1", "c1(-[O](-[C]))ccccc1", "[C]", "bad_smarts"]
         # smilesList = ["CCCC", "N(=O)(O)", "[C]([H])([C])", "N", "C=O", "bad_smiles", "C"]
         # hubsList = [[0], [0], [0], [0,0], [0,0,1], [], []]
-        nt = NodeTrace(Node("desc", smiles, hubs), "", smarts, None)
+        nt = NodeTrace(Group("desc", smiles, hubs), "", smarts, None)
         with pytest.raises((ValueError, AttributeError)) as e:
             visualize_node_trace(nt)
             print(e, smarts, smiles, hubs)

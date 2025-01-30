@@ -5,6 +5,9 @@ from Grouper.tests.base_test import BaseTest
 
 
 class TestGroupGraph(BaseTest):
+    def __init(self):
+        self.to_set_of_sets = lambda matches: {frozenset(match) for match in matches}
+
     def test_add_node(self):
         # Basic node addition
         graph = GroupGraph()
@@ -34,10 +37,10 @@ class TestGroupGraph(BaseTest):
         graph.add_node("type1", "", [0, 0])
 
         graph.add_edge((0, 0), (1, 0))
-        assert (0, 0, 1, 0) in graph.edges
+        assert (0, 0, 1, 0, 1) in graph.edges
 
         graph.add_edge((2, 1), (1, 1))
-        assert (2, 1, 1, 1) in graph.edges
+        assert (2, 1, 1, 1, 1) in graph.edges
 
     def test_add_edge_with_invalid_nodes(self):
         graph = GroupGraph()
@@ -192,6 +195,47 @@ class TestGroupGraph(BaseTest):
         if graph_fixture == "five_member_ring_graph":
             assert graph.to_smiles() == "C1CCCC1"
 
+    def test_from_smiles(self):
+        graph = AtomGraph()
+        graph.from_smiles("CN")
+        truth = AtomGraph()
+        truth.add_node("C", 4)
+        truth.add_node("N", 3)
+        truth.add_edge(0,1,1)
+        assert graph == truth
+
+        graph = AtomGraph()
+        graph.from_smiles("C")
+        truth = AtomGraph()
+        truth.add_node("C", 4)
+        assert graph == truth
+
+        graph = AtomGraph()
+        graph.from_smiles("CC")
+        truth = AtomGraph()
+        truth.add_node("C", 4)
+        truth.add_node("C", 4)
+        truth.add_edge(0,1)
+        assert graph == truth
+
+        graph = AtomGraph()
+        graph.from_smiles("O=COOC(=O)O")
+        truth = AtomGraph()
+        truth.add_node('O',2)
+        truth.add_node('C',4)
+        truth.add_node('O',2)
+        truth.add_node('O',2)
+        truth.add_node('C',4)
+        truth.add_node('O',2)
+        truth.add_node('O',2)
+        truth.add_edge(0,1, 2)
+        truth.add_edge(1,2, 1)
+        truth.add_edge(2, 3, 1)
+        truth.add_edge(3, 4, 1)
+        truth.add_edge(4, 5, 2)
+        truth.add_edge(4, 6, 1)
+        assert graph == truth
+
     def test_add_node_performance(self, benchmark):
         graph = GroupGraph()
         for i in range(100):
@@ -203,54 +247,109 @@ class TestGroupGraph(BaseTest):
         # Benchmark the add_node method
         benchmark(benchmark_add_node)
 
-    # def test_substructure_search(self):
-    #     from Grouper import AtomGraph
-    #     graph = AtomGraph()
-    #     graph.add_node("C", 4)
-    #     graph.add_node("C", 4)
-    #     graph.add_node("C", 4)
-    #     graph.add_edge(0, 1)
-    #     graph.add_edge(1, 2)
-    #     sub = AtomGraph()
-    #     sub.add_node("C", 4)
-    #     matches = graph.substructure_search(sub, [0])
-    #     set_matches = set(tuple(m) for m in matches)
-    #     assert set_matches == {(0,), (2,)}
-
-    #     matches = graph.substructure_search(sub, [0,0])
-    #     set_matches = set(tuple(m) for m in matches)
-    #     assert set_matches == {(1,)}
-
-    #     matches = graph.substructure_search(sub, [0,0,0])
-    #     set_matches = set(tuple(m) for m in matches)
-    #     assert set_matches == set()
-
-    #     graph = AtomGraph() # "CCOCO"
-    #     graph.add_node("C", 4)
-    #     graph.add_node("C", 4)
-    #     graph.add_node("O", 2)
-    #     graph.add_node("C", 4)
-    #     graph.add_node("O", 2)
-    #     graph.add_edge(0, 1)
-    #     graph.add_edge(1, 2)
-    #     graph.add_edge(2, 3)
-    #     graph.add_edge(3, 4)
-    #     methanol = AtomGraph()
-    #     methanol.add_node("C", 4)
-    #     methanol.add_node("O", 2)
-    #     methanol.add_edge(0, 1)
-    #     matches = graph.substructure_search(methanol, [0])
-    #     set_matches = set(tuple(m) for m in matches)
-    #     assert set_matches == {(3,4)}
-    #     ether = AtomGraph()
-    #     ether.add_node("C", 4)
-    #     ether.add_node("O", 2)
-    #     ether.add_edge(0, 1)
-    #     matches = graph.substructure_search(ether, [0,1])
-    #     set_matches = set(tuple(m) for m in matches)
+    def test_substructure_search(self):
+        
+        to_set_of_sets = lambda matches: {frozenset(match) for match in matches}
 
 
+        from Grouper import AtomGraph
+        graph = AtomGraph()
+        graph.add_node("C", 4)
+        graph.add_node("C", 4)
+        graph.add_node("C", 4)
+        graph.add_edge(0, 1)
+        graph.add_edge(1, 2)
+        sub = AtomGraph()
+        sub.add_node("C", 4)
+        matches = graph.substructure_search(sub, [0,0,0])
+        assert to_set_of_sets(matches) == {frozenset({(0, 0)}), frozenset({(0, 2)})}
 
+        matches = graph.substructure_search(sub, [0,0])
+        assert to_set_of_sets(matches) == {frozenset({(0,1)})}
+
+        matches = graph.substructure_search(sub, [0])
+        assert to_set_of_sets(matches) == set()
+
+        graph = AtomGraph() # "CCOCO"
+        graph.add_node("C", 4)
+        graph.add_node("C", 4)
+        graph.add_node("O", 2)
+        graph.add_node("C", 4)
+        graph.add_node("O", 2)
+        graph.add_edge(0, 1)
+        graph.add_edge(1, 2)
+        graph.add_edge(2, 3)
+        graph.add_edge(3, 4)
+        methanol = AtomGraph() # "CO"
+        methanol.add_node("C", 4)
+        methanol.add_node("O", 2)
+        methanol.add_edge(0, 1)
+        matches = graph.substructure_search(methanol, [0,0])
+        assert to_set_of_sets(matches) == {frozenset({(0,1),(1,2)}), frozenset({(0,3),(1,2)})}
+
+        graph = AtomGraph() # C=CO
+        graph.add_node("C", 4)
+        graph.add_node("C", 4)
+        graph.add_node("O", 2)
+        graph.add_edge(0, 1, 2)
+        graph.add_edge(1, 2)
+        alkene = AtomGraph() # C=C
+        alkene.add_node("C", 4)
+        alkene.add_node("C", 4)
+        alkene.add_edge(0, 1, 2)
+        matches = graph.substructure_search(alkene, [0])
+        assert to_set_of_sets(matches) == set()
+        matches = graph.substructure_search(alkene, [0,0,1,1])
+        assert to_set_of_sets(matches) == set()
+        matches = graph.substructure_search(alkene, [0,0,1])
+        assert to_set_of_sets(matches) == {frozenset({(1,1),(0,0)})}
+        matches = graph.substructure_search(alkene, [1,1,0])
+        assert to_set_of_sets(matches) == {frozenset({(0,1),(1,0)})}
+        matches = graph.substructure_search(alkene, [0,0])
+        assert to_set_of_sets(matches) == set()
+
+        graph = AtomGraph() # C=CO
+        graph.add_node("C", 4)
+        graph.add_node("C", 4)
+        graph.add_node("O", 2)
+        graph.add_edge(0, 1, 2)
+        graph.add_edge(1, 2)
+        oxyl = AtomGraph()
+        oxyl.add_node("O", 2)
+        matches = graph.substructure_search(oxyl, [0])
+        assert to_set_of_sets(matches) == {frozenset({(0,2)})}
+
+    def test_substructure_search_2(self):
+        from Grouper import AtomGraph
+        truth = AtomGraph()
+        truth.from_smiles("CNCNOC=O")
+
+        sub = AtomGraph()
+        sub.add_node("C", 4)
+        sub.add_node("O", 2)
+        sub.add_node("O", 2)
+        sub.add_edge(0, 1)
+        sub.add_edge(0, 2, 2)
+
+        matches = truth.substructure_search(sub, [0])
+        assert len(matches) == 1
+
+    def test_substructure_search_3(self):
+        to_set_of_sets = lambda matches: {frozenset(match) for match in matches}
+        from Grouper import AtomGraph
+        truth = AtomGraph()
+        truth.from_smiles("CNCNC(=O)O")
+
+        sub = AtomGraph()
+        sub.add_node("C", 4)
+        sub.add_node("N", 3)
+        sub.add_node("C", 4)
+        sub.add_edge(0, 1)
+        sub.add_edge(1, 2)
+
+        matches = truth.substructure_search(sub, [0,0,0,1, 2,2])
+        # matches = truth.substructure_search(sub, [2,2,2, 1, 0, 0])
+        assert to_set_of_sets(matches) == {frozenset({(0,0),(1,1),(2,2)})}
 
     # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()

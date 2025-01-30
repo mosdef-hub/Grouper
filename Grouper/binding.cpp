@@ -27,16 +27,16 @@ py::set convert_unordered_set(const std::unordered_set<GroupGraph>& cpp_set) {
 
 PYBIND11_MODULE(_Grouper, m) {
     m.doc() = "Grouper bindings for Python";
-    py::class_<GroupGraph::Node>(m, "Node")
+    py::class_<GroupGraph::Group>(m, "Group")
         .def(py::init<>())
         .def(py::init<const std::string&, const std::string&, const std::vector<int>&>())
-        .def_readwrite("type", &GroupGraph::Node::ntype)
-        .def_readwrite("smarts", &GroupGraph::Node::smarts)
-        .def_readwrite("ports", &GroupGraph::Node::ports)
-        .def_readwrite("hubs", &GroupGraph::Node::hubs)
-        .def("__eq__", &GroupGraph::Node::operator==)
-        .def("__hash__", [](const GroupGraph::Node& node) {
-            return std::hash<GroupGraph::Node>{}(node);
+        .def_readwrite("type", &GroupGraph::Group::ntype)
+        .def_readwrite("smarts", &GroupGraph::Group::smarts)
+        .def_readwrite("ports", &GroupGraph::Group::ports)
+        .def_readwrite("hubs", &GroupGraph::Group::hubs)
+        .def("__eq__", &GroupGraph::Group::operator==)
+        .def("__hash__", [](const GroupGraph::Group& node) {
+            return std::hash<GroupGraph::Group>{}(node);
         });;
     py::class_<GroupGraph>(m, "GroupGraph")
         .def(py::init<>())
@@ -50,8 +50,9 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("add_edge", &GroupGraph::addEdge,
              py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
              py::arg("dst") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
+             py::arg("order") = 1,
              py::arg("verbose") = false)
-        .def("n_free_ports", &GroupGraph::n_free_ports)
+        .def("n_free_ports", &GroupGraph::numFreePorts)
         .def("compute_edge_orbits", &GroupGraph::computeEdgeOrbits)
         .def("__repr__", &GroupGraph::printGraph)
         .def("to_smiles", &GroupGraph::toSmiles, "Convert GroupGraph to SMILES")
@@ -74,7 +75,7 @@ PYBIND11_MODULE(_Grouper, m) {
              py::arg("dst"),
              py::arg("order") = 1)
         .def("from_smiles", &AtomGraph::fromSmiles)
-        // .def("substructure_search", &AtomGraph::substructureSearch)
+        .def("substructure_search", &AtomGraph::substructureSearch)
         .def("free_valency", &AtomGraph::getFreeValency)
         .def("__str__", &AtomGraph::printGraph)
         .def("__eq__", &AtomGraph::operator==);
@@ -92,7 +93,7 @@ PYBIND11_MODULE(_Grouper, m) {
         py::arg("options"),
         py::arg("stats"));
     m.def("exhaustive_generate", [](int n_nodes,
-                                    const std::unordered_set<GroupGraph::Node>& node_defs,
+                                    const std::unordered_set<GroupGraph::Group>& node_defs,
                                     const std::string& nauty_path,
                                     const std::string& input_file_path,
                                     int num_procs,
