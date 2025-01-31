@@ -100,6 +100,7 @@ PYBIND11_MODULE(_Grouper, m) {
              py::arg("dst"),
              py::arg("order") = 1)
         .def("from_smiles", &AtomGraph::fromSmiles)
+        .def("from_smarts", &AtomGraph::fromSmarts)
         .def("substructure_search", &AtomGraph::substructureSearch)
         .def("free_valency", &AtomGraph::getFreeValency)
         .def("__str__", &AtomGraph::printGraph)

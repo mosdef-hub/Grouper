@@ -90,6 +90,8 @@ public:
     std::vector<NodeIDType> nodeOrbits() const;
     std::vector<setword> toNautyGraph() const;
     void fromSmiles(const std::string& smiles);
+    void fromSmarts(const std::string& smarts);
+    void fromSmilesorSmarts(const std::string& smilesorsmarts);
     std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;
 
 private:
@@ -197,15 +199,20 @@ namespace std {
             return h1 ^ (h2 << 1) ^ (h3 << 2);
         }
     };
-    // template <> // Custom hash for std::tuple<int, int, unsigned int> AtomGraph::edges
-    // struct hash<std::tuple<int, int, unsigned int>> {
-    //     std::size_t operator()(const std::tuple<int, int, unsigned int>& t) const {
-    //         std::size_t h1 = std::hash<int>{}(std::get<0>(t));
-    //         std::size_t h2 = std::hash<int>{}(std::get<1>(t));
-    //         std::size_t h3 = std::hash<unsigned int>{}(std::get<2>(t));
-    //         return h1 ^ (h2 << 1) ^ (h3 << 2);
-    //     }
-    // };
+    template <>
+    struct hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType,
+                        GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>> {
+        std::size_t operator()(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType,
+                                                GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>& t) const {
+            std::size_t h1 = std::hash<GroupGraph::NodeIDType>{}(std::get<0>(t));
+            std::size_t h2 = std::hash<GroupGraph::PortType>{}(std::get<1>(t));
+            std::size_t h3 = std::hash<GroupGraph::NodeIDType>{}(std::get<2>(t));
+            std::size_t h4 = std::hash<GroupGraph::PortType>{}(std::get<3>(t));
+            std::size_t h5 = std::hash<unsigned int>{}(std::get<4>(t));
+
+            return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
+        }
+    };
     template <>
     struct hash<GroupGraph> {
         std::size_t operator()(const GroupGraph& graph) const {
@@ -215,8 +222,8 @@ namespace std {
                 h ^= std::hash<GroupGraph::Group>{}(node) + 0x9e3779b9 + (h << 6) + (h >> 2);
             }
             for (const auto& edge : graph.edges) {
-                h ^= std::hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, 
-                                        GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>>{}(edge) 
+                h ^= std::hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType,
+                                        GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>>{}(edge)
                     + 0x9e3779b9 + (h << 6) + (h >> 2);
             }
             return h;
