@@ -19,10 +19,10 @@ class TestGroupGraph(BaseTest):
         assert [n.ports for n in graph.nodes.values()] == [[0, 1]]
 
         # Basic node addition for AtomGraph
-        graph = AtomGraph()
-        graph.add_node("C", 4)
-        assert set(n.ntype for n in graph.nodes.values()) == set(["C"])
-        assert set(n.valency for n in graph.nodes.values()) == set([4])
+        agraph = AtomGraph()
+        agraph.add_node("C", 4)
+        assert set(n.type for n in agraph.nodes.values()) == set(["C"])
+        assert set(n.valency for n in agraph.nodes.values()) == set([4])
 
         # Adding a node with different type and smarts
         graph.add_node("", "C", [0, 0])
