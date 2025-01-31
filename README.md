@@ -80,7 +80,7 @@ The fundamental data structure behind this package is based on a port graph, loo
 conda create -n Grouper python=3.9
 conda activate Grouper
 conda install librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 openmp
-conda install -c conda-forge nauty
+conda install -c conda-forge nauty nlohmann_json
 
 git clone https://github.com/kierannp/Grouper
 cd Grouper

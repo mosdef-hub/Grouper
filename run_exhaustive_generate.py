@@ -1,4 +1,4 @@
-from Grouper import Node, exhaustive_generate
+from Grouper import Group, exhaustive_generate, GroupGraph
 from Grouper.visualization import visualize
 from Grouper.utils import convert_to_nx
 import time
@@ -15,15 +15,15 @@ import io
 if __name__ == "__main__":
 
     node_defs = set()
-    node_defs.add(Node(0, 'carbon', 'C', [0,0,0,0]))
-    # node_defs.add(Node(0, 'methine', 'C', [0,1,2], [0,0,0]))
-    # node_defs.add(Node(0, 'methylene', 'C', [0,1], [0,0]))
-    # node_defs.add(Node(0, 'methyl', 'C', [0], [0]))
-    # node_defs.add(Node(0, 'hydroxymethyl', 'CO', [0], [0]))
-    # node_defs.add(Node(0, 'primary_amine', 'CN', [0,1,2], [0,0,0]))
-    # node_defs.add(Node(0, 'secondary_amine', 'CNC', [0,1], [0,0]))
-    node_defs.add(Node(0, 'tertiary_amine', 'N', [0,0,0]))
-    node_defs.add(Node(0, 'hydroxyl', 'O',  [0]))
+    node_defs.add(Group('carbon', 'C', [0,0,0,0]))
+    # node_defs.add(Group(0, 'methine', 'C', [0,1,2], [0,0,0]))
+    # node_defs.add(Group(0, 'methylene', 'C', [0,1], [0,0]))
+    # node_defs.add(Group(0, 'methyl', 'C', [0], [0]))
+    # node_defs.add(Group(0, 'hydroxymethyl', 'CO', [0], [0]))
+    # node_defs.add(Group(0, 'primary_amine', 'CN', [0,1,2], [0,0,0]))
+    # node_defs.add(Group(0, 'secondary_amine', 'CNC', [0,1], [0,0]))
+    node_defs.add(Group('tertiary_amine', 'N', [0,0,0]))
+    node_defs.add(Group('hydroxyl', 'O',  [0]))
 
     # positive_constraints = {"hydroxyl" : 1, "tertiary_amine" : 1}
     # negative_constraints = {'NN', 'NO', 'NCN', 'NCO', 'OCO'}
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     result = exhaustive_generate(
         args.n, 
         node_defs, 
-        nauty_path="/Users/kieran/projects/genGrouper/packages/nauty2_8_8",
+        nauty_path="/raid6/homes/kierannp/projects/nauty2_8_9",
         input_file_path="",
         num_procs=args.n_cpus,
         positive_constraints=positive_constraints,
@@ -81,8 +81,7 @@ if __name__ == "__main__":
     # save grid image of each graph
     figures  = []
     for graph in result:
-        nx_graph = convert_to_nx(graph)
-        fig = visualize(nx_graph)
+        fig = visualize(graph)
         figures.append(fig_to_img(fig))
         plt.close(fig)
 
@@ -99,7 +98,6 @@ if __name__ == "__main__":
     composite.save(f'graphs_{args.n}.png')
 
 
-
-
-
-
+    # # Save to pickle
+    with open(f"{parent}/graphs_{args.n}.pkl", 'wb') as f:
+        pickle.dump(result, f)

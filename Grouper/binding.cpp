@@ -35,6 +35,9 @@ PYBIND11_MODULE(_Grouper, m) {
         .def_readwrite("ports", &GroupGraph::Group::ports)
         .def_readwrite("hubs", &GroupGraph::Group::hubs)
         .def("__eq__", &GroupGraph::Group::operator==)
+        .def("__ne__", &GroupGraph::Group::operator!=)
+        .def("__str__", &GroupGraph::Group::toString)
+        .def("__repr__", &GroupGraph::Group::toString)
         .def("__hash__", [](const GroupGraph::Group& node) {
             return std::hash<GroupGraph::Group>{}(node);
         });;
@@ -59,10 +62,32 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("to_vector", &GroupGraph::toVector, "Convert GroupGraph to group vector")
         .def("to_atom_graph", &GroupGraph::toAtomicGraph, "Convert GroupGraph to AtomGraph")
         .def("to_json", &GroupGraph::serialize, "Turn GroupGraph in JSON")
+        .def("from_json", &GroupGraph::deserialize, "Load GroupGraph from JSON")
         .def("__hash__", [](const GroupGraph& g) {
             return std::hash<GroupGraph>{}(g);  // Using your defined hash function
         })
-        .def("__eq__", &GroupGraph::operator==);
+        .def("__eq__", &GroupGraph::operator==)
+        .def(py::pickle(
+            [](const GroupGraph& g) {
+                return g.serialize();
+            },
+            [](const std::string& json_state) {
+                GroupGraph g;
+                g.deserialize(json_state);
+                return g;
+            }
+        ));
+    py::class_<AtomGraph::Atom>(m, "Atom")
+        .def(py::init<>())
+        .def(py::init<int, const std::string&, unsigned int>())
+        .def_readwrite("type", &AtomGraph::Atom::ntype)
+        .def_readwrite("valency", &AtomGraph::Atom::valency)
+        .def("__eq__", &AtomGraph::Atom::operator==)
+        .def("__str__", &AtomGraph::Atom::toString)
+        .def("__repr__", &AtomGraph::Atom::toString)
+        .def("__hash__", [](const AtomGraph::Atom& node) {
+            return std::hash<AtomGraph::Atom>{}(node);
+        });
     py::class_<AtomGraph>(m, "AtomGraph")
         .def(py::init<>())
         .def_readwrite("nodes", &AtomGraph::nodes)
@@ -79,7 +104,10 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("substructure_search", &AtomGraph::substructureSearch)
         .def("free_valency", &AtomGraph::getFreeValency)
         .def("__str__", &AtomGraph::printGraph)
-        .def("__eq__", &AtomGraph::operator==);
+        .def("__eq__", &AtomGraph::operator==)
+        .def("__hash__", [](const AtomGraph& g) {
+            return std::hash<AtomGraph>{}(g);  // Using your defined hash function
+        });
     m.def("process_nauty_output", &process_nauty_output,
         py::arg("line"),
         py::arg("node_defs"),

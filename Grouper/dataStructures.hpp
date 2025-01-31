@@ -44,6 +44,8 @@ public:
         Atom(int id, const std::string& ntype, const unsigned int valency)
             : id(id), ntype(ntype), valency(valency) {}
 
+        std::string toString() const;
+
     };
 
     // Custom hash function for the Atom struct
@@ -105,6 +107,7 @@ public:
         }
 
         std::vector<int> hubOrbits() const;
+        std::string toString() const;
 
     };
     std::unordered_map<NodeIDType, Group> nodes; ///< Map of node IDs to their respective nodes.
@@ -142,7 +145,8 @@ public:
     std::string toSmiles() const;
     std::unique_ptr<AtomGraph> toAtomicGraph() const;
     std::string serialize() const;
-    std::string Canon() const;
+    void deserialize(const std::string& state);
+    std::string canonize() const;
 
 
 private:
@@ -154,7 +158,7 @@ private:
 inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>& lhs,
                       const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>& rhs);
 
-// Specialize std::hash for GroupGraph::Group
+// Specialize std::hash for GroupGraph::Group, GroupGraph, GroupGraph.edge, AtomGraph::Atom
 namespace std {
     template <>
     struct hash<GroupGraph::Group> {
@@ -171,6 +175,17 @@ namespace std {
                 h5 ^= std::hash<int>{}(hub) + 0x9e3779b9 + (h5 << 6) + (h5 >> 2);
             }
             return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
+        }
+    };
+    template <>
+    struct hash<AtomGraph::Atom> {
+        std::size_t operator()(const AtomGraph::Atom& atom) const {
+            std::size_t h1 = std::hash<int>{}(atom.id);
+            std::size_t h2 = std::hash<std::string>{}(atom.ntype);
+            std::size_t h3 = std::hash<unsigned int>{}(atom.valency);
+
+            // Combine the individual hashes using XOR and shifting
+            return h1 ^ (h2 << 1) ^ (h3 << 2);
         }
     };
     template <>
@@ -200,6 +215,33 @@ namespace std {
                                         GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>>{}(edge)
                     + 0x9e3779b9 + (h << 6) + (h >> 2);
             }
+            return h;
+        }
+    };
+    template <>
+    struct hash<AtomGraph> {
+        std::size_t operator()(const AtomGraph& graph) const {
+            std::size_t h = 0;
+
+            // Hash the nodes (unordered_map<NodeIDType, Atom>)
+            for (const auto& node_pair : graph.nodes) {
+                const auto& node = node_pair.second;
+                h ^= std::hash<AtomGraph::Atom>{}(node) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            }
+
+            // Hash the edges (unordered_map<NodeIDType, unordered_set<std::pair<NodeIDType, unsigned int>>)
+            for (const auto& edge_pair : graph.edges) {
+                const auto& edge_set = edge_pair.second;
+                for (const auto& edge : edge_set) {
+                    // Custom hash for std::pair<NodeIDType, unsigned int>
+                    std::size_t h1 = std::hash<AtomGraph::NodeIDType>{}(edge.first);
+                    std::size_t h2 = std::hash<unsigned int>{}(edge.second);
+
+                    // Combine the two hashes
+                    h ^= h1 ^ (h2 << 1) + 0x9e3779b9 + (h << 6) + (h >> 2);
+                }
+            }
+
             return h;
         }
     };
