@@ -80,6 +80,20 @@ std::vector<int> GroupGraph::Group::hubOrbits() const {
     return hubs; // TODO: Implement hub orbits
 }
 
+std::string GroupGraph::Group::toString() const {
+    std::ostringstream output;
+    output << "Group " << id << " (" << ntype << ") (" << smarts << ") ";
+    output << ": \n    Ports ";
+    for (PortType port : ports) {
+        output << port << " ";
+    }
+    output << "\n    Hubs  ";
+    for (NodeIDType hub : hubs) {
+        output << hub << " ";
+    }
+    return output.str();
+}
+
 bool GroupGraph::operator==(const GroupGraph& other) const {
     // Check if empty
     if (nodes.empty() && other.nodes.empty()) {
@@ -705,6 +719,12 @@ AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
         edges = other.edges;
     }
     return *this;
+}
+
+std::string AtomGraph::Atom::toString() const {
+    std::ostringstream output;
+    output << "Atom " << id << " (" << ntype << ") Valency: " << valency;
+    return output.str();
 }
 
 bool AtomGraph::operator==(const AtomGraph& other) const {
