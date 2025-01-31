@@ -290,7 +290,6 @@ std::vector<GroupGraph> fragment(
                 }
                 
                 tempGraph.addNode(parent->ntype, parent->smarts, parent->hubs);
-                applied = true;
 
                 for (const auto& [queryid, molid] : match) {
                     tempAtomToNodeid[molid] = currentId;

@@ -140,7 +140,8 @@ public:
     std::string toSmiles() const;
     std::unique_ptr<AtomGraph> toAtomicGraph() const;
     std::string serialize() const;
-    std::string Canon() const;
+    void deserialize(const std::string& state);
+    std::string canonize() const;
 
 
 private:

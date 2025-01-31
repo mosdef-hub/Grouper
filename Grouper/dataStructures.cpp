@@ -7,6 +7,7 @@
 #include <cstring>
 #include <queue>
 #include <stack>
+#include <nlohmann/json.hpp>
 
 #include "dataStructures.hpp"
 #include "autUtils.hpp"
@@ -556,40 +557,109 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
 }
 
 std::string GroupGraph::serialize() const {
-        std::ostringstream oss;
-        oss << "{\n  \"nodes\": [\n";
-        for (const auto& pair : nodes) {
-            const Group& node = pair.second;
-            oss << "    {\n      \"id\": " << node.id
-                << ",\n      \"ntype\": \"" << node.ntype
-                << "\",\n      \"smarts\": \"" << node.smarts
-                << "\",\n      \"ports\": [";
-            for (const auto& port : node.ports) {
-                oss << port << ",";
-            }
-            oss.seekp(-1, oss.cur); // remove the last comma
-            oss << "],\n      \"hubs\": [";
-            for (const auto& hub : node.hubs) {
-                oss << hub << ",";
-            }
-            oss.seekp(-1, oss.cur); // remove the last comma
-            oss << "]\n    },\n";
+    std::ostringstream oss;
+    oss << "{\n  \"nodes\": [\n";
+    for (const auto& pair : nodes) {
+        const Group& node = pair.second;
+        oss << "    {\n      \"id\": " << pair.first
+            << ",\n      \"ntype\": \"" << node.ntype
+            << "\",\n      \"smarts\": \"" << node.smarts
+            << "\",\n      \"ports\": [";
+        for (size_t i = 0; i < node.ports.size(); ++i) {
+            if (i > 0) oss << ",";
+            oss << node.ports[i];
         }
-        oss.seekp(-2, oss.cur); // remove the last comma and newline
-        oss << "\n  ],\n  \"edges\": [\n";
-        for (const auto& edge : edges) {
-            oss << "    ["
-                << std::get<0>(edge) << ","
-                << std::get<1>(edge) << ","
-                << std::get<2>(edge) << ","
-                << std::get<3>(edge) << "],\n";
+        oss << "],\n      \"hubs\": [";
+        for (size_t i = 0; i < node.hubs.size(); ++i) {
+            if (i > 0) oss << ",";
+            oss << node.hubs[i];
         }
-        oss.seekp(-2, oss.cur); // remove the last comma and newline
-        oss << "\n  ]\n}";
-        return oss.str();
+        oss << "]\n    },\n";
     }
+    if (!nodes.empty()) {
+        oss.seekp(-2, oss.cur); // Remove last comma and newline
+    }
+    oss << "\n  ],\n  \"edges\": [\n";
+    for (size_t i = 0; i < edges.size(); ++i) {
+        const auto& edge = edges[i];
+        oss << "    ["
+            << std::get<0>(edge) << ","
+            << std::get<1>(edge) << ","
+            << std::get<2>(edge) << ","
+            << std::get<3>(edge) << ","
+            << std::get<4>(edge) << "]";
+        if (i < edges.size() - 1) {
+            oss << ",\n";
+        }
+    }
+    oss << "\n  ]\n}";
+    return oss.str();
+}
 
-std::string GroupGraph::Canon() const {
+void GroupGraph::deserialize(const std::string& data) {
+    using json = nlohmann::json;
+    try {
+        // Start with clean state
+        nodes.clear();
+        edges.clear();
+        nodetypes.clear();
+
+        
+        json j = json::parse(data);
+
+        // Pre-allocate space
+        const auto& nodes_array = j["nodes"];
+        nodes.reserve(nodes_array.size());
+
+        // Process nodes
+        for (const auto& node_data : nodes_array) {
+            // Extract all data first
+            NodeIDType id = node_data["id"].get<NodeIDType>();
+            
+            // Construct the group directly with its constructor
+            std::string ntype = node_data["ntype"].get<std::string>();
+            std::string smarts = node_data["smarts"].get<std::string>();
+            std::vector<NodeIDType> hubs = node_data["hubs"].get<std::vector<NodeIDType>>();
+            
+            // Create and insert the group
+            Group group(ntype, smarts, hubs);
+            group.id = id;  // Set ID after construction
+            
+            // If ports were specified, override the default ports
+            if (node_data.contains("ports")) {
+                group.ports = node_data["ports"].get<std::vector<PortType>>();
+            }
+            
+            // Use emplace with piecewise construction
+            nodes.emplace(std::piecewise_construct,
+                         std::forward_as_tuple(id),
+                         std::forward_as_tuple(std::move(group)));
+        }
+
+        // Process edges
+        const auto& edges_array = j["edges"];
+        edges.reserve(edges_array.size());
+        
+        for (const auto& edge_data : edges_array) {
+            edges.emplace_back(
+                edge_data[0].get<NodeIDType>(),
+                edge_data[1].get<PortType>(),
+                edge_data[2].get<NodeIDType>(),
+                edge_data[3].get<PortType>(),
+                edge_data[4].get<unsigned int>()
+            );
+        }
+
+    } catch (const json::parse_error& e) {
+        std::cerr << "JSON parse error: " << e.what() << std::endl;
+        throw;
+    } catch (const std::exception& e) {
+        std::cerr << "Error during deserialization: " << e.what() << std::endl;
+        throw;
+    }
+}
+
+std::string GroupGraph::canonize() const {
         // TODO: Implement canonicalization algorithm, this doesn't work because the it doesn't account for automorphisms
 
         // Step 1: Sort nodes based on their attributes (e.g., id, ntype, smarts)

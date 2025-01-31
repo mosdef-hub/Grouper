@@ -59,10 +59,21 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("to_vector", &GroupGraph::toVector, "Convert GroupGraph to group vector")
         .def("to_atom_graph", &GroupGraph::toAtomicGraph, "Convert GroupGraph to AtomGraph")
         .def("to_json", &GroupGraph::serialize, "Turn GroupGraph in JSON")
+        .def("from_json", &GroupGraph::deserialize, "Load GroupGraph from JSON")
         .def("__hash__", [](const GroupGraph& g) {
             return std::hash<GroupGraph>{}(g);  // Using your defined hash function
         })
-        .def("__eq__", &GroupGraph::operator==);
+        .def("__eq__", &GroupGraph::operator==)
+        .def(py::pickle(
+            [](const GroupGraph& g) {
+                return g.serialize();
+            },
+            [](const std::string& json_state) {
+                GroupGraph g;
+                g.deserialize(json_state);
+                return g;
+            }
+        ));
     py::class_<AtomGraph>(m, "AtomGraph")
         .def(py::init<>())
         .def_readwrite("nodes", &AtomGraph::nodes)

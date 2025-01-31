@@ -76,7 +76,7 @@ def visualize(group_graph, pos=None):
 
     # Manually draw edges between specified ports
     for i, edge in enumerate(group_graph.edges):
-        node1, port1, node2, port2 = edge
+        node1, port1, node2, port2, order = edge
 
         # Ensure ports are not reused
         if port1 in used_ports[node1] or port2 in used_ports[node2]:
@@ -223,7 +223,7 @@ def spring_layout(group_graph, iterations=50, k=1.0):
 
         # Attractive forces (Hooke's law)
         for edge in group_graph.edges:
-            (node1, port1, node2, port2) = edge
+            (node1, port1, node2, port2, order) = edge
             delta = pos[node1] - pos[node2]
             distance = np.linalg.norm(delta) + 1e-4
             force = -(distance**2 / k) * delta / distance
