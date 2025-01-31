@@ -919,6 +919,124 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     return matches;
 }
 
+/**
+ * Processing method for creating atom graphs from SMILES or SMARTS strings.
+ *
+ * This method can check for either a SMARTS or SMILES string, with
+ * SMARTS taking precedence, and create an atomgraph
+ *
+ * @tparam smilesorsmarts a string that will be processed into AtomGraph
+ * @return void
+ */
+void AtomGraph::fromSmilesorSmarts(const std::string& smilessorsmarts) {
+    // Parse fromSMILES or fromSMARTS
+};
+
+/**
+ * Processing method for creating atom graphs from SMARTS strings.
+ *
+ *  Currently supported symbols
+ *  `(,),[,],;,C,N,O,H,S,F,Br,Cl,I,-,=,#`
+ *
+ * TODO: Plenty more symbols to support.
+ * `R,!,X,ints,*,@`
+ * TODO: Add possibility to leverage RDKit parsing alternatively
+ * TODO: Handle two letter elements, such as Br, Cl etc.
+ *
+ * @tparam smarts a string that will be processed into AtomGraph
+ * @return void
+ */
+void AtomGraph::fromSmarts(const std::string& smarts) {
+    nodes.clear();
+    edges.clear();
+
+    std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+    };
+
+    std::vector<NodeIDType> centralNodeVec; // List to handle branching
+    std::unordered_map<int, NodeIDType> ringClosures; // Map for ring closure indices
+    int prevDepth = 0; // For determining if there's branching
+    int currentDepth = 0; // How many parantheses deep are you at in the string
+
+    NodeIDType currentNode = 0;
+    int bondOrder = 1; // Default to single bond
+
+    for (size_t i = 0; i < smarts.length(); ++i) {
+        char c = smarts[i];
+
+        if (standardElementValency.count(std::string(1, c))) {
+            // Handle atom
+            int valency = standardElementValency[std::string(1, c)];
+            addNode(std::string(1, c), valency);
+            NodeIDType currentNode = nodes.size() - 1;
+
+            // In the initial state, no bonds occur, so just add the node
+            if (centralNodeVec.empty()) {
+                centralNodeVec[currentDepth] =  currentNode;
+            } else if (currentDepth <= prevDepth) { // at the end of a branch, so overwrite previous source node
+                addEdge(centralNodeVec[currentDepth], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            } else { // bond goes to the actively building branch
+                addEdge(centralNodeVec[currentDepth-1], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            }
+        } else if (c == '(') {
+            // Going one level deeper into molecule branching
+            currentDepth++;
+        } else if (c == ')') {
+            // Stepping one level out of molecule branching
+            currentDepth--;
+        } else if (std::isdigit(c)) {
+            // Handle ring closure
+            int ringIndex = c;
+            if (ringClosures.count(ringIndex)) {
+                // Connect the current node to the ring closure with the current bond order
+                addEdge(currentNode, ringClosures[ringIndex], bondOrder);
+                ringClosures.erase(ringIndex);
+            } else {
+                // Store the current node as the ring closure point
+                ringClosures[ringIndex] = currentNode;
+            }
+            bondOrder = 1; // Reset bond order to single after use
+        } else if (c == '-') {
+            // Set bond order to single, this may be useless
+            bondOrder = 1;
+        } else if (c == '=') {
+            // Set bond order to double
+            bondOrder = 2;
+        } else if (c == '#') {
+            // Set bond order to triple
+            bondOrder = 3;
+        } else if ((c == '[') || (c == ']')) {
+            // Some symbols that need to be considered with more specifics
+            ;
+        } else {
+            // Handle unsupported characters (e.g., invalid SMARTS)
+            throw std::invalid_argument(
+                "Unsupported character in SMARTS: `"
+                + std::string(1, c)
+                + "` for SMILES "
+                + std::string(smarts)
+            );
+        }
+    }
+
+    // Basic error checking for unclosed rings
+    if (!ringClosures.empty()) {
+        std::cerr << "Unclosed rings detected: ";
+        for (const auto& entry : ringClosures) {
+            std::cerr << entry.first << " ";
+        }
+        std::cerr << std::endl;
+        throw std::invalid_argument(
+                "Unclosed ring detected in SMILES string `"
+                + std::string(smarts)
+                + "`"
+            );
+    }
+}
+
 void AtomGraph::fromSmiles(const std::string& smiles) {
     nodes.clear();
     edges.clear();
@@ -926,7 +1044,7 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
     std::unordered_map<std::string, int> standardElementValency = {
         {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
     };
-    
+
     std::stack<NodeIDType> nodeStack; // Stack to handle branching
     std::unordered_map<int, NodeIDType> ringClosures; // Map for ring closure indices
     NodeIDType lastNode = -1;
@@ -971,12 +1089,23 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
                 ringClosures[ringIndex] = lastNode;
             }
             bondOrder = 1; // Reset bond order to single after use
+        } else if (c == '-') {
+            // Set bond order to single, this may be useless
+            bondOrder = 1;
         } else if (c == '=') {
             // Set bond order to double
             bondOrder = 2;
+        } else if (c == '#') {
+            // Set bond order to triple
+            bondOrder = 3;
         } else {
             // Handle unsupported characters (e.g., invalid SMILES)
-            throw std::invalid_argument("Unsupported character in SMILES: " + std::string(1, c));
+            throw std::invalid_argument(
+                "Unsupported character in SMILES: `"
+                + std::string(1, c)
+                + "` for SMILES "
+                + std::string(smiles)
+            );
         }
     }
 
@@ -987,7 +1116,11 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
             std::cerr << entry.first << " ";
         }
         std::cerr << std::endl;
-        throw std::runtime_error("Unclosed ring detected in SMILES string.");
+        throw std::invalid_argument(
+                "Unclosed ring detected in SMILES string `"
+                + std::string(smiles)
+                + "`"
+            );
     }
 
 }

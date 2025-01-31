@@ -77,6 +77,8 @@ public:
     std::vector<NodeIDType> nodeOrbits() const;
     std::vector<setword> toNautyGraph() const;
     void fromSmiles(const std::string& smiles);
+    void fromSmarts(const std::string& smarts);
+    void fromSmilesorSmarts(const std::string& smilesorsmarts);
     std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;
 
 private:
@@ -172,9 +174,9 @@ namespace std {
         }
     };
     template <>
-    struct hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, 
+    struct hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType,
                         GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>> {
-        std::size_t operator()(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, 
+        std::size_t operator()(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType,
                                                 GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>& t) const {
             std::size_t h1 = std::hash<GroupGraph::NodeIDType>{}(std::get<0>(t));
             std::size_t h2 = std::hash<GroupGraph::PortType>{}(std::get<1>(t));
@@ -194,8 +196,8 @@ namespace std {
                 h ^= std::hash<GroupGraph::Group>{}(node) + 0x9e3779b9 + (h << 6) + (h >> 2);
             }
             for (const auto& edge : graph.edges) {
-                h ^= std::hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, 
-                                        GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>>{}(edge) 
+                h ^= std::hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType,
+                                        GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>>{}(edge)
                     + 0x9e3779b9 + (h << 6) + (h >> 2);
             }
             return h;

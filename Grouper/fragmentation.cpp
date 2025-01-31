@@ -20,9 +20,9 @@
 struct TupleHash {
     template <typename T1, typename T2, typename T3>
     std::size_t operator ()(const std::tuple<T1, T2, T3>& t) const {
-        auto h1 = std::hash<T1>{}(std::get<0>(t)); 
-        auto h2 = std::hash<T2>{}(std::get<1>(t)); 
-        auto h3 = std::hash<T3>{}(std::get<2>(t)); 
+        auto h1 = std::hash<T1>{}(std::get<0>(t));
+        auto h2 = std::hash<T2>{}(std::get<1>(t));
+        auto h3 = std::hash<T3>{}(std::get<2>(t));
 
         // Combine the hashes using a better mix (commonly used strategy)
         h1 ^= h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2);  // Mixing h1 and h2
@@ -75,7 +75,7 @@ std::unordered_set<GroupGraph::Group> possibleValencyNode(const GroupGraph::Grou
         The upper bound is 2^hubs.size() - 1 but because the atoms in a node can be automorphic to each other this is in practice much smaller
         Ex. C=C, [0,0,1,1] -> C=C, [0,0,1,1], C=C, [0,0,1], C=C, [0,1], C=C, [0,0], C=C, [0], C=C []
         TODO: Implement a more efficient algorithm, currently this is generates all possible subsets, would be more efficient to incorporate the automorphisms
-    */ 
+    */
 
     // Resulting set of nodes
     std::unordered_set<GroupGraph::Group> possibleNodes;
@@ -107,9 +107,10 @@ std::unordered_set<GroupGraph::Group> possibleValencyNode(const GroupGraph::Grou
     return possibleNodes;
 
 }
-
+// TODO: This should accept nodeDefs which are NodeTraces
+// TODO: This should handle Groups which can be SMARTS or SMILES
 std::vector<GroupGraph> fragment(
-    const std::string& smiles, 
+    const std::string& smiles,
     const std::unordered_set<GroupGraph::Group>& nodeDefs
 ) {
     std::vector<GroupGraph> allFragmentations; // Store all valid fragmentations
@@ -131,17 +132,17 @@ std::vector<GroupGraph> fragment(
     for (const auto& [node, possibleNodeSet] : possibleNodes) {
         possibleNodesVec[node] = std::vector<GroupGraph::Group>(possibleNodeSet.begin(), possibleNodeSet.end());
     }
-    
+
     std::vector<GroupGraph::Group> nodesVec;
     for (const auto& [node, possibleNodeSet] : possibleNodes) {
         nodesVec.push_back(node);
     }
 
-    std::sort(nodesVec.begin(), nodesVec.end(), 
+    std::sort(nodesVec.begin(), nodesVec.end(),
         [](const GroupGraph::Group& a, const GroupGraph::Group& b) {
             AtomGraph aGraph, bGraph;
-            aGraph.fromSmiles(a.smarts);
-            bGraph.fromSmiles(b.smarts);
+            aGraph.fromSmiles(a.smarts); // fromSmarts?
+            bGraph.fromSmiles(b.smarts); // fromSmarts?
             if (aGraph.nodes.size() != bGraph.nodes.size()) {
                 return aGraph.nodes.size() > bGraph.nodes.size();
             }
@@ -150,11 +151,12 @@ std::vector<GroupGraph> fragment(
     );
 
     for (auto& [node, nodeCompositionVec] : possibleNodesVec) {
-        std::sort(nodeCompositionVec.begin(), nodeCompositionVec.end(), 
+        std::sort(nodeCompositionVec.begin(), nodeCompositionVec.end(),
         [](const GroupGraph::Group& a, const GroupGraph::Group& b) {
             AtomGraph aGraph, bGraph;
-            aGraph.fromSmiles(a.smarts);
-            bGraph.fromSmiles(b.smarts);
+
+            aGraph.fromSmiles(a.smarts); // fromSmarts
+            bGraph.fromSmiles(b.smarts); // fromSmarts
             if (aGraph.nodes.size() != bGraph.nodes.size()) {
                 return aGraph.nodes.size() > bGraph.nodes.size();
             }
@@ -171,17 +173,17 @@ std::vector<GroupGraph> fragment(
     }
 
     // Recursive function to explore all valid fragmentations
-    std::function<void(const std::vector<GroupGraph::Group>&, 
-                       std::unordered_map<int, GroupGraph::NodeIDType>, 
-                       std::unordered_map<int, std::vector<int>>, 
-                       std::unordered_map<int, std::string>, 
-                       int, 
+    std::function<void(const std::vector<GroupGraph::Group>&,
+                       std::unordered_map<int, GroupGraph::NodeIDType>,
+                       std::unordered_map<int, std::vector<int>>,
+                       std::unordered_map<int, std::string>,
+                       int,
                        GroupGraph)>
-    attemptFragmentation = [&](const std::vector<GroupGraph::Group>& candidates, 
-                               std::unordered_map<int, GroupGraph::NodeIDType> atomToNodeid, 
-                               std::unordered_map<int, std::vector<int>> atomToPorts, 
-                               std::unordered_map<int, std::string> atomToSmarts, 
-                               int startIdx, 
+    attemptFragmentation = [&](const std::vector<GroupGraph::Group>& candidates,
+                               std::unordered_map<int, GroupGraph::NodeIDType> atomToNodeid,
+                               std::unordered_map<int, std::vector<int>> atomToPorts,
+                               std::unordered_map<int, std::string> atomToSmarts,
+                               int startIdx,
                                GroupGraph currentGraph) {
         if (atomToNodeid.size() == mol.nodes.size()) {
             // Add edges to the group graph based on molecular connectivity
@@ -236,7 +238,7 @@ std::vector<GroupGraph> fragment(
                     // }
                     // printf("Edge: %d-%d, Ports: %d-%d\n", src, dst, srcPort, dstPort);
                     // printf("Smarts: %s-%s\n", atomToSmarts[src].c_str(), atomToSmarts[dst].c_str());
-                    
+
                     // printf("Bond Order: %d\n", bondOrder);
 
                     currentGraph.addEdge(
@@ -254,7 +256,7 @@ std::vector<GroupGraph> fragment(
         for (size_t i = startIdx; i < candidates.size(); ++i) {
             const auto& node = candidates[i];
             AtomGraph query;
-            query.fromSmiles(node.smarts);
+            query.fromSmiles(node.smarts); // fromSMARTS
 
             auto matches = mol.substructureSearch(query, node.hubs);
             if (matches.empty()) {
@@ -278,7 +280,7 @@ std::vector<GroupGraph> fragment(
                 if (alreadyMatched) continue;
 
                 auto parent = std::find_if(
-                    nodeDefs.begin(), 
+                    nodeDefs.begin(),
                     nodeDefs.end(),
                     [&](const GroupGraph::Group& n) {
                         return n.smarts == node.smarts && n.ntype == node.ntype;
@@ -288,9 +290,9 @@ std::vector<GroupGraph> fragment(
                 if (parent == nodeDefs.end()) {
                     throw std::invalid_argument("Parent node not found.");
                 }
-                
+
                 tempGraph.addNode(parent->ntype, parent->smarts, parent->hubs);
-                applied = true;
+                // applied = true;
 
                 for (const auto& [queryid, molid] : match) {
                     tempAtomToNodeid[molid] = currentId;
@@ -326,5 +328,3 @@ std::vector<GroupGraph> fragment(
 
     return allFragmentations;
 }
-
-
