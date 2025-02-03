@@ -618,7 +618,7 @@ void GroupGraph::deserialize(const std::string& data) {
         edges.clear();
         nodetypes.clear();
 
-        
+
         json j = json::parse(data);
 
         // Pre-allocate space
@@ -629,21 +629,21 @@ void GroupGraph::deserialize(const std::string& data) {
         for (const auto& node_data : nodes_array) {
             // Extract all data first
             NodeIDType id = node_data["id"].get<NodeIDType>();
-            
+
             // Construct the group directly with its constructor
             std::string ntype = node_data["ntype"].get<std::string>();
             std::string smarts = node_data["smarts"].get<std::string>();
             std::vector<NodeIDType> hubs = node_data["hubs"].get<std::vector<NodeIDType>>();
-            
+
             // Create and insert the group
             Group group(ntype, smarts, hubs);
             group.id = id;  // Set ID after construction
-            
+
             // If ports were specified, override the default ports
             if (node_data.contains("ports")) {
                 group.ports = node_data["ports"].get<std::vector<PortType>>();
             }
-            
+
             // Use emplace with piecewise construction
             nodes.emplace(std::piecewise_construct,
                          std::forward_as_tuple(id),
@@ -653,7 +653,7 @@ void GroupGraph::deserialize(const std::string& data) {
         // Process edges
         const auto& edges_array = j["edges"];
         edges.reserve(edges_array.size());
-        
+
         for (const auto& edge_data : edges_array) {
             edges.emplace_back(
                 edge_data[0].get<NodeIDType>(),
@@ -1063,7 +1063,7 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
 
             // In the initial state, no bonds occur, so just add the node
             if (centralNodeVec.empty()) {
-                centralNodeVec[currentDepth] =  currentNode;
+                centralNodeVec.push_back(currentNode);
             } else if (currentDepth <= prevDepth) { // at the end of a branch, so overwrite previous source node
                 addEdge(centralNodeVec[currentDepth], currentNode, bondOrder);
                 centralNodeVec[currentDepth] = currentNode;
