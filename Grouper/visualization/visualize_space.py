@@ -8,6 +8,10 @@ from networkx import Graph
 from numpy.typing import ArrayLike
 from rdkit import Chem
 from rdkit.Chem import rdmolops
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+import numpy as np
+from collections import Counter
 
 from Grouper import GroupGraph
 
@@ -109,3 +113,84 @@ def plot_feature_similarity(
     options: dict,
 ) -> plt.Figure:
     pass
+
+def calculate_centrality(space_network: Graph) -> Dict[str, Dict]:
+    """Compute various centrality measures."""
+    return {
+        "degree_centrality": nx.degree_centrality(space_network),
+        "betweenness_centrality": nx.betweenness_centrality(space_network),
+        "closeness_centrality": nx.closeness_centrality(space_network),
+        "eigenvector_centrality": nx.eigenvector_centrality(space_network),
+    }
+
+
+def visualize_chemical_space(kernel_matrix: ArrayLike, method: str = "PCA") -> plt.Figure:
+    """Project the chemical space into a 2D representation using PCA or t-SNE."""
+    if method == "PCA":
+        reduced = PCA(n_components=2).fit_transform(kernel_matrix)
+    elif method == "tSNE":
+        reduced = TSNE(n_components=2, perplexity=30, metric="precomputed").fit_transform(1 - kernel_matrix)
+    else:
+        raise ValueError("Unsupported dimensionality reduction method")
+
+    fig, ax = plt.subplots()
+    ax.scatter(reduced[:, 0], reduced[:, 1])
+    ax.set_title(f"{method} Projection of Chemical Space")
+    return fig
+
+
+def calculate_diversity_index(kernel_matrix: ArrayLike) -> float:
+    """Compute molecular diversity index based on pairwise similarity."""
+    return np.mean(1 - kernel_matrix[np.triu_indices_from(kernel_matrix, k=1)])
+
+
+def find_shortest_paths(space_network: Graph, source: str, target: str) -> t.List[t.List[str]]:
+    """Find shortest paths between two molecules in the chemical space."""
+    return list(nx.all_shortest_paths(space_network, source=source, target=target, weight="weight"))
+
+
+def calculate_substructure_frequencies(space_set: t.Set[GroupGraph]) -> Dict[str, int]:
+    """Identify frequently occurring substructures in the chemical space."""
+    substructure_counts = Counter()
+    for g in space_set:
+        for i in g.nodes.keys():
+            substructure_counts[g.nodes[i].type] += 1
+    return substructure_counts
+
+def visualize_substructure_correlation(space_set: t.Set[GroupGraph], graph_property: ArrayLike, options: dict = None) -> plt.Figure:
+    """Visualize the correlation between substructures in the chemical space."""
+    from scipy.stats import pearsonr
+    def to_ordered_vector(g, order):
+        node_hist = g.to_vector()
+        ordered_vector = []
+        for o in order:
+            if o not in node_hist:
+                ordered_vector.append(0)
+            else:
+                ordered_vector.append(node_hist[o])
+        return ordered_vector
+    
+    nodes_types = set()
+    for g in space_set:
+        for i in g.nodes.keys():
+            nodes_types.add(g.nodes[i].type)
+    order = list(nodes_types)
+    # Calculate Pearson correlation coefficient
+    data = []
+    for g in space_set:
+        ordered_vector = to_ordered_vector(g, order)
+        data.append(ordered_vector)
+
+    data = np.array(data)
+    properties = np.array(graph_property)
+    correlations = []
+    for i in range(data.shape[1]):
+        corr, _ = pearsonr(data[:, i], properties)
+        correlations.append(corr)
+    fig, ax = plt.subplots()
+    ax.bar(range(len(correlations)), correlations)
+    ax.set_xticks(range(len(correlations)))
+    ax.set_xticklabels(order, rotation=45)
+    ax.set_title("Substructure Correlation")
+    return fig
+
