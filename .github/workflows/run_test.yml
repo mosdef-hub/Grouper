@@ -30,12 +30,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-     - name: Install environment
-       uses: mamba-org/setup-micromamba@v2
-       with:
-         environment-file: environment.yml
-         create-args: >-
-           python=${{ matrix.python-version }}
+    - name: Install environment
+      uses: mamba-org/setup-micromamba@v2
+      with:
+        environment-file: environment.yml
+        create-args: >-
+          python=${{ matrix.python-version }}
 
     - name: Activate env
       run: micromamba activate test-env
