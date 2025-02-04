@@ -19,6 +19,7 @@ dependencies:
   - seaborn
   - cairosvg
   - pyg
+  - pytorch
   - pytest-benchmark
   - pytest
   - nlohmann_json
