@@ -32,10 +32,10 @@ jobs:
 
      - name: Install environment
        uses: mamba-org/setup-micromamba@v2
-         with:
-           environment-file: environment.yml
-           create-args: >-
-             python=${{ matrix.python-version }}
+       with:
+         environment-file: environment.yml
+         create-args: >-
+           python=${{ matrix.python-version }}
 
     - name: Activate env
       run: micromamba activate test-env
