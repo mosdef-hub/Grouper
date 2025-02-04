@@ -23,7 +23,7 @@ class TestLibraries(BaseTest):
         nt = library.query_nodes({"node": node})[0]
 
         assert nt.node == node
-        assert nt.smarts == "CH2"
+        assert nt.smarts == "[CX4H3]"
         assert nt.doi == ""
         assert nt.priority is None
 
