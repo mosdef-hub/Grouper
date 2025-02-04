@@ -16,7 +16,6 @@ dependencies:
   - mbuild
   - nauty
   - jupyter
-  - jupyter
   - seaborn
   - cairosvg
   - pyg
