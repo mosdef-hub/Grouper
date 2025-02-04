@@ -1,4 +1,4 @@
-name: newgrouper39
+name: test-env
 channels:
   - conda-forge
   - pyg

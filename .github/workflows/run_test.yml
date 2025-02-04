@@ -30,24 +30,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Setup micromamba
-      uses: mamba-org/setup-micromamba@v1
-      with:
-        environment-name: test-env
-        create-args: python=${{ matrix.python-version }}
-
-    - name: Install dependencies
-      run: |
-        micromamba install -n test-env librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 networkx pytest llvm-openmp nlohmann_json cairosvg seaborn jupyter -y
-        micromamba install pytorch torchvision -c pytorch
-        micromamba install pyg -c pyg
-        pip install grakel
+     - name: Install environment
+       uses: mamba-org/setup-micromamba@v2
+         with:
+           environment-file: environment.yml
+           create-args: >-
+             python=${{ matrix.python-version }}
 
     - name: Activate env
       run: micromamba activate test-env
-
-    - name : Install nauty
-      run: micromamba install -n test-env -c conda-forge nauty -y
 
     - name: List nauty headers
       run: ls /home/runner/micromamba/envs/test-env/include/nauty
