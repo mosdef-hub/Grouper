@@ -307,7 +307,8 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
     }
 
     // Add the edge
-    edges.push_back(std::make_tuple(from, fromPort, to, toPort, bondOrder));
+    edges.insert(std::make_tuple(from, fromPort, to, toPort, bondOrder));
+    // edges.insert(std::make_tuple(to, toPort, from, fromPort, bondOrder)); // Uncomment this line to make the graph undirected
     return true;
 }
 
@@ -604,8 +605,8 @@ std::string GroupGraph::serialize() const {
         oss.seekp(-2, oss.cur); // Remove last comma and newline
     }
     oss << "\n  ],\n  \"edges\": [\n";
-    for (size_t i = 0; i < edges.size(); ++i) {
-        const auto& edge = edges[i];
+    size_t i = 0;
+    for (auto edge : edges) {
         oss << "    ["
             << std::get<0>(edge) << ","
             << std::get<1>(edge) << ","
@@ -615,6 +616,7 @@ std::string GroupGraph::serialize() const {
         if (i < edges.size() - 1) {
             oss << ",\n";
         }
+        i++;
     }
     oss << "\n  ]\n}";
     return oss.str();
@@ -665,12 +667,14 @@ void GroupGraph::deserialize(const std::string& data) {
         edges.reserve(edges_array.size());
         
         for (const auto& edge_data : edges_array) {
-            edges.emplace_back(
-                edge_data[0].get<NodeIDType>(),
-                edge_data[1].get<PortType>(),
-                edge_data[2].get<NodeIDType>(),
-                edge_data[3].get<PortType>(),
-                edge_data[4].get<unsigned int>()
+            edges.insert(
+                std::make_tuple(
+                    edge_data[0].get<NodeIDType>(),
+                    edge_data[1].get<PortType>(),
+                    edge_data[2].get<NodeIDType>(),
+                    edge_data[3].get<PortType>(),
+                    edge_data[4].get<unsigned int>()
+                )
             );
         }
 
@@ -696,7 +700,10 @@ std::string GroupGraph::canonize() const {
         });
 
         // Step 2: Sort edges by connected nodes and ports
-        std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> sortedEdges = edges;
+        std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> sortedEdges;
+        for (const auto& edge : edges) {
+            sortedEdges.push_back(edge);
+        }
         std::sort(sortedEdges.begin(), sortedEdges.end());
 
         // Step 3: Convert sorted nodes and edges to a canonical smarts or other format

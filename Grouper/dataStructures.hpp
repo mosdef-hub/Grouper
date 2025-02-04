@@ -120,7 +120,7 @@ public:
 
     };
     std::unordered_map<NodeIDType, Group> nodes; ///< Map of node IDs to their respective nodes.
-    std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> edges; ///< List of edges connecting nodes. (srcNodeID, srcPort, dstNodeID, dstPort, bondOrder)
+    std::unordered_set<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> edges; ///< List of edges connecting nodes. (srcNodeID, srcPort, dstNodeID, dstPort, bondOrder)
     std::unordered_map<std::string, std::vector<PortType>> nodetypes; ///< Map of node types to their respective ports.
 
     // Core Methods
