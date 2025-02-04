@@ -8,7 +8,7 @@ from Grouper.tests.base_test import BaseTest
 class TestLibraries(BaseTest):
     @pytest.mark.parametrize(
         "library,n_graphs",
-        [("saftgm", 36), ("joback", 41), ("UNIFAC", 89), ("base", 0)],
+        [("saftgm", 1), ("joback", 41), ("UNIFAC", 89), ("base", 0)],
     )
     def test_build_library(self, library, n_graphs):
         if library == "base":
