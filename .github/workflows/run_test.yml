@@ -38,6 +38,10 @@ jobs:
 
     - name: Install dependencies
       run: micromamba install -n test-env librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 networkx pytest llvm-openmp nlohmann_json -y
+      run: micromamba install pytorch torchvision -c pytorch
+      run: micromamba install pyg -c pyg
+
+
 
     - name: Activate env
       run: micromamba activate test-env
