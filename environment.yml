@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - pyg
 dependencies:
-  - python=3.12
+  - python>=3.9
   - boost
   - cmake
   - rdkit
