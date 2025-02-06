@@ -66,8 +66,7 @@ GroupGraph& GroupGraph::operator=(const GroupGraph& other) {
 }
 
 bool GroupGraph::Group::operator==(const Group& other) const {
-    return id == other.id &&
-           ntype == other.ntype &&
+    return ntype == other.ntype &&
            smarts == other.smarts &&
            hubs == other.hubs;
 }
@@ -729,6 +728,7 @@ AtomGraph::AtomGraph()
 
 AtomGraph::AtomGraph(const AtomGraph& other)
     : nodes(other.nodes), edges(other.edges) {}
+
 
 AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
     if (this != &other) {

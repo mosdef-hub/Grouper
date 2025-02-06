@@ -79,7 +79,7 @@ PYBIND11_MODULE(_Grouper, m) {
         ));
     py::class_<AtomGraph::Atom>(m, "Atom")
         .def(py::init<>())
-        .def(py::init<int, const std::string&, unsigned int>())
+        .def(py::init<int, const std::string&, int>())
         .def_readwrite("type", &AtomGraph::Atom::ntype)
         .def_readwrite("valency", &AtomGraph::Atom::valency)
         .def("__eq__", &AtomGraph::Atom::operator==)

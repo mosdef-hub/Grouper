@@ -60,11 +60,12 @@ public:
 
         // Need to define comparison operators for Atom to be used in unordered_map
         bool operator==(const Atom& other) const {
-            return id == other.id && ntype == other.ntype && valency == other.valency;
+            return ntype == other.ntype && valency == other.valency;
         }
         bool operator!=(const Atom& other) const {
             return !(*this == other);
         }
+
         Atom() : id(0), ntype(""), valency(0) {}
 
         Atom(int id, const std::string& ntype, const unsigned int valency)
@@ -93,7 +94,6 @@ public:
     void fromSmarts(const std::string& smarts);
     void fromSmilesorSmarts(const std::string& smilesorsmarts);
     std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;
-
 private:
 };
 

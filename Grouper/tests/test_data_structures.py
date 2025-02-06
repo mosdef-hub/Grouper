@@ -1,7 +1,7 @@
 import pytest
 from rdkit import Chem
 
-from Grouper import AtomGraph, GroupGraph
+from Grouper import Atom, AtomGraph, Group, GroupGraph
 from Grouper.tests.base_test import BaseTest
 
 
@@ -9,6 +9,66 @@ class TestGroupGraph(BaseTest):
     def to_set_of_sets(self, matches):
         """Helper function for set comparison."""
         return {frozenset(match) for match in matches}
+
+    def test_group_equality(self):
+        g1 = Group("C", "[C]", [0])
+        g2 = Group("C", "[C]", [0])
+        g3 = Group("C2", "[C]", [0])
+        g4 = Group("C", "[C2]", [0])
+        g5 = Group("C", "[C]", [0, 1])
+
+        assert g1 == g2
+        assert g1 != g3
+        assert g1 != g4
+        assert g1 != g5
+        assert g3 != g4
+        assert g3 != g5
+        assert g4 != g5
+
+        gg = GroupGraph()
+        gg.add_node("O", "[O]", [0])
+        gg.add_node("O", "[O]", [0])
+        gg.add_node("O", "[O]", [0])
+        gg.add_node("O", "[O]", [0])
+
+        assert all(
+            [n1 == n2 for n1, n2 in zip(gg.nodes.values(), list(gg.nodes.values())[1:])]
+        )
+
+        gg = GroupGraph()
+        gg.add_node("O", "[O]", [0])
+        gg.add_node("C", "[O]", [0])
+        gg.add_node("N", "[O]", [0])
+        gg.add_node("S", "[O]", [0])
+
+        assert not any([n1 == n2 for n1, n2 in zip(gg.nodes, list(gg.nodes)[1:])])
+
+    def test_atom_equality(self):
+        a1 = Atom("C")
+        a2 = Atom("C", 4)
+        a3 = Atom("C", 3)
+        a4 = Atom("N")
+
+        assert a1 == a2
+        assert a1 != a3
+        assert a1 != a4
+        assert a3 != a4
+
+        ag = AtomGraph()
+        ag.add_atom("C")
+        ag.add_node("C", 4)
+        nodeList = list(ag.nodes.values())
+
+        assert nodeList[0] == nodeList[1]
+
+        ag = AtomGraph()
+        ag.add_atom("C")
+        ag.add_node("C", 3)
+        ag.add_node("N")
+        ag.add_node("N", 2)
+        nodeList = list(ag.nodes.values())
+
+        assert not any([n1 == n2 for n1, n2 in zip(nodeList, nodeList[1:])])
 
     def test_add_node(self):
         # Basic node addition

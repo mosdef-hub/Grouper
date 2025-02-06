@@ -1,4 +1,5 @@
 import logging
+import os
 
 import pytest
 
@@ -29,9 +30,11 @@ class TestGeneration(BaseTest):
         # Load nauty path from config file
         import json
         import pathlib
-        print(pathlib.Path(__file__).parent.parent.parent / "config.json")
-        with open(pathlib.Path(__file__).parent.parent.parent / "config.json", "r") as config_file:
 
+        print(pathlib.Path(__file__).parent.parent.parent / "config.json")
+        with open(
+            pathlib.Path(__file__).parent.parent.parent / "config.json", "r"
+        ) as config_file:
             config = json.load(config_file)
         nauty_path = config.get("nauty_path")
         if not nauty_path:
@@ -59,7 +62,7 @@ class TestGeneration(BaseTest):
             verbose,
         )
         logging.info("Benchmark complete")
-        
+
     def test_simple_exhaustive_generation(self):
         node_defs = [
             {"type": "t2", "smarts": "[N]", "hubs": [0, 0, 0]},
@@ -70,13 +73,21 @@ class TestGeneration(BaseTest):
         # Load nauty path from config file
         import json
         import pathlib
-        print(pathlib.Path(__file__).parent.parent.parent / "config.json")
-        with open(pathlib.Path(__file__).parent.parent.parent / "config.json", "r") as config_file:
+
+        packagePath = pathlib.Path(__file__).parent.parent.parent
+        print(packagePath / "config.json")
+        with open(packagePath / "config.json", "r") as config_file:
             config = json.load(config_file)
         nauty_path = config.get("nauty_path")
-        if not nauty_path:
-            raise RuntimeError("Nauty path is not defined in the configuration file.")
-        
+        if nauty_path and os.path.exists(nauty_path):
+            pass
+        elif os.path.exists(packagePath / "packages/nauty"):
+            nauty_path = str(packagePath / "packages/nauty")
+        else:
+            raise RuntimeError(
+                f"Nauty path {nauty_path} is not defined in the configuration file or does not exists."
+            )
+
         # Convert node_defs to the expected format
         node_defs = set(Group(n["type"], n["smarts"], n["hubs"]) for n in node_defs)
 
@@ -94,7 +105,7 @@ class TestGeneration(BaseTest):
             node_defs,
             nauty_path,
             input_file_path,
-            1, # num_procs
+            1,  # num_procs
             positive_constraints,
             negative_constraints,
             "",
