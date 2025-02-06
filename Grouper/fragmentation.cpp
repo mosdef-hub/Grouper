@@ -141,8 +141,8 @@ std::vector<GroupGraph> fragment(
     std::sort(nodesVec.begin(), nodesVec.end(),
         [](const GroupGraph::Group& a, const GroupGraph::Group& b) {
             AtomGraph aGraph, bGraph;
-            aGraph.fromSmiles(a.smarts); // fromSmarts?
-            bGraph.fromSmiles(b.smarts); // fromSmarts?
+            aGraph.fromSmarts(a.smarts); // fromSmarts?
+            bGraph.fromSmarts(b.smarts); // fromSmarts?
             if (aGraph.nodes.size() != bGraph.nodes.size()) {
                 return aGraph.nodes.size() > bGraph.nodes.size();
             }
@@ -155,8 +155,8 @@ std::vector<GroupGraph> fragment(
         [](const GroupGraph::Group& a, const GroupGraph::Group& b) {
             AtomGraph aGraph, bGraph;
 
-            aGraph.fromSmiles(a.smarts); // fromSmarts
-            bGraph.fromSmiles(b.smarts); // fromSmarts
+            aGraph.fromSmarts(a.smarts);
+            bGraph.fromSmarts(b.smarts); 
             if (aGraph.nodes.size() != bGraph.nodes.size()) {
                 return aGraph.nodes.size() > bGraph.nodes.size();
             }
@@ -254,7 +254,7 @@ std::vector<GroupGraph> fragment(
         for (size_t i = startIdx; i < candidates.size(); ++i) {
             const auto& node = candidates[i];
             AtomGraph query;
-            query.fromSmiles(node.smarts); // fromSMARTS
+            query.fromSmarts(node.smarts); // fromSMARTS
 
             auto matches = mol.substructureSearch(query, node.hubs);
             if (matches.empty()) {
