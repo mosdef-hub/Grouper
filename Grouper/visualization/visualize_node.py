@@ -97,7 +97,7 @@ def visualize_node_trace(
 
     # Determine where to place label below object
     if text:
-        font = ImageFont.truetype("Chalkduster.ttf", 16)
+        font = ImageFont.load_default()
         _, descent = font.getmetrics()
         text_width = font.getmask(text).getbbox()[2]
         text_height = font.getmask(text).getbbox()[3] + descent

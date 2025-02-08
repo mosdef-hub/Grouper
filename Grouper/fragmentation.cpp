@@ -185,66 +185,64 @@ std::vector<GroupGraph> fragment(
                                GroupGraph currentGraph) {
         if (atomToNodeid.size() == mol.nodes.size()) {
             // Add edges to the group graph based on molecular connectivity
-            for (const auto& [src, dstSet] : mol.edges) {
-                for (const auto& [dst, bondOrder] : dstSet) {
-                    GroupGraph::NodeIDType srcNode = atomToNodeid[src];
-                    GroupGraph::NodeIDType dstNode = atomToNodeid[dst];
-                    if (srcNode == dstNode) continue;
+            for (const auto& [src, dst, bondOrder] : mol.edges) {
+                GroupGraph::NodeIDType srcNode = atomToNodeid[src];
+                GroupGraph::NodeIDType dstNode = atomToNodeid[dst];
+                if (srcNode == dstNode) continue;
 
-                    // Check if the edge already exists
-                    bool edgeExists = false;
-                    for (const auto& edge : currentGraph.edges) {
-                        if ((std::get<0>(edge) == srcNode && std::get<2>(edge) == dstNode) || (std::get<0>(edge) == dstNode && std::get<2>(edge) == srcNode)) {
-                            edgeExists = true;
-                            break;
-                        }
+                // Check if the edge already exists
+                bool edgeExists = false;
+                for (const auto& edge : currentGraph.edges) {
+                    if ((std::get<0>(edge) == srcNode && std::get<2>(edge) == dstNode) || (std::get<0>(edge) == dstNode && std::get<2>(edge) == srcNode)) {
+                        edgeExists = true;
+                        break;
                     }
-                    if (edgeExists) continue;
-                    // Find available ports
-                    int srcPort = -1, dstPort = -1;
-                    for (int port : atomToPorts[src]) {
-                        if (currentGraph.isPortFree(srcNode, port)) {
-                            srcPort = port;
-                            break;
-                        }
-                    }
-                    for (int port : atomToPorts[dst]) {
-                        if (currentGraph.isPortFree(dstNode, port)) {
-                            dstPort = port;
-                            break;
-                        }
-                    }
-
-                    if (srcPort == -1 || dstPort == -1) {
-                        // printf("Failed to find free ports for edge: %d-%d\n%s\n", src, dst, currentGraph.printGraph().c_str());
-                        return;
-                        // throw std::invalid_argument("No free ports available for " + std::string(atomToSmarts[src]) +  " ( " + std::to_string(src) + " )"+ " -> " + std::string(atomToSmarts[dst]) + " ( " + std::to_string(dst) + " )");
-                    }
-
-                    // printf("GroupGraph : %s\n", currentGraph.printGraph().c_str());
-                    // printf("AtomtoPorts:\n");
-                    // for (const auto& [atom, ports] : atomToPorts) {
-                    //     printf("%d: ", atom);
-                    //     printf ("Ports: ");
-                    //     for (const auto& port : ports) {
-                    //         printf("%d ", port);
-                    //     }
-                    //     printf("Smarts: %s ", atomToSmarts[atom].c_str());
-                    //     printf(" element %s", mol.nodes[atom].ntype.c_str());
-                    //     printf("NodeID: %d\n", atomToNodeid[atom]);
-                    //     printf("\n");
-                    // }
-                    // printf("Edge: %d-%d, Ports: %d-%d\n", src, dst, srcPort, dstPort);
-                    // printf("Smarts: %s-%s\n", atomToSmarts[src].c_str(), atomToSmarts[dst].c_str());
-                    
-                    // printf("Bond Order: %d\n", bondOrder);
-
-                    currentGraph.addEdge(
-                        std::make_tuple(srcNode, srcPort),
-                        std::make_tuple(dstNode, dstPort),
-                        bondOrder
-                    );
                 }
+                if (edgeExists) continue;
+                // Find available ports
+                int srcPort = -1, dstPort = -1;
+                for (int port : atomToPorts[src]) {
+                    if (currentGraph.isPortFree(srcNode, port)) {
+                        srcPort = port;
+                        break;
+                    }
+                }
+                for (int port : atomToPorts[dst]) {
+                    if (currentGraph.isPortFree(dstNode, port)) {
+                        dstPort = port;
+                        break;
+                    }
+                }
+
+                if (srcPort == -1 || dstPort == -1) {
+                    // printf("Failed to find free ports for edge: %d-%d\n%s\n", src, dst, currentGraph.printGraph().c_str());
+                    return;
+                    // throw std::invalid_argument("No free ports available for " + std::string(atomToSmarts[src]) +  " ( " + std::to_string(src) + " )"+ " -> " + std::string(atomToSmarts[dst]) + " ( " + std::to_string(dst) + " )");
+                }
+
+                // printf("GroupGraph : %s\n", currentGraph.printGraph().c_str());
+                // printf("AtomtoPorts:\n");
+                // for (const auto& [atom, ports] : atomToPorts) {
+                //     printf("%d: ", atom);
+                //     printf ("Ports: ");
+                //     for (const auto& port : ports) {
+                //         printf("%d ", port);
+                //     }
+                //     printf("Smarts: %s ", atomToSmarts[atom].c_str());
+                //     printf(" element %s", mol.nodes[atom].ntype.c_str());
+                //     printf("NodeID: %d\n", atomToNodeid[atom]);
+                //     printf("\n");
+                // }
+                // printf("Edge: %d-%d, Ports: %d-%d\n", src, dst, srcPort, dstPort);
+                // printf("Smarts: %s-%s\n", atomToSmarts[src].c_str(), atomToSmarts[dst].c_str());
+                
+                // printf("Bond Order: %d\n", bondOrder);
+
+                currentGraph.addEdge(
+                    std::make_tuple(srcNode, srcPort),
+                    std::make_tuple(dstNode, dstPort),
+                    bondOrder
+                );
             }
             allFragmentations.push_back(currentGraph); // Store this valid fragmentation
             // printf("Added fragmentation\n");

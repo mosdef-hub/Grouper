@@ -111,15 +111,19 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
     if (atomGraph1->nodes.size() != atomGraph2->nodes.size()) {
         return false;
     }
-    int edgeCount1 = 0;
-    int edgeCount2 = 0;
-    for (const auto& node : atomGraph1->edges) {
-        edgeCount1 += node.second.size();
-    }
-    for (const auto& node : atomGraph2->edges) {
-        edgeCount2 += node.second.size();
-    }
-    if (edgeCount1 != edgeCount2) {
+    // int edgeCount1 = 0;
+    // int edgeCount2 = 0;
+    // for (const auto& node : atomGraph1->edges) {
+    //     edgeCount1 += node.second.size();
+    // }
+    // for (const auto& node : atomGraph2->edges) {
+    //     edgeCount2 += node.second.size();
+    // }
+    // if (edgeCount1 != edgeCount2) {
+    //     return false;
+    // }
+    // Check if the number of edges are the same
+    if (atomGraph1->edges.size() != atomGraph2->edges.size()) {
         return false;
     }
 
@@ -142,26 +146,32 @@ bool GroupGraph::operator==(const GroupGraph& other) const {
 
     // Convert AtomGraph to nauty graph for g1
     EMPTYGRAPH(g1.data(), m, n);
-    for (const auto& [id, dst_order] : atomGraph1->edges) {
-        if (!dst_order.empty()) {
-            for (const auto& [dest,order] : dst_order) {
-                int from = id;
-                int to = dest;
-                ADDONEEDGE(g1.data(), from, to, m);
-            }
-        }
+    // for (const auto& [id, dst_order] : atomGraph1->edges) {
+    //     if (!dst_order.empty()) {
+    //         for (const auto& [dest,order] : dst_order) {
+    //             int from = id;
+    //             int to = dest;
+    //             ADDONEEDGE(g1.data(), from, to, m);
+    //         }
+    //     }
+    // }
+    for (const auto& [src, dst, order]: atomGraph1->edges) {
+        ADDONEEDGE(g1.data(), src, dst, m);
     }
 
     // Convert AtomGraph to nauty graph for g2
     EMPTYGRAPH(g2.data(), m, n);
-    for (const auto& [id, dst_order] : atomGraph2->edges) {
-        if (!dst_order.empty()) {
-            for (const auto& [dest,order] : dst_order) {
-                int from = id;
-                int to = dest;
-                ADDONEEDGE(g2.data(), from, to, m);
-            }
-        }
+    // for (const auto& [id, dst_order] : atomGraph2->edges) {
+    //     if (!dst_order.empty()) {
+    //         for (const auto& [dest,order] : dst_order) {
+    //             int from = id;
+    //             int to = dest;
+    //             ADDONEEDGE(g2.data(), from, to, m);
+    //         }
+    //     }
+    // }
+    for (const auto& [src, dst, order]: atomGraph2->edges) {
+        ADDONEEDGE(g2.data(), src, dst, m);
     }
 
     // Call nauty to canonicalize the graphs
@@ -297,7 +307,8 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
     }
 
     // Add the edge
-    edges.push_back(std::make_tuple(from, fromPort, to, toPort, bondOrder));
+    edges.insert(std::make_tuple(from, fromPort, to, toPort, bondOrder));
+    // edges.insert(std::make_tuple(to, toPort, from, fromPort, bondOrder)); // Uncomment this line to make the graph undirected
     return true;
 }
 
@@ -594,8 +605,8 @@ std::string GroupGraph::serialize() const {
         oss.seekp(-2, oss.cur); // Remove last comma and newline
     }
     oss << "\n  ],\n  \"edges\": [\n";
-    for (size_t i = 0; i < edges.size(); ++i) {
-        const auto& edge = edges[i];
+    size_t i = 0;
+    for (auto edge : edges) {
         oss << "    ["
             << std::get<0>(edge) << ","
             << std::get<1>(edge) << ","
@@ -605,6 +616,7 @@ std::string GroupGraph::serialize() const {
         if (i < edges.size() - 1) {
             oss << ",\n";
         }
+        i++;
     }
     oss << "\n  ]\n}";
     return oss.str();
@@ -655,12 +667,14 @@ void GroupGraph::deserialize(const std::string& data) {
         edges.reserve(edges_array.size());
         
         for (const auto& edge_data : edges_array) {
-            edges.emplace_back(
-                edge_data[0].get<NodeIDType>(),
-                edge_data[1].get<PortType>(),
-                edge_data[2].get<NodeIDType>(),
-                edge_data[3].get<PortType>(),
-                edge_data[4].get<unsigned int>()
+            edges.insert(
+                std::make_tuple(
+                    edge_data[0].get<NodeIDType>(),
+                    edge_data[1].get<PortType>(),
+                    edge_data[2].get<NodeIDType>(),
+                    edge_data[3].get<PortType>(),
+                    edge_data[4].get<unsigned int>()
+                )
             );
         }
 
@@ -686,7 +700,10 @@ std::string GroupGraph::canonize() const {
         });
 
         // Step 2: Sort edges by connected nodes and ports
-        std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> sortedEdges = edges;
+        std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> sortedEdges;
+        for (const auto& edge : edges) {
+            sortedEdges.push_back(edge);
+        }
         std::sort(sortedEdges.begin(), sortedEdges.end());
 
         // Step 3: Convert sorted nodes and edges to a canonical smarts or other format
@@ -732,15 +749,7 @@ bool AtomGraph::operator==(const AtomGraph& other) const {
     if (this->nodes.size() != other.nodes.size()) {
         return false;
     }
-    int edgeCount1 = 0;
-    int edgeCount2 = 0;
-    for (const auto& node : this->edges) {
-        edgeCount1 += node.second.size();
-    }
-    for (const auto& node : other.edges) {
-        edgeCount2 += node.second.size();
-    }
-    if (edgeCount1 != edgeCount2) {
+    if (this->edges.size() != other.edges.size()) {
         return false;
     }
 
@@ -763,26 +772,14 @@ bool AtomGraph::operator==(const AtomGraph& other) const {
 
     // Convert AtomGraph to nauty graph for g1
     EMPTYGRAPH(g1.data(), m, n);
-    for (const auto& [id, dst_order] : this->edges) {
-        if (!dst_order.empty()) {
-            for (const auto& [dest,order] : dst_order) {
-                int from = id;
-                int to = dest;
-                ADDONEEDGE(g1.data(), from, to, m);
-            }
-        }
+    for (const auto& [srcNode, dstNode, bondOrder] : this->edges) {
+        ADDONEEDGE(g1.data(), srcNode, dstNode, m);
     }
 
     // Convert AtomGraph to nauty graph for g2
     EMPTYGRAPH(g2.data(), m, n);
-    for (const auto& [id, dst_order] : other.edges) {
-        if (!dst_order.empty()) {
-            for (const auto& [dest,order] : dst_order) {
-                int from = id;
-                int to = dest;
-                ADDONEEDGE(g2.data(), from, to, m);
-            }
-        }
+    for (const auto& [srcNode, dstNode, bondOrder] : other.edges) {
+        ADDONEEDGE(g2.data(), srcNode, dstNode, m);
     }
 
     // Call nauty to canonicalize the graphs
@@ -807,10 +804,10 @@ void AtomGraph::addNode(const std::string& type, const unsigned int valency) {
 void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
     if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end()) {
         if (nodes.find(src) == nodes.end()) {
-            throw std::invalid_argument("Group " + std::to_string(src) + " does not exist");
+            throw std::invalid_argument("Atom " + std::to_string(src) + " does not exist");
         }
         else {
-            throw std::invalid_argument("Group " + std::to_string(dst) + " does not exist");
+            throw std::invalid_argument("Atom " + std::to_string(dst) + " does not exist");
         }
     }
     if (getFreeValency(src) <= 0 && getFreeValency(dst) <= 0) {
@@ -822,14 +819,15 @@ void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
     if (getFreeValency(dst) <= 0) {
         throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for the destination node");
     }
-    if (edges[src].find(std::make_pair(dst, order)) != edges[src].end() || edges[dst].find(std::make_pair(src, order)) != edges[dst].end()) {
+    if (edges.find(std::make_tuple(src, dst, order)) != edges.end() || edges.find(std::make_tuple(dst, src, order)) != edges.end()) {
         throw std::invalid_argument("Edge from " + std::to_string(src) + " to " + std::to_string(dst) + " already exists");
     }
     if (order > 4 || order < 1) {
         throw std::invalid_argument("Bond order of " + std::to_string(order) + " is invalid");
     }
-    edges[src].insert(std::make_pair(dst, order));
-    edges[dst].insert(std::make_pair(src, order));
+
+    edges.insert(std::make_tuple(src, dst, order));
+    edges.insert(std::make_tuple(dst, src, order));
 }
 
 std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>> AtomGraph::substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const {
@@ -921,14 +919,21 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
                 }
                 // printf("Hubs Matched");
                 // Check if the bonds are the same
-                for (const auto& [queryNodeid, dstSet] : query.edges) {
-                    for (const auto& [dst, order] : dstSet) {
-                        NodeIDType graphNodeid = currentMapping[queryNodeid];
-                        auto it = edges.find(graphNodeid);
-                        if (it == edges.end() || it->second.find(std::make_pair(currentMapping[dst], order)) == it->second.end()) {
-                            return;
-                        }
-                    }
+                // for (const auto& [queryNodeid, dstSet] : query.edges) {
+                //     for (const auto& [dst, order] : dstSet) {
+                //         NodeIDType graphNodeid = currentMapping[queryNodeid];
+                //         auto it = edges.find(graphNodeid);
+                //         if (it == edges.end() || it->second.find(std::make_pair(currentMapping[dst], order)) == it->second.end()) {
+                //             return;
+                //         }
+                //     }
+                // }
+                for(const auto& [src, dst, order] : query.edges) {
+                    NodeIDType graphNodeid = currentMapping[src];
+                    auto it = edges.find(std::make_tuple(graphNodeid, currentMapping[dst], order));
+                    if (it == edges.end()) { // Node has to be in the graph
+                        return;
+                    }                    
                 }
                 // printf("Bonds Matched\n");
 
@@ -962,8 +967,14 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
                 for (const auto& [queryNeighbor, graphNeighbor] : currentMapping) {
                     // Check if the query graph has an edge between nextQueryNode and queryNeighbor
                     bool edgeExists = false;
-                    for (const auto& edgePair : query.edges.at(nextQueryNode)) {
-                        if (edgePair.first == queryNeighbor) {
+                    // for (const auto& edgePair : query.edges.at(nextQueryNode)) {
+                    //     if (edgePair.first == queryNeighbor) {
+                    //         edgeExists = true;
+                    //         break;
+                    //     }
+                    // }
+                    for (const auto& [src, dst, order] : query.edges) {
+                        if(src == nextQueryNode && dst == queryNeighbor) {
                             edgeExists = true;
                             break;
                         }
@@ -972,8 +983,14 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
                     if (edgeExists) {
                         // Verify the corresponding edge exists in the main graph
                         bool graphEdgeExists = false;
-                        for (const auto& edgePair : edges.at(candidate)) {
-                            if (edgePair.first == graphNeighbor) {
+                        // for (const auto& edgePair : edges.at(candidate)) {
+                        //     if (edgePair.first == graphNeighbor) {
+                        //         graphEdgeExists = true;
+                        //         break;
+                        //     }
+                        // }
+                        for (const auto& [src, dst, order] : edges) {
+                            if(src == candidate && dst == graphNeighbor) {
                                 graphEdgeExists = true;
                                 break;
                             }
@@ -1088,16 +1105,23 @@ int AtomGraph::getFreeValency(NodeIDType nodeID) const {
         throw std::invalid_argument("Cannot get free valency for non-existent node " + std::to_string(nodeID));
     }
     const Atom& node = nodes.at(nodeID);
-    if (edges.find(nodeID) == edges.end()) {
-        return node.valency;
-    }
-    else{
-        int occupied_electrons = 0;
-        for (const auto& edge : edges.at(nodeID)) {
-            occupied_electrons += std::get<1>(edge);
+    // if (edges.find(nodeID) == edges.end()) {
+    //     return node.valency;
+    // }
+    // else{
+    //     int occupied_electrons = 0;
+    //     for (const auto& edge : edges.at(nodeID)) {
+    //         occupied_electrons += std::get<1>(edge);
+    //     }
+    //     return node.valency - occupied_electrons;
+    // }
+    int totalOccupiedValency = 0;
+    for (const auto& [src, dst, order] : edges) {
+        if(src == nodeID) {
+            totalOccupiedValency += order;
         }
-        return node.valency - occupied_electrons;
     }
+    return node.valency - totalOccupiedValency;
 }
 
 std::string AtomGraph::printGraph() const {
@@ -1106,10 +1130,18 @@ std::string AtomGraph::printGraph() const {
     for (const auto& entry : nodes) {
         output << "    Atom " << entry.first << " (" << entry.second.ntype << ")" << " Valency: " << entry.second.valency << "\n";
     }
-    output << "Edges:\n";
-    for (const auto& edge : edges) {
-        for (const auto& [dst, order] : edge.second) {
-            output << "    Edge: " << edge.first << " -> " << dst <<" Order: (" <<order<<")"<<"\n";
+    output << "Edges (without duplication):\n";
+    // for (const auto& edge : edges) {
+    //     for (const auto& [dst, order] : edge.second) {
+    //         output << "    Edge: " << edge.first << " -> " << dst <<" Order: (" <<order<<")"<<"\n";
+    //     }
+    // }
+    std::unordered_set<std::tuple<NodeIDType, NodeIDType, unsigned int>> uniqueEdges;
+    for (const auto& [src, dst, order] : edges) {
+        if (uniqueEdges.find(std::make_tuple(src, dst, order)) == uniqueEdges.end()) {
+            output << "    Edge: " << src << " <-> " << dst <<" Order: (" <<order<<")"<<"\n";
+            uniqueEdges.insert(std::make_tuple(src, dst, order));
+            uniqueEdges.insert(std::make_tuple(dst, src, order));
         }
     }
     return output.str();
@@ -1127,10 +1159,13 @@ std::vector<setword> AtomGraph::toNautyGraph() const {
     EMPTYGRAPH(g.data(), m, n);
 
     // Add edges to the graph
-    for (const auto& [id, dst_order] : edges) {
-        for (const auto& [dest, order] : dst_order) {
-            ADDONEEDGE(g.data(), id, dest, m); // Add edge from 'id' to 'dest'
-        }
+    // for (const auto& [id, dst_order] : edges) {
+    //     for (const auto& [dest, order] : dst_order) {
+    //         ADDONEEDGE(g.data(), id, dest, m); // Add edge from 'id' to 'dest'
+    //     }
+    // }
+    for (const auto& [src, dst, order] : edges) {
+        ADDONEEDGE(g.data(), src, dst, m); // Add edge from 'id' to 'dest'
     }
 
     // Return the nauty graph representation
