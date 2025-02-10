@@ -66,7 +66,7 @@ GroupGraph& GroupGraph::operator=(const GroupGraph& other) {
 }
 
 bool GroupGraph::Group::operator==(const Group& other) const {
-    return id == other.id &&
+    return
            ntype == other.ntype &&
            smarts == other.smarts &&
            hubs == other.hubs;
@@ -76,13 +76,61 @@ bool GroupGraph::Group::operator!=(const Group& other) const {
     return !(*this == other);
 }
 
+GroupGraph::Group::Group(const std::string& ntype, const std::string& smarts, const std::vector<int>& hubs){
+
+    // Error handling
+    if (ntype.empty() && smarts.empty()) {
+        throw std::invalid_argument("Either SMARTS or type must be provided");
+    }
+    if (hubs.empty()) {
+        throw std::invalid_argument("Hubs must be provided");
+    }
+    for (int hub : hubs) {
+        if (hub < 0) {
+            throw std::invalid_argument("Hub ID must be greater than or equal to 0");
+        }
+    }
+    // Validate the Group inputs are possible
+    AtomGraph atomGraph;
+    atomGraph.fromSmiles(smarts);
+    std::unordered_map<int, int> atomFreeValency;
+    for (int hub : hubs) {
+        if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
+            throw std::invalid_argument("Hub ID "+ std::to_string(hub) +" is greater than the number of atoms in the group");
+        }
+    }
+    
+    for (const auto& [id, node] : atomGraph.nodes) {
+        atomFreeValency[id] = node.valency;
+    }
+    for (int hub : hubs) {
+        atomFreeValency[hub] -= 1;
+    }
+    for (const auto& [id, valency] : atomFreeValency) {
+        if (valency < 0) {
+            throw std::invalid_argument("Atom "+std::to_string(id)+" has a negative valency after adding the hub");
+        }
+    }
+    // Validate smarts is a valid SMARTS string
+    std::unique_ptr<RDKit::ROMol> mol(RDKit::SmartsToMol(smarts));
+    if (!mol) {
+        throw std::invalid_argument("Invalid SMARTS string " + smarts + " provided");
+    }
+    this->ntype = ntype;
+    this->smarts = smarts;
+    this->hubs = hubs;
+    std::vector<PortType> ports(hubs.size());
+    std::iota(ports.begin(), ports.end(), 0);
+    this->ports = ports;
+}
+
 std::vector<int> GroupGraph::Group::hubOrbits() const {
     return hubs; // TODO: Implement hub orbits
 }
 
 std::string GroupGraph::Group::toString() const {
     std::ostringstream output;
-    output << "Group " << id << " (" << ntype << ") (" << smarts << ") ";
+    output << "Group " <<" (" << ntype << ") (" << smarts << ") ";
     output << ": \n    Ports ";
     for (PortType port : ports) {
         output << port << " ";
@@ -199,68 +247,55 @@ void GroupGraph::addNode(
     std::string smarts = "",
     std::vector<NodeIDType> hubs = {}
 ) {
-    /*There are 5 ways you can input a node:
-        1. ntype, smiles, hubs
-        2. ntype, hubs
-        3. smiles, hubs
-        4. ntype if it already exists
-        5. smarts if it already exists
+    /*There are 2 ways you can input a node:
+        0. ntype, smiles, hubs
+        1. ntype if it already exists
     */
 
     // Error handling
-    if (ntype.empty() && smarts.empty()) {
-        throw std::invalid_argument("Either SMARTS or type must be provided");
-    }
-    for (NodeIDType hub : hubs) {
-        if (hub < 0) {
-            throw std::invalid_argument("Hub ID must be greater than or equal to 0");
-        }
-    }
-
-    // Check if the node type already exists
     if (ntype.empty()) {
-        ntype = smarts;
+        throw std::invalid_argument("Group type must be provided");
     }
-
-    // Initialize id and ports
-    int id = nodes.size();
-    std::vector<PortType> ports(hubs.size());
-
-    // Case 0: Group type and hubs are provided
-    if (!ntype.empty() && nodetypes.find(ntype) != nodetypes.end() && hubs.empty()) {
-        hubs = nodetypes[ntype]; // Reuse existing hubs
+    // Case 0: Group type, smarts, and hubs are provided
+    if (!ntype.empty() && !smarts.empty() && !hubs.empty()) {
+        // Error handling
+        for (int hub : hubs) {
+            if (hub < 0) {
+                throw std::invalid_argument("Hub ID must be greater than or equal to 0");
+            }
+        }
+        for (const auto& entry : nodes) {
+            if (entry.second.ntype == ntype && entry.second.smarts != smarts && entry.second.hubs != hubs) {
+                throw std::invalid_argument("Group type already exists with different SMARTS or hubs");
+            }
+        }
+        int id = nodes.size();
+        nodes[id] = Group(ntype, smarts, hubs);
+        nodetypes[ntype] = hubs;
     }
-
     // Case 1: Group type (ntype) is provided
-    if (!ntype.empty()) {
-        // If the ntype (or smarts used as ntype) already exists
-        if (nodetypes.find(ntype) != nodetypes.end()) {
-            // Check if hub sizes match the existing node type
-            if (hubs.empty()) {
-                ports = nodetypes[ntype]; // Use the existing ports
-            }
-            if (nodetypes[ntype].size() != hubs.size()) {
-                throw std::invalid_argument("Group type already exists with a different number of hubs");
-            }
-        } else { // New node type
-            std::iota(ports.begin(), ports.end(), 0); // Initialize ports for hubs
-            nodetypes[ntype] = ports; // Save the new node type
+    else if (!ntype.empty() && smarts.empty() && hubs.empty()) {
+        if (nodetypes.find(ntype) == nodetypes.end()) {
+            throw std::invalid_argument("Group type does not exist yet, please provide SMARTS and hubs");
         }
-    }
-
-    // Case 2: smarts is provided (and used as ntype if ntype was empty)
-    if (ntype.empty() && !smarts.empty() && nodetypes.find(smarts) != nodetypes.end()) {
-        // Check if hub sizes match the existing smarts node
-        if (nodetypes[smarts].size() != hubs.size()) {
-            throw std::invalid_argument("smarts already exists with a different number of hubs");
+        int id = nodes.size();
+        std::vector<int> hubs = nodetypes[ntype];
+        for (const auto& [i, node] : nodes) {
+            if (node.ntype == ntype) {
+                hubs = node.hubs;
+                smarts = node.smarts;
+                break;
+            }
         }
-    } else if (!smarts.empty() && nodetypes.find(smarts) == nodetypes.end()) {
-        std::iota(ports.begin(), ports.end(), 0);
-        nodetypes[smarts] = ports; // Save the new smarts as a node type
+        nodes[id] = Group(ntype, smarts, hubs);
     }
-
-    // Create the new node and add it to the nodes map
-    nodes[id] = Group(ntype, smarts, hubs);
+    else {
+        std::string hubs_str = "";
+        for (int hub : hubs) {
+            hubs_str += std::to_string(hub) + " ";
+        }
+        throw std::invalid_argument("Invalid input for add_node ntype: " + ntype + " smarts: " + smarts + " hubs: " + hubs_str);
+    }
 }
 
 
@@ -649,7 +684,6 @@ void GroupGraph::deserialize(const std::string& data) {
             
             // Create and insert the group
             Group group(ntype, smarts, hubs);
-            group.id = id;  // Set ID after construction
             
             // If ports were specified, override the default ports
             if (node_data.contains("ports")) {
@@ -696,7 +730,7 @@ std::string GroupGraph::canonize() const {
             sortedNodes.push_back(pair.second);
         }
         std::sort(sortedNodes.begin(), sortedNodes.end(), [](const Group& a, const Group& b) {
-            return std::tie(a.ntype, a.smarts, a.id) < std::tie(b.ntype, b.smarts, b.id);
+            return std::tie(a.ntype, a.smarts) < std::tie(b.ntype, b.smarts);
         });
 
         // Step 2: Sort edges by connected nodes and ports
