@@ -47,16 +47,20 @@ namespace std {
     };
 }
 
-
+const std::unordered_map<std::string, int> default_valencies = {
+    {"H", 1},
+    {"O", 2},
+    {"C", 4},
+    // ... other elements with their default valencies
+};
 
 class AtomGraph {
 public:
     using NodeIDType = int;
 
     struct Atom {
-        NodeIDType id;
         std::string ntype;
-        unsigned int valency;
+        int valency;
 
         // Need to define comparison operators for Atom to be used in unordered_map
         bool operator==(const Atom& other) const {
@@ -66,10 +70,11 @@ public:
             return !(*this == other);
         }
 
-        Atom() : id(0), ntype(""), valency(0) {}
+        Atom() : ntype("C"), valency(4) {}
 
-        Atom(int id, const std::string& ntype, const unsigned int valency)
-            : id(id), ntype(ntype), valency(valency) {}
+        Atom(const std::string &ntype); // constructor in dataStructures.cpp
+
+        Atom(const std::string &ntype, const int valency); // constructor in dataStructures.cppv
 
         std::string toString() const;
 
@@ -83,7 +88,7 @@ public:
     AtomGraph& operator=(const AtomGraph& other);
     bool operator==(const AtomGraph& other) const;
 
-    void addNode(const std::string& ntype = "", unsigned int valency = 0);
+    void addNode(const std::string& ntype = "", int valency = -1);
     void addEdge(NodeIDType src, NodeIDType dst, unsigned int order = 1);
     int getFreeValency(NodeIDType nid) const;
     std::string printGraph() const;
@@ -191,12 +196,11 @@ namespace std {
     template <>
     struct hash<AtomGraph::Atom> {
         std::size_t operator()(const AtomGraph::Atom& atom) const {
-            std::size_t h1 = std::hash<int>{}(atom.id);
-            std::size_t h2 = std::hash<std::string>{}(atom.ntype);
-            std::size_t h3 = std::hash<unsigned int>{}(atom.valency);
+            std::size_t h1 = std::hash<std::string>{}(atom.ntype);
+            std::size_t h2 = std::hash<unsigned int>{}(atom.valency);
 
             // Combine the individual hashes using XOR and shifting
-            return h1 ^ (h2 << 1) ^ (h3 << 2);
+            return (h1 << 1) ^ (h2 << 2);
         }
     };
     // template <>

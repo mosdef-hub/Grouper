@@ -79,7 +79,8 @@ PYBIND11_MODULE(_Grouper, m) {
         ));
     py::class_<AtomGraph::Atom>(m, "Atom")
         .def(py::init<>())
-        .def(py::init<int, const std::string&, int>())
+        .def(py::init<std::string&>())
+        .def(py::init<const std::string&, int>())
         .def_readwrite("type", &AtomGraph::Atom::ntype)
         .def_readwrite("valency", &AtomGraph::Atom::valency)
         .def("__eq__", &AtomGraph::Atom::operator==)
@@ -94,7 +95,7 @@ PYBIND11_MODULE(_Grouper, m) {
         .def_readwrite("edges", &AtomGraph::edges)
         .def("add_node", &AtomGraph::addNode,
              py::arg("type"),
-             py::arg("valency") = 0)
+             py::arg("valency") = -1)
         .def("add_edge", &AtomGraph::addEdge,
              py::arg("src"),
              py::arg("dst"),

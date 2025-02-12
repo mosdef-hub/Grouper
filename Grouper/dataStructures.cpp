@@ -729,6 +729,46 @@ AtomGraph::AtomGraph()
 AtomGraph::AtomGraph(const AtomGraph& other)
     : nodes(other.nodes), edges(other.edges) {}
 
+AtomGraph::Atom::Atom(const std::string& ntype){
+    static std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+    };
+    this->ntype = ntype;
+    if (standardElementValency.count(ntype)) {
+        this->valency = standardElementValency[ntype];
+    } else { // Error message if passing bad Atom Name
+        std::stringstream err_msg;
+        err_msg << "Element type '" << ntype << "' does not have a default valency. Valid element types are: ";
+        for (const auto& pair : standardElementValency) {
+            err_msg << pair.first << " ";
+        }
+        throw std::invalid_argument(err_msg.str());
+    }
+}
+
+AtomGraph::Atom::Atom(const std::string& ntype, int valency){
+    static std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+    };
+    this->ntype = ntype;
+    if (valency == -1){
+        if (standardElementValency.count(ntype)) {
+            this->valency = standardElementValency[ntype];
+        } else { // Error message if passing bad Atom Name
+            std::stringstream err_msg;
+            err_msg << "Element type '" << ntype << "' does not have a default valency. Valid element types are: ";
+            for (const auto& pair : standardElementValency) {
+                err_msg << pair.first << " ";
+            }
+            throw std::invalid_argument(err_msg.str());
+        }
+    } else {
+        this->valency = valency;
+    }
+}
+
+
+
 
 AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
     if (this != &other) {
@@ -740,7 +780,7 @@ AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
 
 std::string AtomGraph::Atom::toString() const {
     std::ostringstream output;
-    output << "Atom " << id << " (" << ntype << ") Valency: " << valency;
+    output << "Atom " << " (" << ntype << ") Valency: " << valency;
     return output.str();
 }
 
@@ -795,9 +835,9 @@ bool AtomGraph::operator==(const AtomGraph& other) const {
     return true;
 }
 
-void AtomGraph::addNode(const std::string& type, const unsigned int valency) {
+void AtomGraph::addNode(const std::string& type, const int valency) {
     int id = nodes.size();
-    nodes[id] = Atom(id, type, valency);
+    nodes[id] = Atom(type, valency);
 
 }
 
@@ -834,6 +874,11 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     /*
         Returns a list of all subgraph isomorphisms between the query graph and this graph
         format is a list of lists of pairs of node ids where (query_node_id, this_node_id) is a match
+
+        @param query AtomGraph to look at isomorphism mapping
+        @param hubs vector<ints> which indicate where the available hubs are
+
+        @return vector of vectors of pairs of two NodeIds to map in query
     */
     std::vector<std::vector<std::pair<NodeIDType,NodeIDType>>> matches; // To store all matches
     std::unordered_map<NodeIDType, int> queryNeededFreeValency; // To store the number of hubs for each query node
@@ -874,12 +919,15 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     std::unordered_map<NodeIDType, std::vector<NodeIDType>> candidateNodes; // Maps query nodes to possible candidates in the main graph
     for (const auto& queryNodePair : query.nodes) {
         const auto& queryNode = queryNodePair.second;
-        for (const auto& graphNodePair : nodes) {
+        const auto& queryID = queryNodePair.first;
+        for (const auto &graphNodePair : nodes)
+        {
             const auto& graphNode = graphNodePair.second;
+            const auto& graphID = graphNodePair.first;
 
             // Match based on node type and valency
             if (queryNode.ntype == graphNode.ntype && queryNode.valency <= graphNode.valency) {
-                candidateNodes[queryNode.id].push_back(graphNode.id);
+                candidateNodes[queryID].push_back(graphID);
             }
         }
     }
@@ -933,7 +981,7 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
                     auto it = edges.find(std::make_tuple(graphNodeid, currentMapping[dst], order));
                     if (it == edges.end()) { // Node has to be in the graph
                         return;
-                    }                    
+                    }
                 }
                 // printf("Bonds Matched\n");
 

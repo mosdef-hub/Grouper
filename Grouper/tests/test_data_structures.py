@@ -55,14 +55,14 @@ class TestGroupGraph(BaseTest):
         assert a3 != a4
 
         ag = AtomGraph()
-        ag.add_atom("C")
+        ag.add_node("C")
         ag.add_node("C", 4)
         nodeList = list(ag.nodes.values())
 
         assert nodeList[0] == nodeList[1]
 
         ag = AtomGraph()
-        ag.add_atom("C")
+        ag.add_node("C")
         ag.add_node("C", 3)
         ag.add_node("N")
         ag.add_node("N", 2)
