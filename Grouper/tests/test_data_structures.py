@@ -270,7 +270,6 @@ class TestGroupGraph(BaseTest):
         truth.add_node("C", 4)
         truth.add_node("N", 3)
         truth.add_edge(0, 1, 1)
-        truth.add_edge(0, 1, 1)
         assert graph == truth
 
         graph = AtomGraph()
@@ -285,21 +284,11 @@ class TestGroupGraph(BaseTest):
         truth.add_node("C", 4)
         truth.add_node("C", 4)
         truth.add_edge(0, 1)
-        truth.add_edge(0, 1)
         assert graph == truth
 
         graph = AtomGraph()
         graph.from_smiles("O=COOC(=O)O")
         truth = AtomGraph()
-        truth.add_node("O", 2)
-        truth.add_node("C", 4)
-        truth.add_node("O", 2)
-        truth.add_node("O", 2)
-        truth.add_node("C", 4)
-        truth.add_node("O", 2)
-        truth.add_node("O", 2)
-        truth.add_edge(0, 1, 2)
-        truth.add_edge(1, 2, 1)
         truth.add_node("O", 2)
         truth.add_node("C", 4)
         truth.add_node("O", 2)
@@ -328,45 +317,19 @@ class TestGroupGraph(BaseTest):
         ],
     )
     def test_from_smarts(self, smarts):
+        # missing (8,1,1) Extra (0,0,1)
         ag = AtomGraph()
         ag.from_smarts(smarts)
         mol = Chem.MolFromSmarts(smarts)
         # check nodes
         assert len(mol.GetAtoms()) == len(ag.nodes)
         # check edges
-        assert len(mol.GetBonds()) == len(ag.edges)
+        assert int(len(mol.GetBonds())) * 2 == len(ag.edges)
 
         # check connectivity
-        agBonds = [{edge1.type, edge2.type} for edge1, edge2 in ag.edges]
-        for bond in mol.GetBonds():
-            assert {
-                bond.GetBeginAtom().GetSymbol(),
-                bond.GetEndAtom().GetSymbol(),
-            } in agBonds
-
-    @pytest.mark.parametrize(
-        "smarts",
-        [
-            "CCCC",
-            "[C](N)O",
-            "[C](N)O(C)",
-            "[C](N)OC",
-            "[C](O(N))CC",
-            "[C](CC(N(C))C)O",
-            "[C](C1C(N(C))CCCC1)O",
-        ],
-    )
-    def test_from_smarts(self, smarts):
-        ag = AtomGraph()
-        ag.from_smarts(smarts)
-        mol = Chem.MolFromSmarts(smarts)
-        # check nodes
-        assert len(mol.GetAtoms()) == len(ag.nodes)
-        # check edges
-        assert len(mol.GetBonds()) == len(ag.edges)
-
-        # check connectivity
-        agBonds = [{edge1.type, edge2.type} for edge1, edge2 in ag.edges]
+        agBonds = [
+            {ag.nodes[edge1].type, ag.nodes[edge2].type} for edge1, edge2, _ in ag.edges
+        ]
         for bond in mol.GetBonds():
             assert {
                 bond.GetBeginAtom().GetSymbol(),

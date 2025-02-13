@@ -842,25 +842,28 @@ void AtomGraph::addNode(const std::string& type, const int valency) {
 }
 
 void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
-    if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end()) {
+    std::string srcStr = "Atom {id:" + std::to_string(src) + "-" + this->nodes[src].ntype + ") Valency: " + std::to_string(this->nodes[src].valency);
+    std::string dstStr = "Atom {id:" + std::to_string(dst) + "-" + this->nodes[dst].ntype + ") Valency: " + std::to_string(this->nodes[dst].valency);
+    if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end())
+    {
         if (nodes.find(src) == nodes.end()) {
-            throw std::invalid_argument("Atom " + std::to_string(src) + " does not exist");
+            throw std::invalid_argument("Atom " + srcStr + " does not exist");
         }
         else {
-            throw std::invalid_argument("Atom " + std::to_string(dst) + " does not exist");
+            throw std::invalid_argument("Atom " + dstStr + " does not exist");
         }
     }
     if (getFreeValency(src) <= 0 && getFreeValency(dst) <= 0) {
-        throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for both nodes");
+        throw std::invalid_argument("Adding edge from " + srcStr + " to " + dstStr + " would exceed the valency for both nodes");
     }
     if (getFreeValency(src) <= 0) {
-        throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for the source node");
+        throw std::invalid_argument("Adding edge from " + srcStr + " to " + dstStr + " would exceed the valency for the source node");
     }
     if (getFreeValency(dst) <= 0) {
-        throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for the destination node");
+        throw std::invalid_argument("Adding edge from " + srcStr + " to " + dstStr + " would exceed the valency for the destination node");
     }
     if (edges.find(std::make_tuple(src, dst, order)) != edges.end() || edges.find(std::make_tuple(dst, src, order)) != edges.end()) {
-        throw std::invalid_argument("Edge from " + std::to_string(src) + " to " + std::to_string(dst) + " already exists");
+        throw std::invalid_argument("Edge from " + srcStr + " to " + dstStr + " already exists");
     }
     if (order > 4 || order < 1) {
         throw std::invalid_argument("Bond order of " + std::to_string(order) + " is invalid");
@@ -1122,9 +1125,8 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
 
         if (standardElementValency.count(std::string(1, c))) {
             // Handle atom
-            int valency = standardElementValency[std::string(1, c)];
-            addNode(std::string(1, c), valency);
-            NodeIDType currentNode = nodes.size() - 1;
+            addNode(std::string(1, c));
+            currentNode = nodes.size() - 1;
 
             // In the initial state, no bonds occur, so just add the node
             if (centralNodeVec.empty()) {
@@ -1136,37 +1138,55 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
                 addEdge(centralNodeVec[currentDepth-1], currentNode, bondOrder);
                 centralNodeVec[currentDepth] = currentNode;
             }
-        } else if (c == '(') {
+            prevDepth = currentDepth;
+        }
+        else if (c == '(')
+        {
             // Going one level deeper into molecule branching
             currentDepth++;
-        } else if (c == ')') {
+        }
+        else if (c == ')')
+        {
             // Stepping one level out of molecule branching
             currentDepth--;
-        } else if (std::isdigit(c)) {
+        }
+        else if (std::isdigit(c))
+        {
             // Handle ring closure
-            int ringIndex = c;
-            if (ringClosures.count(ringIndex)) {
+            // NodeIDType currentNode = nodes.size() - 1;
+            int ringIndex = c - '0'; // char conversion to int
+            if (ringClosures.find(ringIndex) != ringClosures.end()) {
                 // Connect the current node to the ring closure with the current bond order
                 addEdge(currentNode, ringClosures[ringIndex], bondOrder);
+                bondOrder = 1; // Reset bond order to single after use
                 ringClosures.erase(ringIndex);
             } else {
                 // Store the current node as the ring closure point
                 ringClosures[ringIndex] = currentNode;
             }
-            bondOrder = 1; // Reset bond order to single after use
-        } else if (c == '-') {
+        }
+        else if (c == '-')
+        {
             // Set bond order to single, this may be useless
             bondOrder = 1;
-        } else if (c == '=') {
+        }
+        else if (c == '=')
+        {
             // Set bond order to double
             bondOrder = 2;
-        } else if (c == '#') {
+        }
+        else if (c == '#')
+        {
             // Set bond order to triple
             bondOrder = 3;
-        } else if ((c == '[') || (c == ']')) {
+        }
+        else if ((c == '[') || (c == ']'))
+        {
             // Some symbols that need to be considered with more specifics
             ;
-        } else {
+        }
+        else
+        {
             // Handle unsupported characters (e.g., invalid SMARTS)
             throw std::invalid_argument(
                 "Unsupported character in SMARTS: `"
