@@ -109,7 +109,6 @@ public:
 
     // Attributes
     struct Group {
-        NodeIDType id;
         std::string ntype;
         std::string smarts;
         std::vector<NodeIDType> hubs;
@@ -117,11 +116,7 @@ public:
         bool operator==(const Group& other) const;
         bool operator!=(const Group& other) const;
         Group() : ntype(""), smarts(""), hubs(), ports() {}
-        Group(const std::string& ntype, const std::string& smarts, const std::vector<int>& hubs)
-            : ntype(ntype), smarts(smarts), hubs(hubs), ports(hubs.size()) {
-            std::iota(ports.begin(), ports.end(), 0);
-        }
-
+        Group(const std::string& ntype, const std::string& smarts, const std::vector<int>& hubs);
         std::vector<int> hubOrbits() const;
         std::string toString() const;
 
@@ -179,7 +174,6 @@ namespace std {
     template <>
     struct hash<GroupGraph::Group> {
         std::size_t operator()(const GroupGraph::Group& node) const {
-            std::size_t h1 = std::hash<int>{}(node.id);
             std::size_t h2 = std::hash<std::string>{}(node.ntype);
             std::size_t h3 = std::hash<std::string>{}(node.smarts);
             std::size_t h4 = 0;
@@ -190,7 +184,7 @@ namespace std {
             for (const auto& hub : node.hubs) {
                 h5 ^= std::hash<int>{}(hub) + 0x9e3779b9 + (h5 << 6) + (h5 >> 2);
             }
-            return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
+            return (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
         }
     };
     template <>

@@ -111,6 +111,7 @@ def visualize_node_trace(
 def visualize_group(
     node: Group,
     text: Optional[Union[str, bool]] = "",
+    draw_numbers = False,
     sanitize_smiles: bool = False,
     highlight_color: Tuple[float, float, float, float] = (1.0, 0.5, 0.5, 1.0),
     draw_options: dict = None,
@@ -127,6 +128,8 @@ def visualize_group(
     text : str, optional, default="Matching Subgraph"
         Text to place as a legend under the graph. The color matches the highlighted portion,
         which indicates these atoms would actually be contained in the function group Node.
+    draw_numbers : bool, optional, default=False
+        If True, draw the atom indices on the image.
     sanitize_smiles : bool, optional, default=False
         Argument that can be passed to rdkit.Chem.MolFromSmiles. Sanitization can strip hydrogens.
         See https://www.rdkit.org/docs/source/rdkit.Chem.rdmolfiles.html#rdkit.Chem.rdmolfiles.SmilesParserParams
@@ -179,10 +182,10 @@ def visualize_group(
         drawer.SetDrawOptions(draw_options)
     draw_options.setHighlightColour(highlight_color)
 
-
-    # Add indices to atoms
-    for i, atom in enumerate(mol.GetAtoms()):
-        atom.SetProp("atomNote", str(i))
+    if draw_numbers:
+        # Add indices to atoms
+        for i, atom in enumerate(mol.GetAtoms()):
+            atom.SetProp("atomNote", str(i))
 
     # Drawing steps
     drawer.DrawMolecule(mol)

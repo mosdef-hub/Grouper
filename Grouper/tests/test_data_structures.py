@@ -73,10 +73,33 @@ class TestGroupGraph(BaseTest):
     def test_add_node(self):
         # Basic node addition
         graph = GroupGraph()
-        graph.add_node("type1", "", [0, 0])
+
+        with pytest.raises(ValueError): # No smarts
+            graph.add_node("type1", "", [0, 0])
+        
+        with pytest.raises(ValueError): # Invalid hubs
+            graph.add_node("type1", "C", [0, -1])
+
+        with pytest.raises(ValueError): # Invalid hubs
+            graph.add_node("type1", "C", [0, 1, 2])
+        
+        with pytest.raises(ValueError): # Invalid smarts
+            graph.add_node("type1", "asldkfghj", [0])
+
+        with pytest.raises(ValueError): # No type
+            graph.add_node("", "C", [0, 0])
+
+        assert len(graph.nodes) == 0
+
+        graph.add_node("type1", "C", [0, 0])
+
+        assert len(graph.nodes) == 1
         assert set(n.type for n in graph.nodes.values()) == set(["type1"])
-        assert set(n.smarts for n in graph.nodes.values()) == set([""])
+        assert set(n.smarts for n in graph.nodes.values()) == set(["C"])
         assert [n.ports for n in graph.nodes.values()] == [[0, 1]]
+        assert [n.hubs for n in graph.nodes.values()] == [[0, 0]]
+        
+        graph.add_node("type1")
 
         # Basic node addition for AtomGraph
         agraph = AtomGraph()
@@ -87,16 +110,10 @@ class TestGroupGraph(BaseTest):
         # Adding a node with different type and smarts
         graph.add_node("", "C", [0, 0])
         assert len(graph.nodes) == 2
-        assert set(n.type for n in graph.nodes.values()) == set(["type1", "C"])
-        assert set(n.smarts for n in graph.nodes.values()) == set(["", "C"])
+        assert set(n.type for n in graph.nodes.values()) == set(["type1", "type1"])
+        assert set(n.smarts for n in graph.nodes.values()) == set(["C", "C"])
         assert [n.ports for n in graph.nodes.values()] == [[0, 1], [0, 1]]
-
-        # Adding a node with only a type
-        graph.add_node("type1")
-        assert len(graph.nodes) == 3
-        assert set(n.type for n in graph.nodes.values()) == set(["type1", "C", "type1"])
-        assert set(n.smarts for n in graph.nodes.values()) == set(["", "C", ""])
-        assert [n.ports for n in graph.nodes.values()] == [[0, 1], [0, 1], [0, 1]]
+        assert [n.hubs for n in graph.nodes.values()] == [[0, 0], [0, 0]]
 
     def test_add_edge(self):
         graph = GroupGraph()
