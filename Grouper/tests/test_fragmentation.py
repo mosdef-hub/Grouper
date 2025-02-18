@@ -79,7 +79,7 @@ class TestGroupGraph(BaseTest):
     def test_triple_node(self):
         node_defs = set()
         node_defs.add(Group("oxyl", "O", [0, 0]))  # oxyl group
-        node_defs.add(Group("ester", "[C](=O)[O]", [0, 2]))  # Ester group
+        node_defs.add(Group("ester", "[C](=O)[O]", [0, 2], is_smarts=True))  # Ester group
         node_defs.add(Group("amine", "N", [0, 0, 0]))  # Amine group
         node_defs.add(Group("alkene_secondary_amine", "CNC", [0, 0, 1, 2,2]))
         node_defs.add(Group("alkene", "C", [0, 0, 0]))

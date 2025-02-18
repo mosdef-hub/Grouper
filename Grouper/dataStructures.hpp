@@ -117,6 +117,8 @@ public:
         bool operator!=(const Group& other) const;
         Group() : ntype(""), pattern(""), hubs(), ports() {}
         Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs, const bool isSmarts = false);
+        // Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs) 
+        // : Group(ntype, pattern, hubs, false) {} 
         std::vector<int> hubOrbits() const;
         std::string toString() const;
 

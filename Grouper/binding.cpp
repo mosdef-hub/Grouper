@@ -29,7 +29,10 @@ PYBIND11_MODULE(_Grouper, m) {
     m.doc() = "Grouper bindings for Python";
     py::class_<GroupGraph::Group>(m, "Group")
         .def(py::init<>())
-        .def(py::init<const std::string&, const std::string&, const std::vector<int>&, const bool>())
+        .def(py::init<const std::string&, const std::string&, const std::vector<int>&, bool>(),
+            py::arg("ntype"), py::arg("pattern"), py::arg("hubs"), py::arg("is_smarts") = false)
+        // .def(py::init<const std::string&, const std::string&, const std::vector<int>&>(),
+        //     py::arg("ntype"), py::arg("pattern"), py::arg("hubs"))
         .def_readwrite("type", &GroupGraph::Group::ntype)
         .def_readwrite("pattern", &GroupGraph::Group::pattern)
         .def_readwrite("ports", &GroupGraph::Group::ports)

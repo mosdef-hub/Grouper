@@ -66,8 +66,8 @@ class TestGeneration(BaseTest):
     def test_simple_exhaustive_generation(self):
         node_defs = [
             {"type": "t2", "smarts": "[N]", "hubs": [0, 0, 0]},
-            {"type": "Methyl", "smarts": "[CX3]", "hubs": [0, 0, 0]},
-            {"type": "ester", "smarts": "[CX3](=[OX1])([OX2])", "hubs": [0, 2]},
+            {"type": "Methyl", "smarts": "[C]", "hubs": [0, 0, 0]},
+            {"type": "ester", "smarts": "[C;3](=O)([O;2])", "hubs": [0, 2]},
             {"type": "extra1", "smarts": "[O]", "hubs": [0, 0]},
         ]
         # Load nauty path from config file
@@ -89,7 +89,7 @@ class TestGeneration(BaseTest):
             )
 
         # Convert node_defs to the expected format
-        node_defs = set(Group(n["type"], n["smarts"], n["hubs"]) for n in node_defs)
+        node_defs = set(Group(n["type"], n["smarts"], n["hubs"], is_smarts=True) for n in node_defs)
 
         logging.info("Created node_defs")
 
