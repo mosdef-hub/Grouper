@@ -245,8 +245,8 @@ class TestGroupGraph(BaseTest):
 
     def test_n_free_ports(self):
         graph = GroupGraph()
-        graph.add_node("node1", "[C]", [0, 0])
-        graph.add_node("node2", "[CX4]", [0, 0, 1])
+        graph.add_node("node1", "[C]", [0, 0], True)
+        graph.add_node("node2", "[C]", [0, 0, 0], True)
         assert graph.n_free_ports(0) == 2
 
         # Connect a edge and recheck
@@ -353,10 +353,10 @@ class TestGroupGraph(BaseTest):
     def test_add_node_performance(self, benchmark):
         graph = GroupGraph()
         for i in range(100):
-            graph.add_node(f"type{i}", "", [0, 0])
+            graph.add_node(f"type{i}", "C", [0, 0])
 
         def benchmark_add_node():
-            graph.add_node("type100", "", [0, 0])
+            graph.add_node("type100", "C", [0, 0])
 
         # Benchmark the add_node method
         benchmark(benchmark_add_node)

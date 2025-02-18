@@ -1250,7 +1250,7 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
     edges.clear();
 
     std::unordered_map<std::string, int> standardElementValency = {
-        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}, {"c", 4}, {"n", 3}, {"o", 2}, {"s", 2}
     };
 
     std::stack<NodeIDType> nodeStack; // Stack to handle branching
