@@ -97,7 +97,6 @@ public:
     std::vector<setword> toNautyGraph() const;
     void fromSmiles(const std::string& smiles);
     void fromSmarts(const std::string& smarts);
-    void fromSmilesorSmarts(const std::string& smilesorsmarts);
     std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;
 private:
 };
@@ -110,13 +109,14 @@ public:
     // Attributes
     struct Group {
         std::string ntype;
-        std::string smarts;
+        std::string pattern;
         std::vector<NodeIDType> hubs;
         std::vector<PortType> ports;
+        bool isSmarts = false;
         bool operator==(const Group& other) const;
         bool operator!=(const Group& other) const;
-        Group() : ntype(""), smarts(""), hubs(), ports() {}
-        Group(const std::string& ntype, const std::string& smarts, const std::vector<int>& hubs);
+        Group() : ntype(""), pattern(""), hubs(), ports() {}
+        Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs, const bool isSmarts = false);
         std::vector<int> hubOrbits() const;
         std::string toString() const;
 
@@ -133,8 +133,9 @@ public:
     // Operating methods
     void addNode(
         std::string ntype,
-        std::string smarts,
-        std::vector<NodeIDType> hubs
+        std::string pattern,
+        std::vector<NodeIDType> hubs,
+        bool isSmarts = false
     );
     bool addEdge(
         std::tuple<NodeIDType, PortType> fromNodePort,
@@ -175,7 +176,7 @@ namespace std {
     struct hash<GroupGraph::Group> {
         std::size_t operator()(const GroupGraph::Group& node) const {
             std::size_t h2 = std::hash<std::string>{}(node.ntype);
-            std::size_t h3 = std::hash<std::string>{}(node.smarts);
+            std::size_t h3 = std::hash<std::string>{}(node.pattern);
             std::size_t h4 = 0;
             for (const auto& port : node.ports) {
                 h4 ^= std::hash<int>{}(port) + 0x9e3779b9 + (h4 << 6) + (h4 >> 2);

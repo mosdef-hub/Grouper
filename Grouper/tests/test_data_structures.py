@@ -11,35 +11,32 @@ class TestGroupGraph(BaseTest):
         return {frozenset(match) for match in matches}
 
     def test_group_equality(self):
-        g1 = Group("C", "[C]", [0])
-        g2 = Group("C", "[C]", [0])
-        g3 = Group("C2", "[C]", [0])
-        g4 = Group("C", "[C2]", [0])
-        g5 = Group("C", "[C]", [0, 1])
+        g1 = Group("C", "[C]", [0], True)
+        g2 = Group("C", "[C]", [0], True)
+        g3 = Group("C2", "[C]", [0], True)
+        with pytest.raises(ValueError):
+            g4 = Group("C", "[C2]", [0], True)
+        with pytest.raises(ValueError):
+            g5 = Group("C", "[C]", [0, 1], True)
 
         assert g1 == g2
         assert g1 != g3
-        assert g1 != g4
-        assert g1 != g5
-        assert g3 != g4
-        assert g3 != g5
-        assert g4 != g5
 
         gg = GroupGraph()
-        gg.add_node("O", "[O]", [0])
-        gg.add_node("O", "[O]", [0])
-        gg.add_node("O", "[O]", [0])
-        gg.add_node("O", "[O]", [0])
+        gg.add_node("O", "[O]", [0], True)
+        gg.add_node("O", "[O]", [0], True)
+        gg.add_node("O", "[O]", [0], True)
+        gg.add_node("O", "[O]", [0], True)
 
         assert all(
             [n1 == n2 for n1, n2 in zip(gg.nodes.values(), list(gg.nodes.values())[1:])]
         )
 
         gg = GroupGraph()
-        gg.add_node("O", "[O]", [0])
-        gg.add_node("C", "[O]", [0])
-        gg.add_node("N", "[O]", [0])
-        gg.add_node("S", "[O]", [0])
+        gg.add_node("O", "[O]", [0], True)
+        gg.add_node("C", "[O]", [0], True)
+        gg.add_node("N", "[O]", [0], True)
+        gg.add_node("S", "[O]", [0], True)
 
         assert not any([n1 == n2 for n1, n2 in zip(gg.nodes, list(gg.nodes)[1:])])
 
@@ -95,7 +92,7 @@ class TestGroupGraph(BaseTest):
 
         assert len(graph.nodes) == 1
         assert set(n.type for n in graph.nodes.values()) == set(["type1"])
-        assert set(n.smarts for n in graph.nodes.values()) == set(["C"])
+        assert set(n.pattern for n in graph.nodes.values()) == set(["C"])
         assert [n.ports for n in graph.nodes.values()] == [[0, 1]]
         assert [n.hubs for n in graph.nodes.values()] == [[0, 0]]
         
@@ -107,19 +104,19 @@ class TestGroupGraph(BaseTest):
         assert set(n.type for n in agraph.nodes.values()) == set(["C"])
         assert set(n.valency for n in agraph.nodes.values()) == set([4])
 
-        # Adding a node with different type and smarts
-        graph.add_node("", "C", [0, 0])
-        assert len(graph.nodes) == 2
-        assert set(n.type for n in graph.nodes.values()) == set(["type1", "type1"])
-        assert set(n.smarts for n in graph.nodes.values()) == set(["C", "C"])
-        assert [n.ports for n in graph.nodes.values()] == [[0, 1], [0, 1]]
-        assert [n.hubs for n in graph.nodes.values()] == [[0, 0], [0, 0]]
+        # Adding a node with different type and pattern
+        graph.add_node("type2", "C", [0])
+        assert len(graph.nodes) == 3
+        assert set(n.type for n in graph.nodes.values()) == set(["type1", "type1", "type2"])
+        assert set(n.pattern for n in graph.nodes.values()) == set(["C", "C", "C"])
+        assert [n.ports for n in graph.nodes.values()] == [[0], [0, 1], [0,1]]
+        assert [n.hubs for n in graph.nodes.values()] == [[0], [0, 0], [0, 0]]
 
     def test_add_edge(self):
         graph = GroupGraph()
-        graph.add_node("type1", "", [0, 0])
-        graph.add_node("", "C", [0, 0])
-        graph.add_node("type1", "", [0, 0])
+        graph.add_node("type1", "C", [0, 0])
+        graph.add_node("type2", "C", [0, 0])
+        graph.add_node("type1", "C", [0, 0])
 
         graph.add_edge((0, 0), (1, 0))
         assert (0, 0, 1, 0, 1) in graph.edges
@@ -129,31 +126,31 @@ class TestGroupGraph(BaseTest):
 
     def test_add_edge_with_invalid_nodes(self):
         graph = GroupGraph()
-        graph.add_node("node1", "", [0, 0])
-        graph.add_node("node2", "", [0])
+        graph.add_node("node1", "C", [0, 0])
+        graph.add_node("node2", "C", [0])
         with pytest.raises(ValueError):
             graph.add_edge((0, 1), (2, 1))
 
     def test_add_edge_with_invalid_ports(self):
         graph = GroupGraph()
-        graph.add_node("node1", "", [0, 0])
-        graph.add_node("node2", "", [0, 0])
+        graph.add_node("node1", "C", [0, 0])
+        graph.add_node("node2", "C", [0, 0])
         with pytest.raises(ValueError):
             graph.add_edge((0, 2), (1, 1))
 
     def test_add_edge_with_occupied_port(self):
         graph = GroupGraph()
-        graph.add_node("node1", "", [0, 0])
-        graph.add_node("node2", "", [0, 0])
+        graph.add_node("node1", "C", [0, 0])
+        graph.add_node("node2", "C", [0, 0])
         graph.add_edge((0, 1), (1, 1))
         with pytest.raises(ValueError):
             graph.add_edge((0, 1), (1, 0))
 
     def test_add_edge_with_same_ports(self):
         graph = GroupGraph()
-        graph.add_node("node1", "", [0, 0])
-        graph.add_node("node2", "", [0, 0])
-        graph.add_node("node3", "", [0, 0])
+        graph.add_node("node1", "C", [0, 0])
+        graph.add_node("node2", "C", [0, 0])
+        graph.add_node("node3", "C", [0, 0])
         graph.add_edge((0, 1), (1, 1))
         graph.add_edge((1, 0), (2, 1))
         with pytest.raises(ValueError):

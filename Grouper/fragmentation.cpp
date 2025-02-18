@@ -51,7 +51,7 @@ namespace std {
 //     std::unordered_map<GroupGraph::Group, std::unordered_set<GroupGraph::Group>> nodeComposition;
 //     for (const auto& nodeDef1 : nodeDefs) {
 //         const GroupGraph::Group& nodeData = nodeDef1.second;
-//         const std::string& smiles = nodeData.smarts; // Need to use smiles because rdkit can't actually do substructure matching with smarts
+//         const std::string& smiles = nodeData.pattern; // Need to use smiles because rdkit can't actually do substructure matching with pattern
 
 //         for (const auto& nodeDef2 : nodeDefs) {
 //             const std::string& smarts2 = nodeDef2.first;
@@ -141,8 +141,16 @@ std::vector<GroupGraph> fragment(
     std::sort(nodesVec.begin(), nodesVec.end(),
         [](const GroupGraph::Group& a, const GroupGraph::Group& b) {
             AtomGraph aGraph, bGraph;
-            aGraph.fromSmarts(a.smarts); // fromSmarts?
-            bGraph.fromSmarts(b.smarts); // fromSmarts?
+            if (a.isSmarts) {
+                aGraph.fromSmarts(a.pattern);
+            } else {
+                aGraph.fromSmiles(a.pattern);
+            }
+            if (b.isSmarts) {
+                bGraph.fromSmarts(b.pattern);
+            } else {
+                bGraph.fromSmiles(b.pattern);
+            }
             if (aGraph.nodes.size() != bGraph.nodes.size()) {
                 return aGraph.nodes.size() > bGraph.nodes.size();
             }
@@ -155,8 +163,16 @@ std::vector<GroupGraph> fragment(
         [](const GroupGraph::Group& a, const GroupGraph::Group& b) {
             AtomGraph aGraph, bGraph;
 
-            aGraph.fromSmarts(a.smarts);
-            bGraph.fromSmarts(b.smarts); 
+            if (a.isSmarts) {
+                aGraph.fromSmarts(a.pattern);
+            } else {
+                aGraph.fromSmiles(a.pattern);
+            }
+            if (b.isSmarts) {
+                bGraph.fromSmarts(b.pattern);
+            } else {
+                bGraph.fromSmiles(b.pattern);
+            }
             if (aGraph.nodes.size() != bGraph.nodes.size()) {
                 return aGraph.nodes.size() > bGraph.nodes.size();
             }
@@ -254,7 +270,11 @@ std::vector<GroupGraph> fragment(
         for (size_t i = startIdx; i < candidates.size(); ++i) {
             const auto& node = candidates[i];
             AtomGraph query;
-            query.fromSmarts(node.smarts); // fromSMARTS
+            if (node.isSmarts) {
+                query.fromSmarts(node.pattern);
+            } else {
+                query.fromSmiles(node.pattern);
+            }
 
             auto matches = mol.substructureSearch(query, node.hubs);
             if (matches.empty()) {
@@ -281,7 +301,7 @@ std::vector<GroupGraph> fragment(
                     nodeDefs.begin(),
                     nodeDefs.end(),
                     [&](const GroupGraph::Group& n) {
-                        return n.smarts == node.smarts && n.ntype == node.ntype;
+                        return n.pattern == node.pattern && n.ntype == node.ntype;
                     }
                 );
 
@@ -289,11 +309,11 @@ std::vector<GroupGraph> fragment(
                     throw std::invalid_argument("Parent node not found.");
                 }
 
-                tempGraph.addNode(parent->ntype, parent->smarts, parent->hubs);
+                tempGraph.addNode(parent->ntype, parent->pattern, parent->hubs);
 
                 for (const auto& [queryid, molid] : match) {
                     tempAtomToNodeid[molid] = currentId;
-                    tempAtomToSmarts[molid] = node.smarts;
+                    tempAtomToSmarts[molid] = node.pattern;
 
                     std::vector<int> hubIndices;
                     for (size_t idx = 0; idx < parent->hubs.size(); ++idx) {

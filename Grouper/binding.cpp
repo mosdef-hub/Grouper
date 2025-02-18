@@ -29,11 +29,12 @@ PYBIND11_MODULE(_Grouper, m) {
     m.doc() = "Grouper bindings for Python";
     py::class_<GroupGraph::Group>(m, "Group")
         .def(py::init<>())
-        .def(py::init<const std::string&, const std::string&, const std::vector<int>&>())
+        .def(py::init<const std::string&, const std::string&, const std::vector<int>&, const bool>())
         .def_readwrite("type", &GroupGraph::Group::ntype)
-        .def_readwrite("smarts", &GroupGraph::Group::smarts)
+        .def_readwrite("pattern", &GroupGraph::Group::pattern)
         .def_readwrite("ports", &GroupGraph::Group::ports)
         .def_readwrite("hubs", &GroupGraph::Group::hubs)
+        .def_readwrite("is_smarts", &GroupGraph::Group::isSmarts)
         .def("__eq__", &GroupGraph::Group::operator==)
         .def("__ne__", &GroupGraph::Group::operator!=)
         .def("__str__", &GroupGraph::Group::toString)
@@ -48,8 +49,9 @@ PYBIND11_MODULE(_Grouper, m) {
         .def_readwrite("node_types", &GroupGraph::nodetypes)
         .def("add_node", &GroupGraph::addNode,
              py::arg("type") = "",
-             py::arg("smarts") = "",
-             py::arg("hubs") = std::vector<int>{})
+             py::arg("pattern") = "",
+             py::arg("hubs") = std::vector<int>{},
+             py::arg("isSmarts") = false)
         .def("add_edge", &GroupGraph::addEdge,
              py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
              py::arg("dst") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},

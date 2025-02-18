@@ -35,7 +35,7 @@ std::vector<std::vector<int>> apply_automorphisms(
 std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
     const std::vector<std::pair<int, int>>& edge_list,
     const std::unordered_map<int, std::string>& int_to_node_type,
-    const std::unordered_map<std::string, std::string>& int_to_smarts,
+    const std::unordered_map<std::string, std::string>& int_to_pattern,
     const std::unordered_map<std::string, std::vector<std::string>>& node_types,
     const std::unordered_map<std::string, std::string>& node_type_to_hub
 );
