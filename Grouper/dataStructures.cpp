@@ -66,8 +66,7 @@ GroupGraph& GroupGraph::operator=(const GroupGraph& other) {
 }
 
 bool GroupGraph::Group::operator==(const Group& other) const {
-    return
-           ntype == other.ntype &&
+    return ntype == other.ntype &&
            smarts == other.smarts &&
            hubs == other.hubs;
 }
@@ -665,7 +664,7 @@ void GroupGraph::deserialize(const std::string& data) {
         edges.clear();
         nodetypes.clear();
 
-        
+
         json j = json::parse(data);
 
         // Pre-allocate space
@@ -676,12 +675,12 @@ void GroupGraph::deserialize(const std::string& data) {
         for (const auto& node_data : nodes_array) {
             // Extract all data first
             NodeIDType id = node_data["id"].get<NodeIDType>();
-            
+
             // Construct the group directly with its constructor
             std::string ntype = node_data["ntype"].get<std::string>();
             std::string smarts = node_data["smarts"].get<std::string>();
             std::vector<NodeIDType> hubs = node_data["hubs"].get<std::vector<NodeIDType>>();
-            
+
             // Create and insert the group
             Group group(ntype, smarts, hubs);
             
@@ -689,7 +688,7 @@ void GroupGraph::deserialize(const std::string& data) {
             if (node_data.contains("ports")) {
                 group.ports = node_data["ports"].get<std::vector<PortType>>();
             }
-            
+
             // Use emplace with piecewise construction
             nodes.emplace(std::piecewise_construct,
                          std::forward_as_tuple(id),
@@ -699,7 +698,7 @@ void GroupGraph::deserialize(const std::string& data) {
         // Process edges
         const auto& edges_array = j["edges"];
         edges.reserve(edges_array.size());
-        
+
         for (const auto& edge_data : edges_array) {
             edges.insert(
                 std::make_tuple(
@@ -764,6 +763,47 @@ AtomGraph::AtomGraph()
 AtomGraph::AtomGraph(const AtomGraph& other)
     : nodes(other.nodes), edges(other.edges) {}
 
+AtomGraph::Atom::Atom(const std::string& ntype){
+    static std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+    };
+    this->ntype = ntype;
+    if (standardElementValency.count(ntype)) {
+        this->valency = standardElementValency[ntype];
+    } else { // Error message if passing bad Atom Name
+        std::stringstream err_msg;
+        err_msg << "Element type '" << ntype << "' does not have a default valency. Valid element types are: ";
+        for (const auto& pair : standardElementValency) {
+            err_msg << pair.first << " ";
+        }
+        throw std::invalid_argument(err_msg.str());
+    }
+}
+
+AtomGraph::Atom::Atom(const std::string& ntype, int valency){
+    static std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+    };
+    this->ntype = ntype;
+    if (valency == -1){
+        if (standardElementValency.count(ntype)) {
+            this->valency = standardElementValency[ntype];
+        } else { // Error message if passing bad Atom Name
+            std::stringstream err_msg;
+            err_msg << "Element type '" << ntype << "' does not have a default valency. Valid element types are: ";
+            for (const auto& pair : standardElementValency) {
+                err_msg << pair.first << " ";
+            }
+            throw std::invalid_argument(err_msg.str());
+        }
+    } else {
+        this->valency = valency;
+    }
+}
+
+
+
+
 AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
     if (this != &other) {
         nodes = other.nodes;
@@ -774,7 +814,7 @@ AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
 
 std::string AtomGraph::Atom::toString() const {
     std::ostringstream output;
-    output << "Atom " << id << " (" << ntype << ") Valency: " << valency;
+    output << "Atom " << " (" << ntype << ") Valency: " << valency;
     return output.str();
 }
 
@@ -829,14 +869,15 @@ bool AtomGraph::operator==(const AtomGraph& other) const {
     return true;
 }
 
-void AtomGraph::addNode(const std::string& type, const unsigned int valency) {
+void AtomGraph::addNode(const std::string& type, const int valency) {
     int id = nodes.size();
-    nodes[id] = Atom(id, type, valency);
+    nodes[id] = Atom(type, valency);
 
 }
 
 void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
-    if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end()) {
+    if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end())
+    {
         if (nodes.find(src) == nodes.end()) {
             throw std::invalid_argument("Atom " + std::to_string(src) + " does not exist");
         }
@@ -859,7 +900,6 @@ void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
     if (order > 4 || order < 1) {
         throw std::invalid_argument("Bond order of " + std::to_string(order) + " is invalid");
     }
-
     edges.insert(std::make_tuple(src, dst, order));
     edges.insert(std::make_tuple(dst, src, order));
 }
@@ -868,6 +908,11 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     /*
         Returns a list of all subgraph isomorphisms between the query graph and this graph
         format is a list of lists of pairs of node ids where (query_node_id, this_node_id) is a match
+
+        @param query AtomGraph to look at isomorphism mapping
+        @param hubs vector<ints> which indicate where the available hubs are
+
+        @return vector of vectors of pairs of two NodeIds to map in query
     */
     std::vector<std::vector<std::pair<NodeIDType,NodeIDType>>> matches; // To store all matches
     std::unordered_map<NodeIDType, int> queryNeededFreeValency; // To store the number of hubs for each query node
@@ -908,12 +953,15 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     std::unordered_map<NodeIDType, std::vector<NodeIDType>> candidateNodes; // Maps query nodes to possible candidates in the main graph
     for (const auto& queryNodePair : query.nodes) {
         const auto& queryNode = queryNodePair.second;
-        for (const auto& graphNodePair : nodes) {
+        const auto& queryID = queryNodePair.first;
+        for (const auto &graphNodePair : nodes)
+        {
             const auto& graphNode = graphNodePair.second;
+            const auto& graphID = graphNodePair.first;
 
             // Match based on node type and valency
             if (queryNode.ntype == graphNode.ntype && queryNode.valency <= graphNode.valency) {
-                candidateNodes[queryNode.id].push_back(graphNode.id);
+                candidateNodes[queryID].push_back(graphID);
             }
         }
     }
@@ -967,7 +1015,7 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
                     auto it = edges.find(std::make_tuple(graphNodeid, currentMapping[dst], order));
                     if (it == edges.end()) { // Node has to be in the graph
                         return;
-                    }                    
+                    }
                 }
                 // printf("Bonds Matched\n");
 
@@ -1060,6 +1108,141 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     return matches;
 }
 
+/**
+ * Processing method for creating atom graphs from SMILES or SMARTS strings.
+ *
+ * This method can check for either a SMARTS or SMILES string, with
+ * SMARTS taking precedence, and create an atomgraph
+ *
+ * @tparam smilesorsmarts a string that will be processed into AtomGraph
+ * @return void
+ */
+void AtomGraph::fromSmilesorSmarts(const std::string& smilessorsmarts) {
+    // Parse fromSMILES or fromSMARTS
+};
+
+/**
+ * Processing method for creating atom graphs from SMARTS strings.
+ *
+ *  Currently supported symbols
+ *  `(,),[,],;,C,N,O,H,S,F,Br,Cl,I,-,=,#`
+ *
+ * TODO: Plenty more symbols to support.
+ * `R,!,X,ints,*,@`
+ * TODO: Add possibility to leverage RDKit parsing alternatively
+ * TODO: Handle two letter elements, such as Br, Cl etc.
+ *
+ * @tparam smarts a string that will be processed into AtomGraph
+ * @return void
+ */
+void AtomGraph::fromSmarts(const std::string& smarts) {
+    nodes.clear();
+    edges.clear();
+
+    std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+    };
+
+    std::vector<NodeIDType> centralNodeVec; // List to handle branching
+    std::unordered_map<int, NodeIDType> ringClosures; // Map for ring closure indices
+    int prevDepth = 0; // For determining if there's branching
+    int currentDepth = 0; // How many parantheses deep are you at in the string
+
+    NodeIDType currentNode = 0;
+    int bondOrder = 1; // Default to single bond
+
+    for (size_t i = 0; i < smarts.length(); ++i) {
+        char c = smarts[i];
+
+        if (standardElementValency.count(std::string(1, c))) {
+            // Handle atom
+            addNode(std::string(1, c));
+            currentNode = nodes.size() - 1;
+
+            // In the initial state, no bonds occur, so just add the node
+            if (centralNodeVec.empty()) {
+                centralNodeVec.push_back(currentNode);
+            } else if (currentDepth <= prevDepth) { // at the end of a branch, so overwrite previous source node
+                addEdge(centralNodeVec[currentDepth], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            } else { // bond goes to the actively building branch
+                addEdge(centralNodeVec[currentDepth-1], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            }
+            prevDepth = currentDepth;
+        }
+        else if (c == '(')
+        {
+            // Going one level deeper into molecule branching
+            currentDepth++;
+        }
+        else if (c == ')')
+        {
+            // Stepping one level out of molecule branching
+            currentDepth--;
+        }
+        else if (std::isdigit(c))
+        {
+            // Handle ring closure
+            // NodeIDType currentNode = nodes.size() - 1;
+            int ringIndex = c - '0'; // char conversion to int
+            if (ringClosures.find(ringIndex) != ringClosures.end()) {
+                // Connect the current node to the ring closure with the current bond order
+                addEdge(currentNode, ringClosures[ringIndex], bondOrder);
+                bondOrder = 1; // Reset bond order to single after use
+                ringClosures.erase(ringIndex);
+            } else {
+                // Store the current node as the ring closure point
+                ringClosures[ringIndex] = currentNode;
+            }
+        }
+        else if (c == '-')
+        {
+            // Set bond order to single, this may be useless
+            bondOrder = 1;
+        }
+        else if (c == '=')
+        {
+            // Set bond order to double
+            bondOrder = 2;
+        }
+        else if (c == '#')
+        {
+            // Set bond order to triple
+            bondOrder = 3;
+        }
+        else if ((c == '[') || (c == ']'))
+        {
+            // Some symbols that need to be considered with more specifics
+            ;
+        }
+        else
+        {
+            // Handle unsupported characters (e.g., invalid SMARTS)
+            throw std::invalid_argument(
+                "Unsupported character in SMARTS: `"
+                + std::string(1, c)
+                + "` for SMILES "
+                + std::string(smarts)
+            );
+        }
+    }
+
+    // Basic error checking for unclosed rings
+    if (!ringClosures.empty()) {
+        std::cerr << "Unclosed rings detected: ";
+        for (const auto& entry : ringClosures) {
+            std::cerr << entry.first << " ";
+        }
+        std::cerr << std::endl;
+        throw std::invalid_argument(
+                "Unclosed ring detected in SMILES string `"
+                + std::string(smarts)
+                + "`"
+            );
+    }
+}
+
 void AtomGraph::fromSmiles(const std::string& smiles) {
     nodes.clear();
     edges.clear();
@@ -1067,7 +1250,7 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
     std::unordered_map<std::string, int> standardElementValency = {
         {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
     };
-    
+
     std::stack<NodeIDType> nodeStack; // Stack to handle branching
     std::unordered_map<int, NodeIDType> ringClosures; // Map for ring closure indices
     NodeIDType lastNode = -1;
@@ -1112,12 +1295,23 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
                 ringClosures[ringIndex] = lastNode;
             }
             bondOrder = 1; // Reset bond order to single after use
+        } else if (c == '-') {
+            // Set bond order to single, this may be useless
+            bondOrder = 1;
         } else if (c == '=') {
             // Set bond order to double
             bondOrder = 2;
+        } else if (c == '#') {
+            // Set bond order to triple
+            bondOrder = 3;
         } else {
             // Handle unsupported characters (e.g., invalid SMILES)
-            throw std::invalid_argument("Unsupported character in SMILES: " + std::string(1, c));
+            throw std::invalid_argument(
+                "Unsupported character in SMILES: `"
+                + std::string(1, c)
+                + "` for SMILES "
+                + std::string(smiles)
+            );
         }
     }
 
@@ -1128,7 +1322,11 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
             std::cerr << entry.first << " ";
         }
         std::cerr << std::endl;
-        throw std::runtime_error("Unclosed ring detected in SMILES string.");
+        throw std::invalid_argument(
+                "Unclosed ring detected in SMILES string `"
+                + std::string(smiles)
+                + "`"
+            );
     }
 
 }

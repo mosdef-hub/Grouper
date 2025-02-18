@@ -47,28 +47,34 @@ namespace std {
     };
 }
 
-
+const std::unordered_map<std::string, int> default_valencies = {
+    {"H", 1},
+    {"O", 2},
+    {"C", 4},
+    // ... other elements with their default valencies
+};
 
 class AtomGraph {
 public:
     using NodeIDType = int;
 
     struct Atom {
-        NodeIDType id;
         std::string ntype;
-        unsigned int valency;
+        int valency;
 
         // Need to define comparison operators for Atom to be used in unordered_map
         bool operator==(const Atom& other) const {
-            return id == other.id && ntype == other.ntype && valency == other.valency;
+            return ntype == other.ntype && valency == other.valency;
         }
         bool operator!=(const Atom& other) const {
             return !(*this == other);
         }
-        Atom() : id(0), ntype(""), valency(0) {}
 
-        Atom(int id, const std::string& ntype, const unsigned int valency)
-            : id(id), ntype(ntype), valency(valency) {}
+        Atom() : ntype("C"), valency(4) {}
+
+        Atom(const std::string &ntype); // constructor in dataStructures.cpp
+
+        Atom(const std::string &ntype, const int valency); // constructor in dataStructures.cppv
 
         std::string toString() const;
 
@@ -82,7 +88,7 @@ public:
     AtomGraph& operator=(const AtomGraph& other);
     bool operator==(const AtomGraph& other) const;
 
-    void addNode(const std::string& ntype = "", unsigned int valency = 0);
+    void addNode(const std::string& ntype = "", int valency = -1);
     void addEdge(NodeIDType src, NodeIDType dst, unsigned int order = 1);
     int getFreeValency(NodeIDType nid) const;
     std::string printGraph() const;
@@ -90,8 +96,9 @@ public:
     std::vector<NodeIDType> nodeOrbits() const;
     std::vector<setword> toNautyGraph() const;
     void fromSmiles(const std::string& smiles);
+    void fromSmarts(const std::string& smarts);
+    void fromSmilesorSmarts(const std::string& smilesorsmarts);
     std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;
-
 private:
 };
 
@@ -183,21 +190,25 @@ namespace std {
     template <>
     struct hash<AtomGraph::Atom> {
         std::size_t operator()(const AtomGraph::Atom& atom) const {
-            std::size_t h1 = std::hash<int>{}(atom.id);
-            std::size_t h2 = std::hash<std::string>{}(atom.ntype);
-            std::size_t h3 = std::hash<unsigned int>{}(atom.valency);
+            std::size_t h1 = std::hash<std::string>{}(atom.ntype);
+            std::size_t h2 = std::hash<unsigned int>{}(atom.valency);
 
             // Combine the individual hashes using XOR and shifting
-            return h1 ^ (h2 << 1) ^ (h3 << 2);
+            return (h1 << 1) ^ (h2 << 2);
         }
     };
-    // template <> // Custom hash for std::tuple<int, int, unsigned int> AtomGraph::edges
-    // struct hash<std::tuple<int, int, unsigned int>> {
-    //     std::size_t operator()(const std::tuple<int, int, unsigned int>& t) const {
-    //         std::size_t h1 = std::hash<int>{}(std::get<0>(t));
-    //         std::size_t h2 = std::hash<int>{}(std::get<1>(t));
-    //         std::size_t h3 = std::hash<unsigned int>{}(std::get<2>(t));
-    //         return h1 ^ (h2 << 1) ^ (h3 << 2);
+    // template <>
+    // struct hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType,
+    //                     GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>> {
+    //     std::size_t operator()(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType,
+    //                                             GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>& t) const {
+    //         std::size_t h1 = std::hash<GroupGraph::NodeIDType>{}(std::get<0>(t));
+    //         std::size_t h2 = std::hash<GroupGraph::PortType>{}(std::get<1>(t));
+    //         std::size_t h3 = std::hash<GroupGraph::NodeIDType>{}(std::get<2>(t));
+    //         std::size_t h4 = std::hash<GroupGraph::PortType>{}(std::get<3>(t));
+    //         std::size_t h5 = std::hash<unsigned int>{}(std::get<4>(t));
+
+    //         return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
     //     }
     // };
     template <>
@@ -209,8 +220,8 @@ namespace std {
                 h ^= std::hash<GroupGraph::Group>{}(node) + 0x9e3779b9 + (h << 6) + (h >> 2);
             }
             for (const auto& edge : graph.edges) {
-                h ^= std::hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType, 
-                                        GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>>{}(edge) 
+                h ^= std::hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType,
+                                        GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>>{}(edge)
                     + 0x9e3779b9 + (h << 6) + (h >> 2);
             }
             return h;
