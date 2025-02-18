@@ -842,33 +842,30 @@ void AtomGraph::addNode(const std::string& type, const int valency) {
 }
 
 void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
-    std::string srcStr = "Atom {id:" + std::to_string(src) + "-" + this->nodes[src].ntype + ") Valency: " + std::to_string(this->nodes[src].valency);
-    std::string dstStr = "Atom {id:" + std::to_string(dst) + "-" + this->nodes[dst].ntype + ") Valency: " + std::to_string(this->nodes[dst].valency);
     if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end())
     {
         if (nodes.find(src) == nodes.end()) {
-            throw std::invalid_argument("Atom " + srcStr + " does not exist");
+            throw std::invalid_argument("Atom " + std::to_string(src) + " does not exist");
         }
         else {
-            throw std::invalid_argument("Atom " + dstStr + " does not exist");
+            throw std::invalid_argument("Atom " + std::to_string(dst) + " does not exist");
         }
     }
     if (getFreeValency(src) <= 0 && getFreeValency(dst) <= 0) {
-        throw std::invalid_argument("Adding edge from " + srcStr + " to " + dstStr + " would exceed the valency for both nodes");
+        throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for both nodes");
     }
     if (getFreeValency(src) <= 0) {
-        throw std::invalid_argument("Adding edge from " + srcStr + " to " + dstStr + " would exceed the valency for the source node");
+        throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for the source node");
     }
     if (getFreeValency(dst) <= 0) {
-        throw std::invalid_argument("Adding edge from " + srcStr + " to " + dstStr + " would exceed the valency for the destination node");
+        throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for the destination node");
     }
     if (edges.find(std::make_tuple(src, dst, order)) != edges.end() || edges.find(std::make_tuple(dst, src, order)) != edges.end()) {
-        throw std::invalid_argument("Edge from " + srcStr + " to " + dstStr + " already exists");
+        throw std::invalid_argument("Edge from " + std::to_string(src) + " to " + std::to_string(dst) + " already exists");
     }
     if (order > 4 || order < 1) {
         throw std::invalid_argument("Bond order of " + std::to_string(order) + " is invalid");
     }
-
     edges.insert(std::make_tuple(src, dst, order));
     edges.insert(std::make_tuple(dst, src, order));
 }
