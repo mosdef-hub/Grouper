@@ -54,7 +54,6 @@ std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmart
     return std::unique_ptr<RDKit::ROMol>(isSmarts ? RDKit::SmartsToMol(pattern) : RDKit::SmilesToMol(pattern));
 }
 
-
 // Core methods
 GroupGraph::GroupGraph()
     : nodes(), edges(), nodetypes() {}
@@ -393,31 +392,94 @@ void GroupGraph::clearEdges() {
     edges.clear();
 }
 
-int* GroupGraph::computeEdgeOrbits(
-    const std::vector<std::pair<int, int>> edge_list,
+// int* GroupGraph::computeEdgeOrbits(
+//     const std::vector<std::pair<int, int>> edge_list,
+//     graph* g, int* lab, int* ptn, int* orbits,
+//     optionblk* options,
+//     statsblk* stats
+// ) const {
+//     std::vector<std::vector<int>> edge_list_edge_graph = toEdgeGraph(edge_list);
+//     int n = edge_list.size();
+//     int m = SETWORDSNEEDED(n);
+
+//     EMPTYGRAPH(g, m, n);
+//     for (int i = 0; i < n; ++i) {
+//         for (int j = 0; j < n; ++j) {
+//             if (edge_list_edge_graph[i][j] == 1) {
+//                 ADDONEEDGE(g, i, j, m);
+//             }
+//         }
+//     }
+
+//     densenauty(g, lab, ptn, orbits, options, stats, m, n, NULL);
+
+//     int* result = new int[n];
+//     std::copy(orbits, orbits + n, result);
+
+//     return result;
+// }
+
+std::vector<int> GroupGraph::computeNodeOrbits(
     graph* g, int* lab, int* ptn, int* orbits,
     optionblk* options,
     statsblk* stats
 ) const {
-    std::vector<std::vector<int>> edge_list_edge_graph = toEdgeGraph(edge_list);
-    int n = edge_list.size();
+    int n = nodes.size();
     int m = SETWORDSNEEDED(n);
 
+    // Convert the graph to nauty format
     EMPTYGRAPH(g, m, n);
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            if (edge_list_edge_graph[i][j] == 1) {
-                ADDONEEDGE(g, i, j, m);
-            }
-        }
+    for (const auto& edge : edges) {
+        int from = std::get<0>(edge);
+        int to = std::get<2>(edge);
+        ADDONEEDGE(g, from, to, m);
+        ADDONEEDGE(g, to, from, m); // Uncomment this line to make the graph undirected
     }
 
+    // Call nauty to compute the node orbits
     densenauty(g, lab, ptn, orbits, options, stats, m, n, NULL);
 
-    int* result = new int[n];
-    std::copy(orbits, orbits + n, result);
+    // Convert the orbits to a vector
+    std::vector<int> nodeOrbits(n);
+    std::copy(orbits, orbits + n, nodeOrbits.begin());
 
-    return result;
+    return nodeOrbits;
+}
+
+std::unordered_map<std::pair<int,int>, int> GroupGraph::computeEdgeOrbits(
+    const std::vector<int>& nodeOrbits
+) const {
+    std::unordered_map<std::pair<int, int>, int> edgeOrbits;  // Map of edges to their orbit IDs
+    std::unordered_map<int, int> nodeOrbitMap; // NodeID -> Orbit ID
+
+    // Build a lookup table for node orbits
+    for (size_t i = 0; i < nodeOrbits.size(); ++i) {
+        nodeOrbitMap[i] = nodeOrbits[i];  // Assuming nodeOrbits[i] gives orbit ID
+    }
+
+    int orbitIndex = 0; // Counter for unique edge orbits
+    std::unordered_map<std::pair<int, int>, int> edgeOrbitMap;
+
+    // Iterate over all edges
+    for (const auto& edge : edges) {
+        NodeIDType src = std::get<0>(edge);
+        NodeIDType dst = std::get<2>(edge);
+
+        int srcOrbit = nodeOrbitMap[src];
+        int dstOrbit = nodeOrbitMap[dst];
+
+        // Ensure consistent ordering (since edges are undirected)
+        std::pair<int, int> orbitPair = std::minmax(srcOrbit, dstOrbit);
+
+        // Assign edge orbit ID
+        if (edgeOrbitMap.find(orbitPair) == edgeOrbitMap.end()) {
+            edgeOrbitMap[orbitPair] = orbitIndex++;
+        }
+
+        edgeOrbits[{src, dst}] = edgeOrbitMap[orbitPair];
+    }
+
+    return edgeOrbits;  // Returns a map of edges to their orbit IDs
 }
 
 // Conversion methods
@@ -815,9 +877,6 @@ AtomGraph::Atom::Atom(const std::string& ntype, int valency){
         this->valency = valency;
     }
 }
-
-
-
 
 AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
     if (this != &other) {
