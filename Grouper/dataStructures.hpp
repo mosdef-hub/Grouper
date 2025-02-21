@@ -154,10 +154,15 @@ public:
     //     optionblk* options, statsblk* stats
     //     ) const;
     std::vector<int> computeNodeOrbits(
+        const std::vector<std::pair<int, int>>& edge_list,
+        const std::vector<int>& nodeOrbits,
         graph* g, int* lab, int* ptn, int* orbits,
         optionblk* options, statsblk* stats
     ) const;
-    std::unordered_map<std::pair<int,int>, int> computeEdgeOrbits(const std::vector<int>& nodeOrbits) const;
+    std::unordered_map<std::pair<int,int>, int> computeEdgeOrbits(
+        const std::vector<std::pair<int, int>>& edge_list,
+        const std::vector<int>& nodeOrbits
+    ) const;
     void clearEdges();
     bool isPortFree(NodeIDType nodeID, PortType port) const;
     // Conversion methods

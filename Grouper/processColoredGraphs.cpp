@@ -315,7 +315,6 @@ void process_nauty_output(
     auto [n_vertices, colors, edge_list] = parse_nauty_graph_line(line, node_defs);
 
     // Actual function starts here
-    std::vector<std::pair<int, int>> non_colored_edge_list;
     std::unordered_map<int, std::string> int_to_node_type;
     std::unordered_map<std::string, std::vector<int>> node_types;
     std::unordered_map<std::string, std::vector<int>> node_type_to_hub;
@@ -372,13 +371,13 @@ void process_nauty_output(
     GroupGraph gG;
     for (int i = 0; i < n_vertices; ++i) {
         gG.addNode(
-            int_to_node_type.at(colors[i]), 
-            int_to_pattern.at(colors[i]), 
+            int_to_node_type.at(colors[i]),
+            int_to_pattern.at(colors[i]),
             node_type_to_hub.at(int_to_node_type.at(colors[i]))
         );
     }
 
-    // Generate all possible colorings for the edges 
+    // Generate all possible colorings for the edges
     // TODO: this isn't correct since edge colors need to be different for each node-node pair (red(2),blue(2))=(0,1,2,3) is not the same as (blue(2), blue(2)) = (4,5,6,7)
     std::vector<std::vector<int>> all_colorings;
     std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair> possible_edge_colors;
@@ -395,13 +394,32 @@ void process_nauty_output(
     }
 
     // Calculate node orbits using nauty then compute edge orbits
-    std::vector<int> node_orbits = gG.computeNodeOrbits(g, lab, ptn, orbits, options, stats);
-    std::unordered_map<std::pair<int,int>, int> edge_orbits = gG.computeEdgeOrbits(node_orbits);
+    std::vector<int> node_orbits = gG.computeNodeOrbits(
+        edge_list, 
+        colors,
+        g, lab, ptn, orbits, options, stats // Pass nauty structures
+    );
 
-    // Convert edge orbits to a vector of unordered sets
+    std::unordered_map<std::pair<int,int>, int> edge_orbits = gG.computeEdgeOrbits(edge_list, node_orbits);
+
     std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> edge_orbits_vector;
+    // Intitalize edge orbits vector with empty sets
+    std::unordered_set<int> unique_orbits;
     for (const auto& [edge, orbit] : edge_orbits) {
-        edge_orbits_vector[orbit].insert(edge);
+        unique_orbits.insert(orbit);
+    }
+    // Put edge orbits in same order into a set
+    for (int i = 0; i < unique_orbits.size(); i++) {
+        edge_orbits_vector.push_back({});
+    }
+    std::unordered_map<int,int> orbit_to_index;
+    int index = 0;
+    for (const auto& orbit : unique_orbits) {
+        orbit_to_index[orbit] = index;
+        index++;
+    }
+    for (const auto& [edge, orbit] : edge_orbits) {
+        edge_orbits_vector[orbit_to_index[orbit]].insert(edge);
     }
 
     // Filter orbits based on node-node color pairs

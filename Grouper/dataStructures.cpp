@@ -309,7 +309,6 @@ void GroupGraph::addNode(
     }
 }
 
-
 bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, unsigned int bondOrder, bool verbose) {
     NodeIDType from = std::get<0>(fromNodePort);
     PortType fromPort = std::get<1>(fromNodePort);
@@ -420,33 +419,54 @@ void GroupGraph::clearEdges() {
 // }
 
 std::vector<int> GroupGraph::computeNodeOrbits(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<int>& node_colors,
     graph* g, int* lab, int* ptn, int* orbits,
     optionblk* options,
     statsblk* stats
 ) const {
     int n = nodes.size();
     int m = SETWORDSNEEDED(n);
+    setword workspace[160]; // Nauty workspace
 
-    // Convert the graph to nauty format
     EMPTYGRAPH(g, m, n);
-    for (const auto& edge : edges) {
-        int from = std::get<0>(edge);
-        int to = std::get<2>(edge);
-        ADDONEEDGE(g, from, to, m);
-        ADDONEEDGE(g, to, from, m); // Uncomment this line to make the graph undirected
+
+    // Add edges to the graph
+    for(const auto& edge : edge_list) ADDONEEDGE(g, edge.first, edge.second, m);
+
+    // --- Sort nodes by color and initialize lab/ptn ---
+    std::vector<int> color_order(n); 
+    std::vector<int> color_map(n);  
+    std::vector<std::pair<int, int>> color_sorted_nodes;
+
+    for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(node_colors[i], i);
+
+    std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
+
+    for (int i = 0; i < n; ++i) {
+        lab[i] = color_sorted_nodes[i].second;  // Reordered node index
+        color_order[i] = color_sorted_nodes[i].first; // Store color ordering
     }
 
-    // Call nauty to compute the node orbits
-    densenauty(g, lab, ptn, orbits, options, stats, m, n, NULL);
+    // Set partition (`ptn`)
+    for (int i = 0; i < n - 1; ++i) ptn[i] = (color_order[i] == color_order[i + 1]) ? 1 : 0; 
+    ptn[n - 1] = 0; // Last node always ends a partition
 
-    // Convert the orbits to a vector
-    std::vector<int> nodeOrbits(n);
-    std::copy(orbits, orbits + n, nodeOrbits.begin());
+    // --- Nauty options ---
+    options->getcanon = FALSE; // Only need orbits
+    options->defaultptn = FALSE; // Ensure it uses our partitions
 
-    return nodeOrbits;
+    // Run Nauty
+    densenauty(g, lab, ptn, orbits, options, stats, m, n, workspace);
+
+    // Convert to vector
+    std::vector<int> orbits_vec(orbits, orbits + n);
+    return orbits_vec;
 }
 
+
 std::unordered_map<std::pair<int,int>, int> GroupGraph::computeEdgeOrbits(
+    const std::vector<std::pair<int, int>>& edge_list,
     const std::vector<int>& nodeOrbits
 ) const {
     std::unordered_map<std::pair<int, int>, int> edgeOrbits;  // Map of edges to their orbit IDs
@@ -461,9 +481,7 @@ std::unordered_map<std::pair<int,int>, int> GroupGraph::computeEdgeOrbits(
     std::unordered_map<std::pair<int, int>, int> edgeOrbitMap;
 
     // Iterate over all edges
-    for (const auto& edge : edges) {
-        NodeIDType src = std::get<0>(edge);
-        NodeIDType dst = std::get<2>(edge);
+    for (const auto& [src, dst] : edge_list) {
 
         int srcOrbit = nodeOrbitMap[src];
         int dstOrbit = nodeOrbitMap[dst];
