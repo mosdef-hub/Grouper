@@ -31,8 +31,6 @@ PYBIND11_MODULE(_Grouper, m) {
         .def(py::init<>())
         .def(py::init<const std::string&, const std::string&, const std::vector<int>&, bool>(),
             py::arg("ntype"), py::arg("pattern"), py::arg("hubs"), py::arg("is_smarts") = false)
-        // .def(py::init<const std::string&, const std::string&, const std::vector<int>&>(),
-        //     py::arg("ntype"), py::arg("pattern"), py::arg("hubs"))
         .def_readwrite("type", &GroupGraph::Group::ntype)
         .def_readwrite("pattern", &GroupGraph::Group::pattern)
         .def_readwrite("ports", &GroupGraph::Group::ports)
@@ -61,7 +59,7 @@ PYBIND11_MODULE(_Grouper, m) {
              py::arg("order") = 1,
              py::arg("verbose") = false)
         .def("n_free_ports", &GroupGraph::numFreePorts)
-        .def("compute_edge_orbits", &GroupGraph::computeEdgeOrbits)
+        .def("compute_orbits", &GroupGraph::computeOrbits)
         .def("__repr__", &GroupGraph::printGraph)
         .def("to_smiles", &GroupGraph::toSmiles, "Convert GroupGraph to SMILES")
         .def("to_vector", &GroupGraph::toVector, "Convert GroupGraph to group vector")
@@ -113,20 +111,8 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("__eq__", &AtomGraph::operator==)
         .def("__hash__", [](const AtomGraph& g) {
             return std::hash<AtomGraph>{}(g);  // Using your defined hash function
-        });
-    m.def("process_nauty_output", &process_nauty_output,
-        py::arg("line"),
-        py::arg("node_defs"),
-        py::arg("graph_basis"),
-        py::arg("positive_constraints"),
-        py::arg("negative_constraints"),
-        py::arg("verbose") = false,
-        py::arg("g"),
-        py::arg("lab"),
-        py::arg("ptn"),
-        py::arg("orbits"),
-        py::arg("options"),
-        py::arg("stats"));
+        }
+    );
     m.def("exhaustive_generate", [](int n_nodes,
                                     const std::unordered_set<GroupGraph::Group>& node_defs,
                                     const std::string& nauty_path,

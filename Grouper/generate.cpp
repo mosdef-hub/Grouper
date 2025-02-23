@@ -22,6 +22,8 @@
 #include "processColoredGraphs.hpp"
 #include "debugTools.hpp"
 
+#define MAX_EDGES 100
+
 // Function to update and display progress bar
 void update_progress(int current, int total) {
     float progress = static_cast<float>(current) / total;
@@ -77,7 +79,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 ) {
 
     // Error handling
-    // std::filesystem::path nauty_path_fs(nauty_path);
     if (n_nodes < 1) {
         throw std::invalid_argument("Number of nodes must be greater than 0...");
     }
@@ -90,12 +91,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     if (nauty_path.empty()) {
         throw std::invalid_argument("Nauty path must not be empty...");
     }
-    // if (!std::filesystem::exists(nauty_path_fs)) {
-    //     throw std::invalid_argument("Nauty path does not exist...");
-    // }
-    // if (!std::filesystem::is_directory(nauty_path_fs)) {
-    //     throw std::invalid_argument("Nauty path is not a directory...");
-    // }
     if (!positiveConstraints.empty()){
         for (const auto& constraint : positiveConstraints) {
             if (constraint.second < 0) {
@@ -164,13 +159,12 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         // Thread-local nauty structures using std::vector
         int n = 20; // Max number of nodes (adjustable)
         int m = SETWORDSNEEDED(n);
-
         std::vector<setword> g(m * n, 0);
         std::vector<int> lab(n, 0), ptn(n, 0), orbits(n, 0);
-
         DEFAULTOPTIONS_GRAPH(options);
         statsblk stats;
 
+        // Thread-local basis set
         std::unordered_set<GroupGraph> local_basis;
 
         #pragma omp for schedule(dynamic) nowait

@@ -164,66 +164,6 @@ std::vector<std::vector<int>> generateOrbitCombinations(
     return all_combinations;
 }
 
-// A helper function to compute all non-isomorphic colorings
-// std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings(
-//     std::vector<std::pair<int, int>>& edge_list, // Edges in the graph
-//     std::vector<std::unordered_set<std::pair<int, int>, hash_pair>>& edge_orbits, // Edge orbits
-//     std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair>& available_colors // Available colors for each edge
-// ) {
-//     std::vector<int> current_coloring(edge_list.size(), -1);  // Initialize coloring (all edges uncolored)
-//     std::vector<std::vector<int>> all_colorings;  // Store all valid colorings
-//     std::vector<std::vector<std::vector<int>>> colored_orbits;  // Store all valid colorings for each orbit
-
-//     // Generate possible colorings for each orbit
-//     for (const auto& orbit : edge_orbits) {
-//         std::vector<std::vector<int>> orbit_colorings = generateOrbitCombinations(orbit, available_colors);
-//         colored_orbits.push_back(orbit_colorings);
-//     }
-
-//     // Helper function to recursively combine colorings from orbits
-//     std::function<void(int)> combineOrbits = [&](std::size_t i) {
-//         if (i == colored_orbits.size()) {
-//             // If we have processed all orbits, store the current coloring
-//             all_colorings.push_back(current_coloring);
-//             return;
-//         }
-
-//         // Loop through all colorings of the current orbit
-//         for (const auto& coloring : colored_orbits[i]) {
-//             // Apply the coloring to the corresponding edges in the current orbit
-//             int color_idx = 0;
-//             for (const auto& edge : edge_orbits[i]) {
-//                 // Find the index of the edge in the edge_list
-//                 auto it = std::find(edge_list.begin(), edge_list.end(), edge);
-//                 if (it != edge_list.end()) {
-//                     int edge_index = std::distance(edge_list.begin(), it);
-//                     current_coloring[edge_index] = coloring[color_idx];
-//                 }
-//                 ++color_idx;
-//             }
-
-//             // Recursively process the next orbit
-//             combineOrbits(i + 1);
-
-//             // Undo the coloring for backtracking
-//             color_idx = 0;
-//             for (const auto& edge : edge_orbits[i]) {
-//                 auto it = std::find(edge_list.begin(), edge_list.end(), edge);
-//                 if (it != edge_list.end()) {
-//                     int edge_index = std::distance(edge_list.begin(), it);
-//                     current_coloring[edge_index] = -1;
-//                 }
-//                 ++color_idx;
-//             }
-//         }
-//     };
-
-//     // Start combining from the first orbit
-//     combineOrbits(0);
-
-//     return all_colorings;
-// }
-
 std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings(
     const std::vector<std::pair<int, int>>& edge_list, // Edges in the graph
     const std::vector<std::unordered_set<std::pair<int, int>, hash_pair>>& edge_orbits, // Edge orbits
@@ -307,6 +247,7 @@ void process_nauty_output(
     const std::unordered_set<std::string> negativeConstraints,
     bool verbose,
     graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats // Pass nauty structures
+    // int* num_edges, int edges[][2], int edge_orbits[] // Thread-local edge storage for edge aut
 ) {
     // initializeLogger();
     // logger.log("This is a debug message", Logger::LogLevel::DEBUG);
@@ -394,18 +335,15 @@ void process_nauty_output(
     }
 
     // Calculate node orbits using nauty then compute edge orbits
-    std::vector<int> node_orbits = gG.computeNodeOrbits(
-        edge_list, 
-        colors,
+    auto [nodeOrbits, edgeOrbits] = gG.computeOrbits(
+        edge_list, colors,
         g, lab, ptn, orbits, options, stats // Pass nauty structures
     );
 
-    std::unordered_map<std::pair<int,int>, int> edge_orbits = gG.computeEdgeOrbits(edge_list, node_orbits);
-
+    // Change the edge orbits to a vector of sets for generating colorings
     std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> edge_orbits_vector;
-    // Intitalize edge orbits vector with empty sets
     std::unordered_set<int> unique_orbits;
-    for (const auto& [edge, orbit] : edge_orbits) {
+    for (const auto& orbit : edgeOrbits) {
         unique_orbits.insert(orbit);
     }
     // Put edge orbits in same order into a set
@@ -415,15 +353,19 @@ void process_nauty_output(
     std::unordered_map<int,int> orbit_to_index;
     int index = 0;
     for (const auto& orbit : unique_orbits) {
-        orbit_to_index[orbit] = index;
-        index++;
+        if (orbit_to_index.find(orbit) == orbit_to_index.end()) {
+            orbit_to_index[orbit] = index;
+            index++;
+        }
     }
-    for (const auto& [edge, orbit] : edge_orbits) {
-        edge_orbits_vector[orbit_to_index[orbit]].insert(edge);
+    std::unordered_map<std::pair<int, int>, int, hash_pair> edge_to_index;
+    for (int i = 0; i < edge_list.size(); i++) {
+        edge_to_index[edge_list[i]] = i;
     }
-
-    // Filter orbits based on node-node color pairs
-    // std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> edge_orbits_filtered = filterOrbits(edge_list, edge_orbits, colors);
+    for (const auto& edge : edge_list) {
+        int edge_index = edge_to_index[edge];  // Get unique edge index
+        edge_orbits_vector[orbit_to_index[edgeOrbits[edge_index]]].insert(edge);
+    }
 
     // Compute all non-automorphic colorings
     std::vector<std::vector<int>> unique_colorings = generateNonAutomorphicEdgeColorings(edge_list, edge_orbits_vector, possible_edge_colors);

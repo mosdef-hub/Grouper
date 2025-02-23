@@ -148,20 +148,11 @@ public:
         bool verbose = false
     );
     int numFreePorts(NodeIDType nid) const;
-    // int* computeEdgeOrbits(
-    //     const std::vector<std::pair<int, int>> edge_list,
-    //     graph* g, int* lab, int* ptn, int* orbits,
-    //     optionblk* options, statsblk* stats
-    //     ) const;
-    std::vector<int> computeNodeOrbits(
+    std::pair<std::vector<int>, std::vector<int>> computeOrbits(
         const std::vector<std::pair<int, int>>& edge_list,
         const std::vector<int>& nodeOrbits,
-        graph* g, int* lab, int* ptn, int* orbits,
-        optionblk* options, statsblk* stats
-    ) const;
-    std::unordered_map<std::pair<int,int>, int> computeEdgeOrbits(
-        const std::vector<std::pair<int, int>>& edge_list,
-        const std::vector<int>& nodeOrbits
+        graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats
+        // int* num_edges, int nauty_edges[][2], int edge_orbits[]
     ) const;
     void clearEdges();
     bool isPortFree(NodeIDType nodeID, PortType port) const;

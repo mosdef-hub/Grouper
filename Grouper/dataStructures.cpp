@@ -26,6 +26,7 @@
 #include <nauty/nauty.h>
 #include <nauty/naututil.h>
 
+#define MAX_EDGES 100
 
 // Define structures as thread-local using thread_local
 thread_local std::vector<setword> g;         // For the nauty graph
@@ -34,6 +35,15 @@ thread_local std::vector<int> ptn;          // For the partition array
 thread_local std::vector<int> orbits;       // For the orbits array
 thread_local DEFAULTOPTIONS_GRAPH(options); // Default nauty options
 thread_local statsblk stats;                // Nauty stats structure
+
+struct NautyEdgeData {
+    int num_edges;
+    int edges[MAX_EDGES][2];
+    int edge_orbits[MAX_EDGES];
+};
+
+// Each thread gets its own pointer to avoid conflicts
+thread_local NautyEdgeData* edge_data_ptr = nullptr;
 
 // Function to initialize the thread-local nauty structures
 void initializeNautyStructures(int n) {
@@ -391,113 +401,113 @@ void GroupGraph::clearEdges() {
     edges.clear();
 }
 
-// int* GroupGraph::computeEdgeOrbits(
-//     const std::vector<std::pair<int, int>> edge_list,
-//     graph* g, int* lab, int* ptn, int* orbits,
-//     optionblk* options,
-//     statsblk* stats
-// ) const {
-//     std::vector<std::vector<int>> edge_list_edge_graph = toEdgeGraph(edge_list);
-//     int n = edge_list.size();
-//     int m = SETWORDSNEEDED(n);
+// Union-Find Data Structure
+struct DisjointSet {
+    std::vector<int> parent;
 
-//     EMPTYGRAPH(g, m, n);
-//     for (int i = 0; i < n; ++i) {
-//         for (int j = 0; j < n; ++j) {
-//             if (edge_list_edge_graph[i][j] == 1) {
-//                 ADDONEEDGE(g, i, j, m);
-//             }
-//         }
-//     }
+    DisjointSet(int n) : parent(n) {
+        for (int i = 0; i < n; ++i) parent[i] = i;
+    }
 
-//     densenauty(g, lab, ptn, orbits, options, stats, m, n, NULL);
+    int find(int x) {
+        if (parent[x] != x) parent[x] = find(parent[x]);
+        return parent[x];
+    }
 
-//     int* result = new int[n];
-//     std::copy(orbits, orbits + n, result);
+    void unite(int x, int y) {
+        int rootX = find(x);
+        int rootY = find(y);
+        if (rootX != rootY) parent[rootY] = rootX;
+    }
+};
 
-//     return result;
-// }
+void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int stabvertex, int n) {
 
-std::vector<int> GroupGraph::computeNodeOrbits(
+    if (!edge_data_ptr) return; // Ensure pointer is set
+
+    int num_edges = edge_data_ptr->num_edges;
+    int (*nauty_edges)[2] = edge_data_ptr->edges;
+    int* edge_orbits = edge_data_ptr->edge_orbits;
+
+    DisjointSet uf(num_edges); // Disjoint-set to track edge orbit merging
+
+    for (int i = 0; i < num_edges; i++) {
+        int v1 = nauty_edges[i][0], v2 = nauty_edges[i][1];
+        int new_v1 = perm[v1], new_v2 = perm[v2];
+
+        for (int j = 0; j < num_edges; j++) {
+            if ((nauty_edges[j][0] == new_v1 && nauty_edges[j][1] == new_v2) ||
+                (nauty_edges[j][0] == new_v2 && nauty_edges[j][1] == new_v1)) {
+                
+                // Merge edge orbits using Union-Find
+                uf.unite(i, j);
+            }
+        }
+    }
+
+    // Assign final edge orbit values
+    for (int i = 0; i < num_edges; i++) {
+        edge_orbits[i] = uf.find(i); // Assign orbit representatives
+    }
+}
+
+std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
     const std::vector<std::pair<int, int>>& edge_list,
     const std::vector<int>& node_colors,
-    graph* g, int* lab, int* ptn, int* orbits,
-    optionblk* options,
-    statsblk* stats
+    graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats
+    // int* num_edges, int nauty_edges[][2], int edge_orbits[]
 ) const {
     int n = nodes.size();
     int m = SETWORDSNEEDED(n);
     setword workspace[160]; // Nauty workspace
 
-    EMPTYGRAPH(g, m, n);
-
-    // Add edges to the graph
-    for(const auto& edge : edge_list) ADDONEEDGE(g, edge.first, edge.second, m);
-
-    // --- Sort nodes by color and initialize lab/ptn ---
-    std::vector<int> color_order(n); 
-    std::vector<int> color_map(n);  
-    std::vector<std::pair<int, int>> color_sorted_nodes;
-
-    for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(node_colors[i], i);
-
-    std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
-
-    for (int i = 0; i < n; ++i) {
-        lab[i] = color_sorted_nodes[i].second;  // Reordered node index
-        color_order[i] = color_sorted_nodes[i].first; // Store color ordering
+    // Allocate a local edge data struct for this thread
+    NautyEdgeData edge_data;
+    edge_data.num_edges = edge_list.size();
+    if (edge_data.num_edges > MAX_EDGES) {
+        throw std::runtime_error("Too many edges; increase MAX_EDGES.");
     }
 
-    // Set partition (`ptn`)
-    for (int i = 0; i < n - 1; ++i) ptn[i] = (color_order[i] == color_order[i + 1]) ? 1 : 0; 
-    ptn[n - 1] = 0; // Last node always ends a partition
+    for (size_t i = 0; i < edge_list.size(); i++) {
+        edge_data.edges[i][0] = edge_list[i].first;
+        edge_data.edges[i][1] = edge_list[i].second;
+        edge_data.edge_orbits[i] = i;  // Initially, each edge is its own orbit
+    }
 
-    // --- Nauty options ---
-    options->getcanon = FALSE; // Only need orbits
-    options->defaultptn = FALSE; // Ensure it uses our partitions
+    // Set the thread-local pointer for update_edge_orbits
+    edge_data_ptr = &edge_data;
+
+    // Initialize graph structure
+    EMPTYGRAPH(g, m, n);
+    for (const auto& edge : edge_list) ADDONEEDGE(g, edge.first, edge.second, m);
+
+    // Sort nodes by color and initialize `lab` and `ptn`
+    std::vector<std::pair<int, int>> color_sorted_nodes;
+    for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(node_colors[i], i);
+    std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
+
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted_nodes[i].second;
+    for (int i = 0; i < n - 1; ++i) ptn[i] = (color_sorted_nodes[i].first == color_sorted_nodes[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
+
+    // Configure Nauty options
+    options->getcanon = FALSE;
+    options->defaultptn = FALSE;
+    options->userautomproc = update_edge_orbits;
 
     // Run Nauty
     densenauty(g, lab, ptn, orbits, options, stats, m, n, workspace);
 
-    // Convert to vector
-    std::vector<int> orbits_vec(orbits, orbits + n);
-    return orbits_vec;
-}
+    // Convert node orbit array to vector
+    std::vector<int> node_orbits(n), edge_orbits_vec(edge_data.num_edges);
+    for (int i = 0; i < n; ++i) node_orbits[i] = orbits[i];
+    for (int i = 0; i < edge_data.num_edges; ++i) edge_orbits_vec[i] = edge_data.edge_orbits[i];
 
 
-std::unordered_map<std::pair<int,int>, int> GroupGraph::computeEdgeOrbits(
-    const std::vector<std::pair<int, int>>& edge_list,
-    const std::vector<int>& nodeOrbits
-) const {
-    std::unordered_map<std::pair<int, int>, int> edgeOrbits;  // Map of edges to their orbit IDs
-    std::unordered_map<int, int> nodeOrbitMap; // NodeID -> Orbit ID
+    // Clear thread-local pointer
+    edge_data_ptr = nullptr;
 
-    // Build a lookup table for node orbits
-    for (size_t i = 0; i < nodeOrbits.size(); ++i) {
-        nodeOrbitMap[i] = nodeOrbits[i];  // Assuming nodeOrbits[i] gives orbit ID
-    }
-
-    int orbitIndex = 0; // Counter for unique edge orbits
-    std::unordered_map<std::pair<int, int>, int> edgeOrbitMap;
-
-    // Iterate over all edges
-    for (const auto& [src, dst] : edge_list) {
-
-        int srcOrbit = nodeOrbitMap[src];
-        int dstOrbit = nodeOrbitMap[dst];
-
-        // Ensure consistent ordering (since edges are undirected)
-        std::pair<int, int> orbitPair = std::minmax(srcOrbit, dstOrbit);
-
-        // Assign edge orbit ID
-        if (edgeOrbitMap.find(orbitPair) == edgeOrbitMap.end()) {
-            edgeOrbitMap[orbitPair] = orbitIndex++;
-        }
-
-        edgeOrbits[{src, dst}] = edgeOrbitMap[orbitPair];
-    }
-
-    return edgeOrbits;  // Returns a map of edges to their orbit IDs
+    return {node_orbits, edge_orbits_vec};
 }
 
 // Conversion methods
@@ -1442,11 +1452,6 @@ std::string AtomGraph::printGraph() const {
         output << "    Atom " << entry.first << " (" << entry.second.ntype << ")" << " Valency: " << entry.second.valency << "\n";
     }
     output << "Edges (without duplication):\n";
-    // for (const auto& edge : edges) {
-    //     for (const auto& [dst, order] : edge.second) {
-    //         output << "    Edge: " << edge.first << " -> " << dst <<" Order: (" <<order<<")"<<"\n";
-    //     }
-    // }
     std::unordered_set<std::tuple<NodeIDType, NodeIDType, unsigned int>> uniqueEdges;
     for (const auto& [src, dst, order] : edges) {
         if (uniqueEdges.find(std::make_tuple(src, dst, order)) == uniqueEdges.end()) {
@@ -1468,17 +1473,9 @@ std::vector<setword> AtomGraph::toNautyGraph() const {
 
     // Initialize the nauty graph
     EMPTYGRAPH(g.data(), m, n);
-
-    // Add edges to the graph
-    // for (const auto& [id, dst_order] : edges) {
-    //     for (const auto& [dest, order] : dst_order) {
-    //         ADDONEEDGE(g.data(), id, dest, m); // Add edge from 'id' to 'dest'
-    //     }
-    // }
     for (const auto& [src, dst, order] : edges) {
         ADDONEEDGE(g.data(), src, dst, m); // Add edge from 'id' to 'dest'
     }
-
     // Return the nauty graph representation
     return g;
 }

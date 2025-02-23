@@ -6,5 +6,4 @@ from Grouper._Grouper import (
     GroupGraph,
     exhaustive_generate,
     fragment,
-    process_nauty_output,
 )
