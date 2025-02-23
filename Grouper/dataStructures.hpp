@@ -168,7 +168,7 @@ public:
 
 private:
     std::vector<std::vector<int>> toEdgeGraph(const std::vector<std::pair<int, int>>& edge_list) const;
-    void toNautyGraph(int *n, int *m, int *adj) const;
+    void toNautyGraph(int* n, int* m, long unsigned int** adj) const;
     int numNodes() const;
 };
 

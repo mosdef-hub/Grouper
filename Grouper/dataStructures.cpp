@@ -825,38 +825,78 @@ void GroupGraph::deserialize(const std::string& data) {
     }
 }
 
-std::string GroupGraph::canonize() const {
-        // TODO: Implement canonicalization algorithm, this doesn't work because the it doesn't account for automorphisms
+void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
+    std::unordered_map<NodeIDType, int> group_to_nauty;
+    std::unordered_map<std::pair<NodeIDType, PortType>, int> port_to_nauty;
+    std::unordered_map<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>, int> edge_to_nauty;
 
-        // Step 1: Sort nodes based on their attributes (e.g., id, ntype, pattern)
-        std::vector<Group> sortedNodes;
-        for (const auto& pair : nodes) {
-            sortedNodes.push_back(pair.second);
-        }
-        std::sort(sortedNodes.begin(), sortedNodes.end(), [](const Group& a, const Group& b) {
-            return std::tie(a.ntype, a.pattern) < std::tie(b.ntype, b.pattern);
-        });
+    int nodeIndex = 0;
 
-        // Step 2: Sort edges by connected nodes and ports
-        std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> sortedEdges;
-        for (const auto& edge : edges) {
-            sortedEdges.push_back(edge);
-        }
-        std::sort(sortedEdges.begin(), sortedEdges.end());
+    // Map GroupGraph nodes to nauty nodes
+    for (const auto& [nodeID, group] : nodes) group_to_nauty[nodeID] = nodeIndex++;
 
-        // Step 3: Convert sorted nodes and edges to a canonical pattern or other format
-        std::stringstream ss;
-        for (const auto& node : sortedNodes) {
-            ss << node.ntype << ":" << node.pattern << ";";
+    // Map port nodes
+    for (const auto& [nodeID, group] : nodes) {
+        for (PortType port : group.ports) {
+            port_to_nauty[{nodeID, port}] = nodeIndex++;
         }
-        for (const auto& edge : sortedEdges) {
-            ss << std::get<0>(edge) << "-" << std::get<1>(edge) << "-"
-               << std::get<2>(edge) << "-" << std::get<3>(edge) << ":" << std::get<4>(edge) << ";";
-        }
-
-        // Step 4: Return the canonical representation
-        return ss.str();
     }
+
+    // Map edge nodes
+    for (const auto& edge : edges) edge_to_nauty[edge] = nodeIndex++;
+
+    *n = nodeIndex;  // Total number of nauty nodes
+    *m = SETWORDSNEEDED(*n); // Compute `m` correctly
+
+    // Allocate memory for adj matrix
+    *adj = new graph[*n * (*m)]();
+    
+    // Build adjacency list
+    for (const auto& [nodeID, group] : nodes) {
+        int g_node = group_to_nauty[nodeID];
+        for (PortType port : group.ports) {
+            int p_node = port_to_nauty[{nodeID, port}];
+            ADDONEEDGE(*adj, g_node, p_node, *m);
+        }
+    }
+
+    for (const auto& edge : edges) {
+        auto [src, srcPort, dst, dstPort, order] = edge;
+        int e_node = edge_to_nauty[edge];
+        int p1 = port_to_nauty[{src, srcPort}];
+        int p2 = port_to_nauty[{dst, dstPort}];
+
+        ADDONEEDGE(*adj, p1, e_node, *m);
+        ADDONEEDGE(*adj, e_node, p2, *m);
+    }
+}
+
+std::string GroupGraph::canonize() const {
+    int n, m;
+    graph* adj = nullptr; // Initialize pointer
+
+    toNautyGraph(&n, &m, &adj); // Now `adj` is allocated in toNautyGraph
+
+    std::vector<int> lab(n), ptn(n), orbits(n);
+    std::vector<setword> canong(n);
+
+    DEFAULTOPTIONS_GRAPH(options);
+    statsblk stats;
+    options.getcanon = TRUE;
+
+    densenauty(adj, lab.data(), ptn.data(), orbits.data(), &options, &stats, m, n, canong.data());
+
+    // Convert canonical labeling into a string representation
+    std::string canonical;
+    for (int i = 0; i < n; i++) {
+        canonical += std::to_string(canong[i]);
+        if (i < n - 1) canonical += " ";
+    }
+
+    delete[] adj; // Free allocated memory
+    return canonical;
+}
+
 
 //#############################################################################################################
 //#############################################################################################################

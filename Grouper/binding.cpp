@@ -65,6 +65,7 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("to_vector", &GroupGraph::toVector, "Convert GroupGraph to group vector")
         .def("to_atom_graph", &GroupGraph::toAtomicGraph, "Convert GroupGraph to AtomGraph")
         .def("to_json", &GroupGraph::serialize, "Turn GroupGraph in JSON")
+        .def("to_canonical", &GroupGraph::canonize, "Canonicalize GroupGraph")
         .def("from_json", &GroupGraph::deserialize, "Load GroupGraph from JSON")
         .def("__hash__", [](const GroupGraph& g) {
             return std::hash<GroupGraph>{}(g);  // Using your defined hash function

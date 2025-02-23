@@ -255,6 +255,94 @@ class TestGroupGraph(BaseTest):
         # Benchmark the add_node method
         benchmark(benchmark_add_node)
 
+    def test_canonize(self):
+        # Test simple linear structure
+        graph1 = GroupGraph()
+        graph1.add_node("node1", "C", [0, 0])
+        graph1.add_node("node2", "C", [0, 0])
+        graph1.add_node("node3", "C", [0, 0])
+        graph1.add_edge((0, 0), (1, 0))
+        graph1.add_edge((1, 0), (2, 0))
+
+        graph2 = GroupGraph()
+        graph2.add_node("node3", "C", [0, 0])
+        graph2.add_node("node2", "C", [0, 0])
+        graph2.add_node("node1", "C", [0, 0])
+        graph2.add_edge((2, 0), (1, 0))
+        graph2.add_edge((1, 0), (0, 0))
+
+        assert graph1.to_canonical() == graph2.to_canonical()
+
+        # Test with different node types
+        graph3 = GroupGraph()
+        graph3.add_node("node1", "CO", [0, 0, 0, 1])
+        graph3.add_node("node2", "C", [0, 0])
+        graph3.add_node("node3", "C", [0, 0])
+        graph3.add_edge((0, 0), (1, 0))
+        graph3.add_edge((1, 0), (2, 0))
+
+        graph4 = GroupGraph()
+        graph4.add_node("node1", "CO", [0, 0, 0, 1])
+        graph4.add_node("node3", "C", [0, 0])
+        graph4.add_node("node2", "C", [0, 0])
+        graph4.add_edge((0, 1), (1, 0))
+        graph4.add_edge((1, 0), (2, 0))
+
+        assert graph3.to_canonical() == graph4.to_canonical()
+
+        # Test cyclic structure
+        graph5 = GroupGraph()
+        graph5.add_node("A", "C", [0, 0])
+        graph5.add_node("B", "C", [0, 0])
+        graph5.add_node("C", "C", [0, 0])
+        graph5.add_edge((0, 0), (1, 0))
+        graph5.add_edge((1, 0), (2, 0))
+        graph5.add_edge((2, 0), (0, 0))  # Closing the cycle
+
+        graph6 = GroupGraph()
+        graph6.add_node("B", "C", [0, 0])
+        graph6.add_node("C", "C", [0, 0])
+        graph6.add_node("A", "C", [0, 0])
+        graph6.add_edge((1, 0), (2, 0))
+        graph6.add_edge((2, 0), (0, 0))
+        graph6.add_edge((0, 0), (1, 0))  # Different order but same cycle
+
+        assert graph5.to_canonical() == graph6.to_canonical()
+
+        # Test disconnected graphs with identical structure
+        graph7 = GroupGraph()
+        graph7.add_node("X", "C", [0, 0])
+        graph7.add_node("Y", "C", [0, 0])
+
+        graph8 = GroupGraph()
+        graph8.add_node("Y", "C", [0, 0])
+        graph8.add_node("X", "C", [0, 0])
+
+        assert graph7.to_canonical() == graph8.to_canonical()
+
+        # Test graphs with different structures
+        graph9 = GroupGraph()
+        graph9.add_node("X", "C", [0, 0])
+        graph9.add_node("Y", "C", [0, 0])
+        graph9.add_edge((0, 0), (1, 0))
+
+        graph10 = GroupGraph()
+        graph10.add_node("X", "C", [0, 0])
+        graph10.add_node("Y", "C", [0, 0])
+
+        assert graph9.to_canonical() != graph10.to_canonical()  # One has an edge, the other does not
+
+        # Test automorphic graph
+        graph11 = GroupGraph()
+        graph11.add_node("X", "C", [0, 0])
+        graph11.add_node("Y", "C", [0, 0])
+        graph11.add_edge((0, 0), (1, 0))
+
+        graph12 = GroupGraph()
+        graph12.add_node("Y", "C", [0, 0])
+        graph12.add_node("X", "C", [0, 0])
+        graph12.add_edge((1, 0), (0, 0))
+
 class TestAtomGraph(BaseTest):
     def to_set_of_sets(self, matches):
         """Helper function for set comparison."""
