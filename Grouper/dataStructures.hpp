@@ -123,16 +123,18 @@ public:
         std::string toString() const;
 
     };
+
+    // Attributes
     std::unordered_map<NodeIDType, Group> nodes; ///< Map of node IDs to their respective nodes.
     std::unordered_set<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> edges; ///< List of edges connecting nodes. (srcNodeID, srcPort, dstNodeID, dstPort, bondOrder)
     std::unordered_map<std::string, std::vector<PortType>> nodetypes; ///< Map of node types to their respective ports.
 
-    // Core Methods
+    // Operators
     GroupGraph();
     GroupGraph(const GroupGraph& other);
     GroupGraph& operator=(const GroupGraph& other);
     bool operator==(const GroupGraph& other) const;
-    // Operating methods
+    // Modifing methods
     void addNode(
         std::string ntype,
         std::string pattern,
@@ -146,11 +148,12 @@ public:
         bool verbose = false
     );
     int numFreePorts(NodeIDType nid) const;
-    int* computeEdgeOrbits(
-        const std::vector<std::pair<int, int>> edge_list,
-        graph* g, int* lab, int* ptn, int* orbits,
-        optionblk* options, statsblk* stats
-        ) const;
+    std::pair<std::vector<int>, std::vector<int>> computeOrbits(
+        const std::vector<std::pair<int, int>>& edge_list,
+        const std::vector<int>& nodeOrbits,
+        graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats
+        // int* num_edges, int nauty_edges[][2], int edge_orbits[]
+    ) const;
     void clearEdges();
     bool isPortFree(NodeIDType nodeID, PortType port) const;
     // Conversion methods
