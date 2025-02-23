@@ -40,33 +40,6 @@ class TestGroupGraph(BaseTest):
 
         assert not any([n1 == n2 for n1, n2 in zip(gg.nodes, list(gg.nodes)[1:])])
 
-    def test_atom_equality(self):
-        a1 = Atom("C")
-        a2 = Atom("C", 4)
-        a3 = Atom("C", 3)
-        a4 = Atom("N")
-
-        assert a1 == a2
-        assert a1 != a3
-        assert a1 != a4
-        assert a3 != a4
-
-        ag = AtomGraph()
-        ag.add_node("C")
-        ag.add_node("C", 4)
-        nodeList = list(ag.nodes.values())
-
-        assert nodeList[0] == nodeList[1]
-
-        ag = AtomGraph()
-        ag.add_node("C")
-        ag.add_node("C", 3)
-        ag.add_node("N")
-        ag.add_node("N", 2)
-        nodeList = list(ag.nodes.values())
-
-        assert not any([n1 == n2 for n1, n2 in zip(nodeList, nodeList[1:])])
-
     def test_add_node(self):
         # Basic node addition
         graph = GroupGraph()
@@ -97,12 +70,6 @@ class TestGroupGraph(BaseTest):
         assert [n.hubs for n in graph.nodes.values()] == [[0, 0]]
         
         graph.add_node("type1")
-
-        # Basic node addition for AtomGraph
-        agraph = AtomGraph()
-        agraph.add_node("C", 4)
-        assert set(n.type for n in agraph.nodes.values()) == set(["C"])
-        assert set(n.valency for n in agraph.nodes.values()) == set([4])
 
         # Adding a node with different type and pattern
         graph.add_node("type2", "C", [0])
@@ -277,6 +244,56 @@ class TestGroupGraph(BaseTest):
         if graph_fixture == "five_member_ring_graph":
             assert graph.to_smiles() == "C1CCCC1"
 
+    def test_add_node_performance(self, benchmark):
+        graph = GroupGraph()
+        for i in range(100):
+            graph.add_node(f"type{i}", "C", [0, 0])
+
+        def benchmark_add_node():
+            graph.add_node("type100", "C", [0, 0])
+
+        # Benchmark the add_node method
+        benchmark(benchmark_add_node)
+
+class TestAtomGraph(BaseTest):
+    def to_set_of_sets(self, matches):
+        """Helper function for set comparison."""
+        return {frozenset(match) for match in matches}
+
+    def test_atom_equality(self):
+        a1 = Atom("C")
+        a2 = Atom("C", 4)
+        a3 = Atom("C", 3)
+        a4 = Atom("N")
+
+        assert a1 == a2
+        assert a1 != a3
+        assert a1 != a4
+        assert a3 != a4
+
+        ag = AtomGraph()
+        ag.add_node("C")
+        ag.add_node("C", 4)
+        nodeList = list(ag.nodes.values())
+
+        assert nodeList[0] == nodeList[1]
+
+        ag = AtomGraph()
+        ag.add_node("C")
+        ag.add_node("C", 3)
+        ag.add_node("N")
+        ag.add_node("N", 2)
+        nodeList = list(ag.nodes.values())
+
+        assert not any([n1 == n2 for n1, n2 in zip(nodeList, nodeList[1:])])
+
+    def test_add_node(self):
+        # Basic node addition for AtomGraph
+        agraph = AtomGraph()
+        agraph.add_node("C", 4)
+        assert set(n.type for n in agraph.nodes.values()) == set(["C"])
+        assert set(n.valency for n in agraph.nodes.values()) == set([4])
+
     def test_from_smiles(self):
         graph = AtomGraph()
         graph.from_smiles("CN")
@@ -349,17 +366,6 @@ class TestGroupGraph(BaseTest):
                 bond.GetBeginAtom().GetSymbol(),
                 bond.GetEndAtom().GetSymbol(),
             } in agBonds
-
-    def test_add_node_performance(self, benchmark):
-        graph = GroupGraph()
-        for i in range(100):
-            graph.add_node(f"type{i}", "C", [0, 0])
-
-        def benchmark_add_node():
-            graph.add_node("type100", "C", [0, 0])
-
-        # Benchmark the add_node method
-        benchmark(benchmark_add_node)
 
     def test_substructure_search(self):
         graph = AtomGraph()
@@ -492,6 +498,7 @@ class TestGroupGraph(BaseTest):
         # matches = truth.substructure_search(sub, [2,2,2, 1, 0, 0])
         assert self.to_set_of_sets(matches) == {frozenset({(0, 0), (1, 1), (2, 2)})}
         assert self.to_set_of_sets(matches) == {frozenset({(0, 0), (1, 1), (2, 2)})}
+
 
     # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()
