@@ -36,6 +36,16 @@ thread_local std::vector<int> orbits;       // For the orbits array
 thread_local DEFAULTOPTIONS_GRAPH(options); // Default nauty options
 thread_local statsblk stats;                // Nauty stats structure
 
+struct hash_vector {
+    std::size_t operator()(const std::vector<setword>& v) const {
+        std::size_t seed = 0;
+        for (int i : v) {
+            boost::hash_combine(seed, i);
+        }
+        return seed;
+    }
+};
+
 struct NautyEdgeData {
     int num_edges;
     int edges[MAX_EDGES][2];
@@ -145,7 +155,139 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
 }
 
 std::vector<int> GroupGraph::Group::hubOrbits() const {
-    return hubs; // TODO: Implement hub orbits
+
+    AtomGraph atomGraph;
+    if (isSmarts) {
+        atomGraph.fromSmarts(pattern);
+    }
+    else {
+        atomGraph.fromSmiles(pattern);
+    }
+    int n = atomGraph.nodes.size();
+    if (n == 0) return {}; // Edge case: no atoms
+
+    // Step 1: Convert group to a nauty-compatible atomic graph
+    int m = SETWORDSNEEDED(n);
+    std::vector<setword> adj(n * m, 0);
+    
+    // Map atoms to nauty node indices
+    std::unordered_map<int, int> atom_to_nauty;
+    int index = 0;
+    for (const auto& [id, node] : atomGraph.nodes) {
+        atom_to_nauty[id] = index++;
+    }
+
+    // Add edges for atomic connectivity
+    for (const auto& [src, dst, order] : atomGraph.edges) {
+        int from = atom_to_nauty[src];
+        int to = atom_to_nauty[dst];
+        ADDONEEDGE(adj.data(), from, to, m);
+    }
+
+    // Step 2: Compute atom orbits using nauty
+    std::vector<int> lab(n), ptn(n), orbits(n);
+    std::vector<setword> canong(n);
+    DEFAULTOPTIONS_GRAPH(options);
+    statsblk stats;
+    options.getcanon = TRUE;
+
+    densenauty(adj.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats, m, n, canong.data());
+
+    // Step 3: Map orbits back to hubs
+    std::vector<int> hub_orbits;
+    for (int hub : hubs) {
+        if (atom_to_nauty.find(hub) != atom_to_nauty.end()) {
+            hub_orbits.push_back(orbits[atom_to_nauty[hub]]);
+        }
+    }
+
+    return hub_orbits;
+}
+
+std::vector<std::vector<int>> GroupGraph::Group::getPossibleAttachments(int degree) const {
+    std::vector<std::vector<int>> possible_attachments;
+
+    if (degree > hubs.size()) {
+        return possible_attachments; // Not enough ports for the given degree
+    }
+
+    // Generate all possible attachment sets using combinations
+    std::vector<int> indices(hubs.size());
+    std::iota(indices.begin(), indices.end(), 0); // Fill with 0, 1, ..., hubs.size()-1
+
+    std::vector<int> combination;
+    std::function<void(int, int)> generate_combinations = [&](int start, int count) {
+        if (count == 0) {
+            possible_attachments.push_back(combination);
+            return;
+        }
+        for (size_t i = start; i <= indices.size() - count; ++i) {
+            combination.push_back(indices[i]);
+            generate_combinations(i + 1, count - 1);
+            combination.pop_back();
+        }
+    };
+
+    generate_combinations(0, degree); // Generate all subsets of size `degree`
+
+    // Filter out isomorphic attachment sets
+    AtomGraph atomGraph;
+    if (isSmarts) {
+        atomGraph.fromSmarts(pattern);
+    } else {
+        atomGraph.fromSmiles(pattern);
+    }
+
+    // Store unique canonical forms
+    std::unordered_set<std::vector<setword>, hash_vector> unique_canon_attachments;
+    std::vector<std::vector<int>> non_isomorphic_attachments;
+
+    for (const auto& attachment : possible_attachments) {
+        AtomGraph modifiedGraph = atomGraph;
+
+        // Add dummy attachment atoms to these positions
+        for (int port_idx : attachment) {
+            modifiedGraph.addNode("I"); // Add dummy attachment atom
+            modifiedGraph.addEdge(hubs[port_idx], modifiedGraph.nodes.size() - 1); // Connect to the hub
+        }
+
+        // Compute the canonical form using Nauty
+        std::vector<setword> nauty_graph = modifiedGraph.toNautyGraph();
+        std::vector<int> lab(modifiedGraph.nodes.size()), ptn(modifiedGraph.nodes.size()), orbits(modifiedGraph.nodes.size());
+        std::vector<setword> canong(modifiedGraph.nodes.size());
+
+        // Sort nodes by color and initialize `lab` and `ptn`
+        int n = modifiedGraph.nodes.size();
+        std::vector<std::string> node_colors(modifiedGraph.nodes.size());
+        for (int i = 0; i < modifiedGraph.nodes.size(); ++i) node_colors[i] = modifiedGraph.nodes[i].ntype;
+
+        std::unordered_map<std::string, int> color_to_index;
+        int color_index = 0;
+        for (const auto [id, atom] : modifiedGraph.nodes) {
+            if (color_to_index.find(atom.ntype) == color_to_index.end()){
+                color_to_index[atom.ntype] = color_index;
+                color_index++;
+            }
+        }
+        std::vector<std::pair<int, int>> color_sorted_nodes;
+        for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(color_to_index[node_colors[i]], i);
+        std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
+        for (int i = 0; i < n; ++i) lab[i] = color_sorted_nodes[i].second;
+        for (int i = 0; i < n - 1; ++i) ptn[i] = (color_sorted_nodes[i].first == color_sorted_nodes[i + 1].first) ? 1 : 0;
+        ptn[n - 1] = 0;
+
+        DEFAULTOPTIONS_GRAPH(options);
+        statsblk stats;
+        options.getcanon = TRUE;
+        options.defaultptn = FALSE;
+        densenauty(nauty_graph.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats, SETWORDSNEEDED(modifiedGraph.nodes.size()), modifiedGraph.nodes.size(), canong.data());
+
+        // Keep only unique (non-isomorphic) attachment sets
+        if (unique_canon_attachments.insert(canong).second) {
+            non_isomorphic_attachments.push_back(attachment);
+        }
+    }
+    return non_isomorphic_attachments;
 }
 
 std::string GroupGraph::Group::toString() const {
@@ -825,38 +967,72 @@ void GroupGraph::deserialize(const std::string& data) {
     }
 }
 
-std::string GroupGraph::canonize() const {
-        // TODO: Implement canonicalization algorithm, this doesn't work because the it doesn't account for automorphisms
+void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
+    std::unordered_map<NodeIDType, int> group_to_nauty;
+    std::unordered_map<std::pair<NodeIDType, PortType>, int> port_to_nauty;
+    std::unordered_map<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>, int> edge_to_nauty;
 
-        // Step 1: Sort nodes based on their attributes (e.g., id, ntype, pattern)
-        std::vector<Group> sortedNodes;
-        for (const auto& pair : nodes) {
-            sortedNodes.push_back(pair.second);
-        }
-        std::sort(sortedNodes.begin(), sortedNodes.end(), [](const Group& a, const Group& b) {
-            return std::tie(a.ntype, a.pattern) < std::tie(b.ntype, b.pattern);
-        });
+    int nodeIndex = 0;
 
-        // Step 2: Sort edges by connected nodes and ports
-        std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> sortedEdges;
-        for (const auto& edge : edges) {
-            sortedEdges.push_back(edge);
-        }
-        std::sort(sortedEdges.begin(), sortedEdges.end());
+    // Map GroupGraph nodes to nauty nodes
+    for (const auto& [nodeID, group] : nodes) group_to_nauty[nodeID] = nodeIndex++;
 
-        // Step 3: Convert sorted nodes and edges to a canonical pattern or other format
-        std::stringstream ss;
-        for (const auto& node : sortedNodes) {
-            ss << node.ntype << ":" << node.pattern << ";";
+    // Map port nodes
+    for (const auto& [nodeID, group] : nodes) {
+        for (PortType port : group.ports) {
+            port_to_nauty[{nodeID, port}] = nodeIndex++;
         }
-        for (const auto& edge : sortedEdges) {
-            ss << std::get<0>(edge) << "-" << std::get<1>(edge) << "-"
-               << std::get<2>(edge) << "-" << std::get<3>(edge) << ":" << std::get<4>(edge) << ";";
-        }
-
-        // Step 4: Return the canonical representation
-        return ss.str();
     }
+
+    // Map edge nodes
+    for (const auto& edge : edges) edge_to_nauty[edge] = nodeIndex++;
+
+    *n = nodeIndex;  // Total number of nauty nodes
+    *m = SETWORDSNEEDED(*n); // Compute `m` correctly
+
+    // Allocate memory for adj matrix
+    *adj = new graph[*n * (*m)]();
+    
+    // Build adjacency list
+    for (const auto& [nodeID, group] : nodes) {
+        int g_node = group_to_nauty[nodeID];
+        for (PortType port : group.ports) {
+            int p_node = port_to_nauty[{nodeID, port}];
+            ADDONEEDGE(*adj, g_node, p_node, *m);
+        }
+    }
+
+    for (const auto& edge : edges) {
+        auto [src, srcPort, dst, dstPort, order] = edge;
+        int e_node = edge_to_nauty[edge];
+        int p1 = port_to_nauty[{src, srcPort}];
+        int p2 = port_to_nauty[{dst, dstPort}];
+
+        ADDONEEDGE(*adj, p1, e_node, *m);
+        ADDONEEDGE(*adj, e_node, p2, *m);
+    }
+}
+
+std::vector<setword> GroupGraph::canonize() const {
+    int n, m;
+    graph* adj = nullptr; // Initialize pointer
+
+    toNautyGraph(&n, &m, &adj); // Now `adj` is allocated in toNautyGraph
+
+    std::vector<int> lab(n), ptn(n), orbits(n);
+    std::vector<setword> canong(n);
+
+    DEFAULTOPTIONS_GRAPH(options);
+    statsblk stats;
+    options.getcanon = TRUE;
+
+    densenauty(adj, lab.data(), ptn.data(), orbits.data(), &options, &stats, m, n, canong.data());
+
+    delete[] adj; // Free allocated memory
+
+    return canong;
+}
+
 
 //#############################################################################################################
 //#############################################################################################################
