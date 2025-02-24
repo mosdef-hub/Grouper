@@ -495,10 +495,10 @@ class TestGroupGraph(BaseTest):
 
     def test_hub_orbits(self):
         g = Group("C", "[C]", [0], True)
-        assert g.hub_orbits() == {0}
+        assert g.compute_hub_orbits() == [0]
 
         n_hexane = Group("C6", "CCCCCC", [0,0,0,1,1,2,2,3,3,4,4,5,5,5])
-        assert n_hexane.hub_orbits() == [0,0,0,1,1,1,1,1,1,0,0,0]
+        assert n_hexane.compute_hub_orbits() == [0, 0, 0, 1, 1, 2, 2, 2, 2, 1, 1, 0, 0, 0]
 
     # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()

@@ -156,12 +156,12 @@ public:
     std::unique_ptr<AtomGraph> toAtomicGraph() const;
     std::string serialize() const;
     void deserialize(const std::string& state);
-    std::string canonize() const;
+    std::vector<setword> canonize() const;
 
 
 private:
     std::vector<std::vector<int>> toEdgeGraph(const std::vector<std::pair<int, int>>& edge_list) const;
-    void toNautyGraph(int *n, int *m, int *adj) const;
+    void toNautyGraph(int* n, int* m, graph** adj) const;
     int numNodes() const;
 };
 

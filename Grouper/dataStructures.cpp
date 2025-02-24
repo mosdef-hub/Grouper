@@ -177,7 +177,7 @@ std::vector<int> GroupGraph::Group::hubOrbits() const {
     // Step 2: Compute atom orbits using nauty
     std::vector<int> lab(n), ptn(n), orbits(n);
     std::vector<setword> canong(n);
-    optionblk options;
+    DEFAULTOPTIONS_GRAPH(options);
     statsblk stats;
     options.getcanon = TRUE;
 
