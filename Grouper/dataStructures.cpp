@@ -1595,7 +1595,6 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
 
 }
 
-
 int AtomGraph::getFreeValency(NodeIDType nodeID) const {
     if (nodes.find(nodeID) == nodes.end()) {
         throw std::invalid_argument("Cannot get free valency for non-existent node " + std::to_string(nodeID));
@@ -1649,12 +1648,57 @@ std::vector<setword> AtomGraph::toNautyGraph() const {
     // Initialize the nauty graph
     EMPTYGRAPH(g.data(), m, n);
     for (const auto& [src, dst, order] : edges) {
-        ADDONEEDGE(g.data(), src, dst, m); // Add edge from 'id' to 'dest'
+        // Add edges based on bond order
+        for (int i = 0; i < order; ++i) {
+            ADDONEEDGE(g.data(), src, dst, m); // Add edge from 'src' to 'dst'
+        }
     }
     // Return the nauty graph representation
     return g;
 }
 
+std::vector<setword> AtomGraph::canonize() {
+    // Convert AtomGraph to a Nauty graph representation
+    std::vector<setword> g = this->toNautyGraph();
+
+    // Prepare vectors and workspace
+    int n = nodes.size(); // Number of nodes
+    int m = SETWORDSNEEDED(n); // Size of one row of the adjacency matrix in setwords
+    std::vector<int> lab(n), ptn(n), orbits(n); // Label, partition, and orbits
+    std::vector<setword> canong(n);
+    setword workspace[160]; // Workspace for nauty
+
+    // Sort nodes by color and initialize `lab` and `ptn`
+    std::vector<std::string> node_colors(n);
+    for (int i = 0; i < n; ++i) node_colors[i] = nodes[i].ntype;
+
+    std::unordered_map<std::string, int> color_to_index;
+    int color_index = 0;
+    for (const auto [id, atom] : nodes) {
+        if (color_to_index.find(atom.ntype) == color_to_index.end()){
+            color_to_index[atom.ntype] = color_index;
+            color_index++;
+        }
+    }
+    std::vector<std::pair<int, int>> color_sorted_nodes;
+    for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(color_to_index[node_colors[i]], i);
+    std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted_nodes[i].second;
+    for (int i = 0; i < n - 1; ++i) ptn[i] = (color_sorted_nodes[i].first == color_sorted_nodes[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
+
+    // Set up Nauty options
+    static DEFAULTOPTIONS_GRAPH(options);
+    options.getcanon = true; // Calculate the canonical labeling
+    options.defaultptn = false; // Do not use default partition
+
+    statsblk stats; // Statistics block
+
+    // Run Nauty
+    nauty(g.data(), lab.data(), ptn.data(), nullptr, orbits.data(), &options, &stats, workspace, 160, m, n, canong.data());
+
+    return canong;
+}
 
 std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::nodeAut() const {
     int n = nodes.size(); // Number of nodes
