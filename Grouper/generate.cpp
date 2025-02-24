@@ -20,7 +20,6 @@
 
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
-#include "debugTools.hpp"
 
 #define MAX_EDGES 100
 

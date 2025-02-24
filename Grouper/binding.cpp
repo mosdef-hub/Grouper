@@ -3,7 +3,6 @@
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
 #include "generate.hpp"
-#include "autUtils.hpp"
 #include "fragmentation.hpp"
 #include <nauty/nauty.h>
 #include <pybind11/stl.h>
@@ -36,6 +35,8 @@ PYBIND11_MODULE(_Grouper, m) {
         .def_readwrite("ports", &GroupGraph::Group::ports)
         .def_readwrite("hubs", &GroupGraph::Group::hubs)
         .def_readwrite("is_smarts", &GroupGraph::Group::isSmarts)
+        .def("compute_hub_orbits", &GroupGraph::Group::hubOrbits)
+        .def("possible_attachments", &GroupGraph::Group::getPossibleAttachments)
         .def("__eq__", &GroupGraph::Group::operator==)
         .def("__ne__", &GroupGraph::Group::operator!=)
         .def("__str__", &GroupGraph::Group::toString)
@@ -121,9 +122,8 @@ PYBIND11_MODULE(_Grouper, m) {
                                     int num_procs,
                                     const std::unordered_map<std::string, int>& positive_constraints,
                                     const std::unordered_set<std::string>& negative_constraints,
-                                    const std::string& config_path,
-                                    bool verbose) {
-        std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, nauty_path, input_file_path, num_procs, positive_constraints, negative_constraints, config_path, verbose);
+                                    const std::string& config_path) {
+        std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, nauty_path, input_file_path, num_procs, positive_constraints, negative_constraints, config_path);
         return convert_unordered_set(result);
     },
         py::arg("n_nodes"),
@@ -133,8 +133,8 @@ PYBIND11_MODULE(_Grouper, m) {
         py::arg("num_procs") = -1,
         py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
         py::arg("negative_constraints") = std::unordered_set<std::string>{},
-        py::arg("config_path") = "",
-        py::arg("verbose") = false);
+        py::arg("config_path") = ""
+    );
     m.def("fragment", &fragment,
         py::arg("smiles"),
         py::arg("node_defs"));

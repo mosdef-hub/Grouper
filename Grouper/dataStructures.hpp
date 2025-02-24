@@ -20,8 +20,6 @@
 #include <nauty/nauty.h>
 #include <nauty/naututil.h>
 
-#include "autUtils.hpp"
-
 // Hash function for std::tuple
 namespace std {
     template <>
@@ -46,13 +44,6 @@ namespace std {
         }
     };
 }
-
-const std::unordered_map<std::string, int> default_valencies = {
-    {"H", 1},
-    {"O", 2},
-    {"C", 4},
-    // ... other elements with their default valencies
-};
 
 class AtomGraph {
 public:
@@ -120,6 +111,7 @@ public:
         // Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs) 
         // : Group(ntype, pattern, hubs, false) {} 
         std::vector<int> hubOrbits() const;
+        std::vector<std::vector<int>> getPossibleAttachments(int degree) const;
         std::string toString() const;
 
     };
@@ -168,7 +160,7 @@ public:
 
 private:
     std::vector<std::vector<int>> toEdgeGraph(const std::vector<std::pair<int, int>>& edge_list) const;
-    void toNautyGraph(int* n, int* m, long unsigned int** adj) const;
+    void toNautyGraph(int* n, int* m, graph** adj) const;
     int numNodes() const;
 };
 
