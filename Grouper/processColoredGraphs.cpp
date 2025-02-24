@@ -35,6 +35,16 @@ struct hash_pair {
     }
 };
 
+struct hash_vector {
+    std::size_t operator()(const std::vector<setword>& v) const {
+        std::size_t seed = 0;
+        for (const auto& i : v) {
+            boost::hash_combine(seed, i);
+        }
+        return seed;
+    }
+};
+
 
 std::pair<int, int> color_to_ports(int color, const std::vector<int>& src_ports, const std::vector<int>& dst_ports) {
     int src_port = src_ports[color / dst_ports.size()];
@@ -262,7 +272,7 @@ void process_nauty_output(
     std::unordered_map<int, std::string> int_to_pattern;
     std::unordered_map<std::string, std::string> type_to_pattern;
     std::vector<GroupGraph> group_graphs_list;
-    std::unordered_set<std::string> canon_set;
+    std::unordered_set<std::vector<setword>, hash_vector> canon_set;
 
 
     // Create necessary maps
@@ -392,8 +402,12 @@ void process_nauty_output(
         }
 
     //  Check if the graph is unique considering permutations
-        if (canon_set.find(gG.toSmiles()) == canon_set.end()) {
-            canon_set.insert(gG.toSmiles());
+        // if (canon_set.find(gG.toSmiles()) == canon_set.end()) {
+        //     canon_set.insert(gG.toSmiles());
+        //     graph_basis->insert(gG);
+        // }
+        if (canon_set.find(gG.canonize()) == canon_set.end()) {
+            canon_set.insert(gG.canonize());
             graph_basis->insert(gG);
         }
     }

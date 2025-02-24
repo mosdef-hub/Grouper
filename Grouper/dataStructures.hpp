@@ -163,7 +163,7 @@ public:
     std::unique_ptr<AtomGraph> toAtomicGraph() const;
     std::string serialize() const;
     void deserialize(const std::string& state);
-    std::string canonize() const;
+    std::vector<setword> canonize() const;
 
 
 private:

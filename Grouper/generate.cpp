@@ -40,6 +40,16 @@ void update_progress(int current, int total) {
     std::cout.flush();
 }
 
+struct hash_vector {
+    std::size_t operator()(const std::vector<setword>& v) const {
+        std::size_t seed = 0;
+        for (const auto& i : v) {
+            boost::hash_combine(seed, i);
+        }
+        return seed;
+    }
+};
+
 std::unordered_map<std::string, std::string> parseConfig(const std::string& configFile) {
     std::unordered_map<std::string, std::string> configParams;
     std::ifstream config(configFile);
@@ -147,7 +157,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     }
 
     std::unordered_set<GroupGraph> global_basis;
-    std::unordered_set<std::string> canon_basis;
+    std::unordered_set<std::vector<setword>, hash_vector> canon_basis;
 
     omp_set_num_threads(num_procs);      // Set the number of threads to match
 
@@ -188,8 +198,12 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         #pragma omp critical
         {
             for (const auto& graph : local_basis) {
-                if (canon_basis.find(graph.toSmiles()) == canon_basis.end()) {
-                    canon_basis.insert(graph.toSmiles());
+                // if (canon_basis.find(graph.toSmiles()) == canon_basis.end()) {
+                //     canon_basis.insert(graph.toSmiles());
+                //     global_basis.insert(graph);
+                // }
+                if (canon_basis.find(graph.canonize()) == canon_basis.end()) {
+                    canon_basis.insert(graph.canonize());
                     global_basis.insert(graph);
                 }
             }

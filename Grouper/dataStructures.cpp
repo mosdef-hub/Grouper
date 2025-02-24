@@ -871,7 +871,7 @@ void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
     }
 }
 
-std::string GroupGraph::canonize() const {
+std::vector<setword> GroupGraph::canonize() const {
     int n, m;
     graph* adj = nullptr; // Initialize pointer
 
@@ -886,15 +886,9 @@ std::string GroupGraph::canonize() const {
 
     densenauty(adj, lab.data(), ptn.data(), orbits.data(), &options, &stats, m, n, canong.data());
 
-    // Convert canonical labeling into a string representation
-    std::string canonical;
-    for (int i = 0; i < n; i++) {
-        canonical += std::to_string(canong[i]);
-        if (i < n - 1) canonical += " ";
-    }
-
     delete[] adj; // Free allocated memory
-    return canonical;
+
+    return canong;
 }
 
 
