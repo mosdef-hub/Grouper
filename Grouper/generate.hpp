@@ -11,8 +11,9 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     std::unordered_set<GroupGraph::Group> node_defs, 
     std::string nauty_path,
     std::string input_file_path,
-    int num_procs = -1,
+    int num_procs = 32,
     std::unordered_map<std::string, int> positiveConstraints = {},
     std::unordered_set<std::string> negativeConstraints = {},
-    std::string config_path = ""
+    std::string config_path = "",
+    bool verbose = false
 );

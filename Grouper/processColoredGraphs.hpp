@@ -20,7 +20,52 @@
 
 class GroupGraph; // Forward declaration of GroupGraph
 
+void generate_all_colorings(
+    const std::unordered_map<std::pair<int, int>, int>& possible_edge_colors, 
+    std::vector<std::vector<int>>& all_colorings, 
+    std::vector<int>& current_coloring, 
+    size_t edge_index
+);
+
+std::vector<std::vector<int>> apply_automorphisms(
+    const std::vector<std::vector<int>>& colorings, 
+    const std::vector<std::vector<int>>& automorphisms
+);
+
+std::vector<GroupGraph> generate_non_isomorphic_colored_graphs(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::unordered_map<int, std::string>& int_to_node_type,
+    const std::unordered_map<std::string, std::string>& int_to_pattern,
+    const std::unordered_map<std::string, std::vector<std::string>>& node_types,
+    const std::unordered_map<std::string, std::string>& node_type_to_hub
+);
+
+std::vector<std::vector<int>> compute_non_isomorphic_colorings(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<std::unordered_set<std::pair<int, int>>>& edge_orbits,
+    const std::unordered_map<std::pair<int, int>, std::vector<int>>& available_colors
+);
+
+std::vector<std::vector<int>> apply_edge_automorphisms(
+    const std::vector<std::vector<int>>& colorings, 
+    const std::vector<std::vector<std::pair<int, int>>>& automorphisms
+);
+
 std::pair<int, int> color_to_ports(int color, const std::vector<int>& src_ports, const std::vector<int>& dst_ports);
+
+std::vector<std::unordered_set<std::pair<int, int>>> compute_edge_orbits(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<std::vector<int>>& automorphisms
+);
+
+void enumerate_colorings(
+    size_t orbit_idx,
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<std::unordered_set<std::pair<int, int>>>& edge_orbits,
+    const std::unordered_map<std::pair<int, int>, std::vector<int>>& available_colors,
+    std::vector<int>& current_coloring,
+    std::vector<std::vector<int>>& all_colorings
+);
 
 std::tuple<int, std::vector<int>, std::vector<std::pair<int, int>>> parse_nauty_graph_line(
     const std::string& line, 
@@ -34,7 +79,7 @@ void process_nauty_output(
     std::unordered_set<GroupGraph>* graph_basis,
     const std::unordered_map<std::string, int> positiveConstraints,
     const std::unordered_set<std::string> negativeConstraints,
-    const std::unordered_map<std::string, std::vector<int>>& type_to_hub_orbits,
+    bool verbose,
     graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats // Pass nauty structures
 );
 

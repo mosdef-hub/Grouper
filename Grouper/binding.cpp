@@ -37,6 +37,7 @@ PYBIND11_MODULE(_Grouper, m) {
         .def_readwrite("hubs", &GroupGraph::Group::hubs)
         .def_readwrite("is_smarts", &GroupGraph::Group::isSmarts)
         .def("compute_hub_orbits", &GroupGraph::Group::hubOrbits)
+        .def("possible_attachments", &GroupGraph::Group::getPossibleAttachments)
         .def("__eq__", &GroupGraph::Group::operator==)
         .def("__ne__", &GroupGraph::Group::operator!=)
         .def("__str__", &GroupGraph::Group::toString)
