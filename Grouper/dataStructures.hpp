@@ -47,13 +47,6 @@ namespace std {
     };
 }
 
-const std::unordered_map<std::string, int> default_valencies = {
-    {"H", 1},
-    {"O", 2},
-    {"C", 4},
-    // ... other elements with their default valencies
-};
-
 class AtomGraph {
 public:
     using NodeIDType = int;
