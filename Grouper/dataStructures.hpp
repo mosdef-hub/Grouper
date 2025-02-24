@@ -113,6 +113,7 @@ public:
         // Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs) 
         // : Group(ntype, pattern, hubs, false) {} 
         std::vector<int> hubOrbits() const;
+        std::vector<std::vector<int>> getPossibleAttachments(int degree) const;
         std::string toString() const;
 
     };

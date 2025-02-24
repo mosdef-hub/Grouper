@@ -36,6 +36,16 @@ thread_local std::vector<int> orbits;       // For the orbits array
 thread_local DEFAULTOPTIONS_GRAPH(options); // Default nauty options
 thread_local statsblk stats;                // Nauty stats structure
 
+struct hash_vector {
+    std::size_t operator()(const std::vector<setword>& v) const {
+        std::size_t seed = 0;
+        for (int i : v) {
+            boost::hash_combine(seed, i);
+        }
+        return seed;
+    }
+};
+
 struct NautyEdgeData {
     int num_edges;
     int edges[MAX_EDGES][2];
@@ -192,6 +202,92 @@ std::vector<int> GroupGraph::Group::hubOrbits() const {
     }
 
     return hub_orbits;
+}
+
+std::vector<std::vector<int>> GroupGraph::Group::getPossibleAttachments(int degree) const {
+    std::vector<std::vector<int>> possible_attachments;
+
+    if (degree > hubs.size()) {
+        return possible_attachments; // Not enough ports for the given degree
+    }
+
+    // Generate all possible attachment sets using combinations
+    std::vector<int> indices(hubs.size());
+    std::iota(indices.begin(), indices.end(), 0); // Fill with 0, 1, ..., hubs.size()-1
+
+    std::vector<int> combination;
+    std::function<void(int, int)> generate_combinations = [&](int start, int count) {
+        if (count == 0) {
+            possible_attachments.push_back(combination);
+            return;
+        }
+        for (size_t i = start; i <= indices.size() - count; ++i) {
+            combination.push_back(indices[i]);
+            generate_combinations(i + 1, count - 1);
+            combination.pop_back();
+        }
+    };
+
+    generate_combinations(0, degree); // Generate all subsets of size `degree`
+
+    // Filter out isomorphic attachment sets
+    AtomGraph atomGraph;
+    if (isSmarts) {
+        atomGraph.fromSmarts(pattern);
+    } else {
+        atomGraph.fromSmiles(pattern);
+    }
+
+    // Store unique canonical forms
+    std::unordered_set<std::vector<setword>, hash_vector> unique_canon_attachments;
+    std::vector<std::vector<int>> non_isomorphic_attachments;
+
+    for (const auto& attachment : possible_attachments) {
+        AtomGraph modifiedGraph = atomGraph;
+
+        // Add dummy attachment atoms to these positions
+        for (int port_idx : attachment) {
+            modifiedGraph.addNode("I"); // Add dummy attachment atom
+            modifiedGraph.addEdge(hubs[port_idx], modifiedGraph.nodes.size() - 1); // Connect to the hub
+        }
+
+        // Compute the canonical form using Nauty
+        std::vector<setword> nauty_graph = modifiedGraph.toNautyGraph();
+        std::vector<int> lab(modifiedGraph.nodes.size()), ptn(modifiedGraph.nodes.size()), orbits(modifiedGraph.nodes.size());
+        std::vector<setword> canong(modifiedGraph.nodes.size());
+
+        // Sort nodes by color and initialize `lab` and `ptn`
+        int n = modifiedGraph.nodes.size();
+        std::vector<std::string> node_colors(modifiedGraph.nodes.size());
+        for (int i = 0; i < modifiedGraph.nodes.size(); ++i) node_colors[i] = modifiedGraph.nodes[i].ntype;
+
+        std::unordered_map<std::string, int> color_to_index;
+        int color_index = 0;
+        for (const auto [id, atom] : modifiedGraph.nodes) {
+            if (color_to_index.find(atom.ntype) == color_to_index.end()){
+                color_to_index[atom.ntype] = color_index;
+                color_index++;
+            }
+        }
+        std::vector<std::pair<int, int>> color_sorted_nodes;
+        for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(color_to_index[node_colors[i]], i);
+        std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
+        for (int i = 0; i < n; ++i) lab[i] = color_sorted_nodes[i].second;
+        for (int i = 0; i < n - 1; ++i) ptn[i] = (color_sorted_nodes[i].first == color_sorted_nodes[i + 1].first) ? 1 : 0;
+        ptn[n - 1] = 0;
+
+        DEFAULTOPTIONS_GRAPH(options);
+        statsblk stats;
+        options.getcanon = TRUE;
+        options.defaultptn = FALSE;
+        densenauty(nauty_graph.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats, SETWORDSNEEDED(modifiedGraph.nodes.size()), modifiedGraph.nodes.size(), canong.data());
+
+        // Keep only unique (non-isomorphic) attachment sets
+        if (unique_canon_attachments.insert(canong).second) {
+            non_isomorphic_attachments.push_back(attachment);
+        }
+    }
+    return non_isomorphic_attachments;
 }
 
 std::string GroupGraph::Group::toString() const {
