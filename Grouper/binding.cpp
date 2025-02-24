@@ -108,6 +108,7 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("from_smiles", &AtomGraph::fromSmiles)
         .def("from_smarts", &AtomGraph::fromSmarts)
         .def("substructure_search", &AtomGraph::substructureSearch)
+        .def("to_canonical", &AtomGraph::canonize)
         .def("free_valency", &AtomGraph::getFreeValency)
         .def("__str__", &AtomGraph::printGraph)
         .def("__eq__", &AtomGraph::operator==)

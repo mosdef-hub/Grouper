@@ -52,7 +52,6 @@ public:
     struct Atom {
         std::string ntype;
         int valency;
-
         // Need to define comparison operators for Atom to be used in unordered_map
         bool operator==(const Atom& other) const {
             return ntype == other.ntype && valency == other.valency;
@@ -60,15 +59,10 @@ public:
         bool operator!=(const Atom& other) const {
             return !(*this == other);
         }
-
         Atom() : ntype("C"), valency(4) {}
-
         Atom(const std::string &ntype); // constructor in dataStructures.cpp
-
-        Atom(const std::string &ntype, const int valency); // constructor in dataStructures.cppv
-
+        Atom(const std::string &ntype, const int valency); // constructor in dataStructures.cpp
         std::string toString() const;
-
     };
 
     std::unordered_map<NodeIDType, Atom> nodes; ///< Map of node IDs to their respective nodes.
@@ -86,6 +80,7 @@ public:
     std::vector<std::vector<NodeIDType>> nodeAut() const;
     std::vector<NodeIDType> nodeOrbits() const;
     std::vector<setword> toNautyGraph() const;
+    std::vector<setword> canonize();
     void fromSmiles(const std::string& smiles);
     void fromSmarts(const std::string& smarts);
     std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;

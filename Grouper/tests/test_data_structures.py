@@ -343,6 +343,13 @@ class TestGroupGraph(BaseTest):
         graph12.add_node("X", "C", [0, 0])
         graph12.add_edge((1, 0), (0, 0))
 
+    def test_hub_orbits(self):
+        g = Group("C", "[C]", [0], True)
+        assert g.compute_hub_orbits() == [0]
+
+        n_hexane = Group("C6", "CCCCCC", [0,0,0,1,1,2,2,3,3,4,4,5,5,5])
+        assert n_hexane.compute_hub_orbits() == [0, 0, 0, 1, 1, 2, 2, 2, 2, 1, 1, 0, 0, 0]
+
 class TestAtomGraph(BaseTest):
     def to_set_of_sets(self, matches):
         """Helper function for set comparison."""
@@ -586,14 +593,96 @@ class TestAtomGraph(BaseTest):
         # matches = truth.substructure_search(sub, [2,2,2, 1, 0, 0])
         assert self.to_set_of_sets(matches) == {frozenset({(0, 0), (1, 1), (2, 2)})}
         assert self.to_set_of_sets(matches) == {frozenset({(0, 0), (1, 1), (2, 2)})}
+    
+    def test_canonize(self):
+        # Test case 1: Simple linear chain with single bonds
+        A = AtomGraph()
+        A.add_node("C", 4)
+        A.add_node("C", 4)
+        A.add_node("C", 4)
+        A.add_edge(0, 1, 1)  # Single bond
+        A.add_edge(1, 2, 1)  # Single bond
 
+        B = AtomGraph()
+        B.add_node("C", 4)
+        B.add_node("C", 4)
+        B.add_node("C", 4)
+        B.add_edge(0, 1, 1)  # Single bond
+        B.add_edge(1, 2, 1)  # Single bond
 
-    def test_hub_orbits(self):
-        g = Group("C", "[C]", [0], True)
-        assert g.compute_hub_orbits() == [0]
+        assert A.to_canonical() == B.to_canonical()
 
-        n_hexane = Group("C6", "CCCCCC", [0,0,0,1,1,2,2,3,3,4,4,5,5,5])
-        assert n_hexane.compute_hub_orbits() == [0, 0, 0, 1, 1, 2, 2, 2, 2, 1, 1, 0, 0, 0]
+        # Test case 2: Linear chain with a double bond
+        C = AtomGraph()
+        C.add_node("C", 4)
+        C.add_node("C", 4)
+        C.add_node("C", 4)
+        C.add_edge(0, 1, 2)  # Double bond
+        C.add_edge(1, 2, 1)  # Single bond
+
+        D = AtomGraph()
+        D.add_node("C", 4)
+        D.add_node("C", 4)
+        D.add_node("C", 4)
+        D.add_edge(0, 1, 2)  # Double bond
+        D.add_edge(1, 2, 1)  # Single bond
+
+        assert C.to_canonical() == D.to_canonical()
+
+        # Test case 3: Cyclic structure with single bonds
+        E = AtomGraph()
+        E.add_node("C", 4)
+        E.add_node("C", 4)
+        E.add_node("C", 4)
+        E.add_edge(0, 1, 1)  # Single bond
+        E.add_edge(1, 2, 1)  # Single bond
+        E.add_edge(2, 0, 1)  # Single bond
+
+        F = AtomGraph()
+        F.add_node("C", 4)
+        F.add_node("C", 4)
+        F.add_node("C", 4)
+        F.add_edge(0, 1, 1)  # Single bond
+        F.add_edge(1, 2, 1)  # Single bond
+        F.add_edge(2, 0, 1)  # Single bond
+
+        assert E.to_canonical() == F.to_canonical()
+
+        # Test case 4: Cyclic structure with a double bond
+        G = AtomGraph()
+        G.add_node("C", 4)
+        G.add_node("C", 4)
+        G.add_node("C", 4)
+        G.add_edge(0, 1, 2)  # Double bond
+        G.add_edge(1, 2, 1)  # Single bond
+        G.add_edge(2, 0, 1)  # Single bond
+
+        H = AtomGraph()
+        H.add_node("C", 4)
+        H.add_node("C", 4)
+        H.add_node("C", 4)
+        H.add_edge(0, 1, 2)  # Double bond
+        H.add_edge(1, 2, 1)  # Single bond
+        H.add_edge(2, 0, 1)  # Single bond
+
+        assert G.to_canonical() == H.to_canonical()
+
+        # Test case 5: Automorphic graphs with different bond orders
+        I = AtomGraph()
+        I.add_node("C", 4)
+        I.add_node("C", 4)
+        I.add_node("C", 4)
+        I.add_edge(0, 1, 1)  # Single bond
+        I.add_edge(1, 2, 2)  # Double bond
+
+        J = AtomGraph()
+        J.add_node("C", 4)
+        J.add_node("C", 4)
+        J.add_node("C", 4)
+        J.add_edge(0, 2, 2)  # Double bond
+        J.add_edge(2, 1, 1)  # Single bond
+
+        assert I.to_canonical() == J.to_canonical()
 
     # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()
