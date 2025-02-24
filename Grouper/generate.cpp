@@ -74,8 +74,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     int num_procs = -1,
     std::unordered_map<std::string, int> positiveConstraints = {},
     std::unordered_set<std::string> negativeConstraints = {},
-    std::string config_path = "",
-    bool verbose = false
+    std::string config_path = ""
 ) {
 
     // Error handling
@@ -99,21 +98,10 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         }
     }
 
-    if (verbose) {
-        std::cout << "Number of nodes: " << n_nodes << std::endl;
-        std::cout << "Number of node definitions: " << node_defs.size() << std::endl;
-        std::cout << "Input file path: " << input_file_path << std::endl;
-        std::cout << "Number of processors: " << num_procs << std::endl;
-    }
-
+    // Call nauty's geng and vcolg to generate graphs
     if (input_file_path.empty()) {
-        // Call nauty
         std::string geng_command = nauty_path + "/geng " + std::to_string(n_nodes) + " -ctf > geng_out.txt";
         std::string vcolg_command = nauty_path + "/vcolg geng_out.txt -T -m" + std::to_string(node_defs.size()) + " > vcolg_out.txt";
-
-        if (verbose) {
-            std::cout << "Calling geng..." << std::endl;
-        }
         system(geng_command.c_str());
         system(vcolg_command.c_str());
     }
@@ -146,6 +134,12 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         throw std::runtime_error("No lines found in input file...");
     }
 
+    // Calculate the hub orbits for each node type
+    std::unordered_map<std::string, std::vector<int>> type_to_hub_orbits;
+    for (const auto& node : node_defs) {
+        type_to_hub_orbits[node.ntype] = node.hubOrbits();
+    }
+
     std::unordered_set<GroupGraph> global_basis;
     std::unordered_set<std::string> canon_basis;
 
@@ -175,7 +169,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 &local_basis,
                 positiveConstraints, 
                 negativeConstraints, 
-                verbose,
+                type_to_hub_orbits,
                 g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
             );
 
