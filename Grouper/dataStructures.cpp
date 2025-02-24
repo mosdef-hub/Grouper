@@ -10,7 +10,6 @@
 #include <nlohmann/json.hpp>
 
 #include "dataStructures.hpp"
-#include "autUtils.hpp"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>

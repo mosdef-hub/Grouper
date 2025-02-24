@@ -17,7 +17,6 @@
 #include <boost/functional/hash.hpp>
 
 #include "dataStructures.hpp"
-#include "debugTools.cpp"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>

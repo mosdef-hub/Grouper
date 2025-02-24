@@ -20,8 +20,6 @@
 #include <nauty/nauty.h>
 #include <nauty/naututil.h>
 
-#include "autUtils.hpp"
-
 // Hash function for std::tuple
 namespace std {
     template <>

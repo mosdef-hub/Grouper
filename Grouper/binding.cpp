@@ -3,7 +3,6 @@
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
 #include "generate.hpp"
-#include "autUtils.hpp"
 #include "fragmentation.hpp"
 #include <nauty/nauty.h>
 #include <pybind11/stl.h>
