@@ -548,8 +548,13 @@ std::unordered_set<GroupGraph> randomGenerate(
     for (const auto& [node_type, ports] : node_types) {
         int_to_node_type[i] = node_type;
         int_to_pattern[i] = type_to_pattern[node_type];
-        color_to_group[i] = *std::find_if(node_defs.begin(), node_defs.end(), 
-                                        [&](const GroupGraph::Group& g) { return g.ntype == node_type; });
+        for (auto& g : node_defs) {
+            if (g.ntype == node_type) {
+                color_to_group[i] = g;
+                break;  // Exit the loop once a match is found
+            }
+        }        
+
         i++;
     }
 
