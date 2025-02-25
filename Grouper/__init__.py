@@ -5,5 +5,6 @@ from Grouper._Grouper import (
     Group,
     GroupGraph,
     exhaustive_generate,
+    random_generate,
     fragment,
 )
