@@ -16,7 +16,6 @@ namespace py = pybind11;
 
 // Function to convert std::set<GroupGraph> to py::set
 py::set convert_unordered_set(const std::unordered_set<GroupGraph>& cpp_set) {
-    std::cout << "Converting unordered set" << std::endl;
     py::set py_set;
     for (const auto& item : cpp_set) {
         py_set.add(item);
