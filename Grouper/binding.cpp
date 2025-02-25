@@ -136,7 +136,26 @@ PYBIND11_MODULE(_Grouper, m) {
         py::arg("negative_constraints") = std::unordered_set<std::string>{},
         py::arg("config_path") = ""
     );
+    m.def("random_generate", [](int n_nodes,
+                                const std::unordered_set<GroupGraph::Group>& node_defs,
+                                int num_graphs,
+                                int num_procs,
+                                const std::string& nauty_path,
+                                const std::unordered_map<std::string, int>& positive_constraints,
+                                const std::unordered_set<std::string>& negative_constraints) {
+        std::unordered_set<GroupGraph> result = randomGenerate(n_nodes, node_defs, num_graphs, num_procs, nauty_path, positive_constraints, negative_constraints);
+        return convert_unordered_set(result);
+    },
+        py::arg("n_nodes"),
+        py::arg("node_defs"),
+        py::arg("num_graphs") = 100,
+        py::arg("num_procs") = -1,
+        py::arg("nauty_path") = "",
+        py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
+        py::arg("negative_constraints") = std::unordered_set<std::string>{}
+    );
     m.def("fragment", &fragment,
         py::arg("smiles"),
-        py::arg("node_defs"));
+        py::arg("node_defs")
+    );
 }

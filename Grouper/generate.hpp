@@ -17,3 +17,13 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     std::string config_path = "",
     bool verbose = false
 );
+
+std::unordered_set<GroupGraph> randomGenerate(
+    int n_nodes, 
+    const std::unordered_set<GroupGraph::Group>& node_defs,
+    int num_graphs = 100,
+    int num_procs = -1,
+    const std::string& nauty_path = "",
+    const std::unordered_map<std::string, int>& positiveConstraints = {},
+    const std::unordered_set<std::string>& negativeConstraints = {}
+);
