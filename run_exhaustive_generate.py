@@ -50,13 +50,11 @@ if __name__ == "__main__":
     result = exhaustive_generate(
         args.n, 
         node_defs, 
-        nauty_path="/raid6/homes/kierannp/projects/nauty2_8_9",
         input_file_path="",
         num_procs=args.n_cpus,
         positive_constraints=positive_constraints,
         negative_constraints=negative_constraints,
         config_path=args.config_path,
-        verbose=False
     )
     end = time.time()
     print(f"Time taken for generation: {end - start}")

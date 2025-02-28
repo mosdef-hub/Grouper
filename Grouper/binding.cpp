@@ -117,20 +117,18 @@ PYBIND11_MODULE(_Grouper, m) {
     );
     m.def("exhaustive_generate", [](int n_nodes,
                                     const std::unordered_set<GroupGraph::Group>& node_defs,
-                                    const std::string& nauty_path,
-                                    const std::string& input_file_path,
+                                    const std::string& vcolg_output_file,
                                     int num_procs,
                                     const std::unordered_map<std::string, int>& positive_constraints,
                                     const std::unordered_set<std::string>& negative_constraints,
                                     const std::string& config_path) {
-        std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, nauty_path, input_file_path, num_procs, positive_constraints, negative_constraints, config_path);
+        std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, num_procs, vcolg_output_file, positive_constraints, negative_constraints, config_path);
         return convert_unordered_set(result);
     },
         py::arg("n_nodes"),
         py::arg("node_defs"),
-        py::arg("nauty_path"),
-        py::arg("input_file_path") = "",
         py::arg("num_procs") = -1,
+        py::arg("vcolg_output_file") = "",
         py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
         py::arg("negative_constraints") = std::unordered_set<std::string>{},
         py::arg("config_path") = ""
@@ -139,17 +137,15 @@ PYBIND11_MODULE(_Grouper, m) {
                                 const std::unordered_set<GroupGraph::Group>& node_defs,
                                 int num_graphs,
                                 int num_procs,
-                                const std::string& nauty_path,
                                 const std::unordered_map<std::string, int>& positive_constraints,
                                 const std::unordered_set<std::string>& negative_constraints) {
-        std::unordered_set<GroupGraph> result = randomGenerate(n_nodes, node_defs, num_graphs, num_procs, nauty_path, positive_constraints, negative_constraints);
+        std::unordered_set<GroupGraph> result = randomGenerate(n_nodes, node_defs, num_graphs, num_procs, positive_constraints, negative_constraints);
         return convert_unordered_set(result);
     },
         py::arg("n_nodes"),
         py::arg("node_defs"),
         py::arg("num_graphs") = 100,
         py::arg("num_procs") = -1,
-        py::arg("nauty_path") = "",
         py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
         py::arg("negative_constraints") = std::unordered_set<std::string>{}
     );

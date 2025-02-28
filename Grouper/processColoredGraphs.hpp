@@ -33,7 +33,6 @@ void process_nauty_output(
     std::unordered_set<GroupGraph>* graph_basis,
     const std::unordered_map<std::string, int> positiveConstraints,
     const std::unordered_set<std::string> negativeConstraints,
-    bool verbose,
     graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats // Pass nauty structures
 );
 
