@@ -69,10 +69,6 @@ The fundamental data structure behind this package is based on a port graph, loo
 <!-- GETTING STARTED -->
 ## Getting Started
 
-### Prerequisites
-
-*  Download and install [`nauty`](https://pallini.di.uniroma1.it/) according to their installation instructions in `Grouper/packages`
-
 ### Installation
 
 1. Clone the repo
