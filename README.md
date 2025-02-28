@@ -101,17 +101,17 @@ python setup.py install
 ```python
 from Grouper import GroupGraph
 
-group_graph = GroupGraph()
+gG = GroupGraph()
 
 # Adding nodes
-group_graph.add_node(type = 'nitrogen', pattern = 'N', hubs = [0,0,0], is_smarts=False) # default of is_smarts is False
-group_graph.add_node('nitrogen') # Once the type of the node has been specified we can use it again
-group_graph.add_node(type = '', pattern = '[N]', hubs = [0,0,0], is_smarts=True) # Alternatively we can just use smarts
+gG.add_node(type = 'nitrogen', pattern = 'N', hubs = [0,0,0], is_smarts=False) # default of is_smarts is False
+gG.add_node('nitrogen') # Once the type of the node has been specified we can use it again
+gG.add_node(type = '', pattern = '[N]', hubs = [0,0,0], is_smarts=True) # Alternatively we can just use smarts
 
 # Adding edges
-group_graph.add_edge(src = (0,0), dst = (1,0), order=1) # In the format ((nodeID, srcPort), (nodeID, dstPort), bondOrder)
-group_graph.add_edge(src = (1,1), dst = (2,0))
-group_graph.add_edge(src = (2,1), dst = (0,1))
+gG.add_edge(src = (0,0), dst = (1,0), order=1) # In the format ((nodeID, srcPort), (nodeID, dstPort), bondOrder)
+gG.add_edge(src = (1,1), dst = (2,0))
+gG.add_edge(src = (2,1), dst = (0,1))
 
 """
 Will make 
@@ -123,11 +123,11 @@ Will make
 
 ### Group graph to SMILES
 ```python
-smiles = group_graph.to_smiles()
+smiles = gG.to_smiles()
 ```
 ### GroupGraph to AtomGraph
 ```python
-atomG = g.to_atomic_graph()
+atomG = gG.to_atomic_graph()
 ```
 
 
@@ -167,35 +167,16 @@ def node_descriptor_generator(node_smiles):
     desc = torch.tensor(desc, dtype=torch.float64)
     return desc
 
-
-gG = Grouper.GroupGraph()
-gG.add_node('node1', 'CH2', [0,0])
-gG.add_node('node2', 'CONH', [0,0,0])
-gG.add_edge((0,0),(1,0))
-
 nxG = convert_to_nx(gG)
+max_ports = max(len(n.hubs) for n in node_defs)
 
-data = nxG.to_PyG_Data(node_descriptor_generator, max_ports = 3)
-data.y = torch.tensor([rdkit.Chem.Descriptors.MolLogP(rdkit.Chem.MolFromSmiles(d))], dtype=torch.float64)
+data = nxG.to_PyG_Data(node_descriptor_generator, max_ports)
+data.y = torch.tensor([rdkit.Chem.Descriptors.MolLogP(rdkit.Chem.MolFromSmiles(d))]) # here we utilize rdkit to estimate logP, but obviously can be generated another way 
 ```
 
 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-<!-- ROADMAP -->
-## Roadmap
-[X] Generate possible graphs with attachments points as limiter for number of connections 
-
-[X] Process output of generation into python data structure
-
-[X] Substiute nodes based on max attachments for graphs
-
-[ ] Rdkit demo
-
-[ ] group graph visualizaiton
-
-[ ] Verify structures with synthesizability checks
 
 <!-- CONTRIBUTING -->
 ## Contributing
@@ -215,7 +196,6 @@ Don't forget to give the project a star! Thanks again!
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
-
 <!-- LICENSE -->
 ## License
 
@@ -229,6 +209,8 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 ## Contact
 
 Kieran Nehil-Puleo - nehilkieran@gmail.com
+
+Cal Craven
 
 Project Link: [https://github.com/kierannp/Grouper](https://github.com/kierannp/Grouper)
 
