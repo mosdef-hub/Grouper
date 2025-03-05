@@ -52,14 +52,23 @@ PYBIND11_MODULE(_Grouper, m) {
              py::arg("type") = "",
              py::arg("pattern") = "",
              py::arg("hubs") = std::vector<int>{},
-             py::arg("isSmarts") = false)
+             py::arg("isSmarts") = false
+        )
         .def("add_edge", &GroupGraph::addEdge,
              py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
              py::arg("dst") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
              py::arg("order") = 1,
-             py::arg("verbose") = false)
+             py::arg("verbose") = false
+        )
         .def("n_free_ports", &GroupGraph::numFreePorts)
-        .def("compute_orbits", &GroupGraph::computeOrbits)
+        .def("compute_orbits",
+            static_cast<std::pair<std::vector<int>, std::vector<int>> (GroupGraph::*)(
+                const std::vector<std::pair<int, int>>&,
+                const std::vector<int>&
+            ) const>(&GroupGraph::computeOrbits),
+            py::arg("edge_list"),
+            py::arg("node_colors")
+        )
         .def("__repr__", &GroupGraph::printGraph)
         .def("to_smiles", &GroupGraph::toSmiles, "Convert GroupGraph to SMILES")
         .def("to_vector", &GroupGraph::toVector, "Convert GroupGraph to group vector")

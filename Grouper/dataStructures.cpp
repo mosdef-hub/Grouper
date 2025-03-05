@@ -651,6 +651,70 @@ std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
     return {node_orbits, edge_orbits_vec};
 }
 
+std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<int>& node_colors
+) const {
+    int n = nodes.size();
+    int m = SETWORDSNEEDED(n);
+    setword workspace[160]; // Nauty workspace
+    graph g[m * n];         // For the nauty graph
+    int lab[n];             // For the label array
+    int ptn[n];             // For the partition array
+    int orbits[n];          // For the orbits array
+    DEFAULTOPTIONS_GRAPH(options); // Default nauty options
+    statsblk stats;                // Nauty stats structure
+
+
+    // Allocate a local edge data struct for this thread
+    NautyEdgeData edge_data;
+    edge_data.num_edges = edge_list.size();
+    if (edge_data.num_edges > MAX_EDGES) {
+        throw std::runtime_error("Too many edges; increase MAX_EDGES.");
+    }
+
+    for (size_t i = 0; i < edge_list.size(); i++) {
+        edge_data.edges[i][0] = edge_list[i].first;
+        edge_data.edges[i][1] = edge_list[i].second;
+        edge_data.edge_orbits[i] = i;  // Initially, each edge is its own orbit
+    }
+
+    // Set the thread-local pointer for update_edge_orbits
+    edge_data_ptr = &edge_data;
+
+    // Initialize graph structure
+    EMPTYGRAPH(g, m, n);
+    for (const auto& edge : edge_list) ADDONEEDGE(g, edge.first, edge.second, m);
+
+    // Sort nodes by color and initialize `lab` and `ptn`
+    std::vector<std::pair<int, int>> color_sorted_nodes;
+    for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(node_colors[i], i);
+    std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
+
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted_nodes[i].second;
+    for (int i = 0; i < n - 1; ++i) ptn[i] = (color_sorted_nodes[i].first == color_sorted_nodes[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
+
+    // Configure Nauty options
+    options.getcanon = FALSE;
+    options.defaultptn = FALSE;
+    options.userautomproc = update_edge_orbits;
+
+    // Run Nauty
+    densenauty(g, lab, ptn, orbits, &options, &stats, m, n, workspace);
+
+    // Convert node orbit array to vector
+    std::vector<int> node_orbits(n), edge_orbits_vec(edge_data.num_edges);
+    for (int i = 0; i < n; ++i) node_orbits[i] = orbits[i];
+    for (int i = 0; i < edge_data.num_edges; ++i) edge_orbits_vec[i] = edge_data.edge_orbits[i];
+
+
+    // Clear thread-local pointer
+    edge_data_ptr = nullptr;
+
+    return {node_orbits, edge_orbits_vec};
+}
+
 // Conversion methods
 std::string GroupGraph::printGraph() const {
     std::ostringstream output;
