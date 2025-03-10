@@ -1055,6 +1055,8 @@ void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
 
     // Allocate memory for adj matrix
     *adj = new graph[*n * (*m)]();
+
+    std::fill(*adj, *adj + (*n * (*m)), 0); // Initialize adjacency matrix to 0
     
     // Build adjacency list
     for (const auto& [nodeID, group] : nodes) {

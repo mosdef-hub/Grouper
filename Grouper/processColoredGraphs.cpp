@@ -271,6 +271,7 @@ void process_nauty_output(
     std::unordered_map<std::string, std::string> type_to_pattern;
     std::vector<GroupGraph> group_graphs_list;
     std::unordered_set<std::vector<setword>, hash_vector> canon_set;
+    // std::unordered_set<std::string> canon_set;
 
 
     // Create necessary maps
@@ -404,10 +405,15 @@ void process_nauty_output(
         //     canon_set.insert(gG.toSmiles());
         //     graph_basis->insert(gG);
         // }
-        if (canon_set.find(gG.canonize()) == canon_set.end()) {
-            canon_set.insert(gG.canonize());
+        auto aG = gG.toAtomicGraph();
+        if (canon_set.find(aG->canonize()) == canon_set.end()) {
+            canon_set.insert(aG->canonize());
             graph_basis->insert(gG);
         }
+        // if (canon_set.find(gG.canonize()) == canon_set.end()) {
+        //     canon_set.insert(gG.canonize());
+        //     graph_basis->insert(gG);
+        // }
     }
 }
 

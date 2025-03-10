@@ -211,6 +211,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
     std::unordered_set<GroupGraph> global_basis;
     std::unordered_set<std::vector<setword>, hash_vector> canon_basis;
+    // std::unordered_set<std::string> canon_basis;
 
     omp_set_num_threads(num_procs);      // Set the number of threads to match
 
@@ -253,10 +254,15 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 //     canon_basis.insert(graph.toSmiles());
                 //     global_basis.insert(graph);
                 // }
-                if (canon_basis.find(graph.canonize()) == canon_basis.end()) {
-                    canon_basis.insert(graph.canonize());
+                auto aG = graph.toAtomicGraph();
+                if (canon_basis.find(aG->canonize()) == canon_basis.end()) {
+                    canon_basis.insert(aG->canonize());
                     global_basis.insert(graph);
                 }
+                // if (canon_basis.find(graph.canonize()) == canon_basis.end()) {
+                //     canon_basis.insert(graph.canonize());
+                //     global_basis.insert(graph);
+                // }
             }
         }
     }
