@@ -80,8 +80,8 @@ class TestGeneration(BaseTest):
         exhaustive_generate(
             2,
             node_defs,
-            input_file_path,
             1,  # num_procs
+            input_file_path,
             positive_constraints,
             negative_constraints,
             "",

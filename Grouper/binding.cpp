@@ -126,8 +126,8 @@ PYBIND11_MODULE(_Grouper, m) {
     );
     m.def("exhaustive_generate", [](int n_nodes,
                                     const std::unordered_set<GroupGraph::Group>& node_defs,
-                                    const std::string& vcolg_output_file,
                                     int num_procs,
+                                    const std::string& vcolg_output_file,
                                     const std::unordered_map<std::string, int>& positive_constraints,
                                     const std::unordered_set<std::string>& negative_constraints,
                                     const std::string& config_path) {
