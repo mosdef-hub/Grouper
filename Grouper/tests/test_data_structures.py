@@ -3,7 +3,7 @@ from rdkit import Chem
 
 from Grouper import Atom, AtomGraph, Group, GroupGraph
 from Grouper.tests.base_test import BaseTest
-
+import pickle
 
 class TestGroupGraph(BaseTest):
     def to_set_of_sets(self, matches):
@@ -593,6 +593,36 @@ class TestAtomGraph(BaseTest):
         # matches = truth.substructure_search(sub, [2,2,2, 1, 0, 0])
         assert self.to_set_of_sets(matches) == {frozenset({(0, 0), (1, 1), (2, 2)})}
         assert self.to_set_of_sets(matches) == {frozenset({(0, 0), (1, 1), (2, 2)})}
+
+    def test_json(self):
+        graph = GroupGraph()
+        graph.add_node("type1", "C", [0, 0])
+        graph.add_node("type1", "C", [0, 0])
+        graph.add_node("type2", "C", [0, 0])
+        graph.add_edge((0, 0), (1, 0))
+        graph.add_edge((1, 1), (2, 0))
+
+        json = graph.to_json()
+        graph2 = GroupGraph()
+        graph2.from_json(json)
+        assert graph == graph2
+
+    def test_pickle(self):
+        graph = GroupGraph()
+        graph.add_node("type1", "C", [0, 0])
+        graph.add_node("type1", "C", [0, 0])
+        graph.add_node("type2", "C", [0, 0])
+        graph.add_edge((0, 0), (1, 0))
+        graph.add_edge((1, 1), (2, 0))
+
+        with open("test.pkl", "wb") as f:
+            pickle.dump(graph, f)
+        
+        with open("test.pkl", "rb") as f:
+            graph2 = pickle.load(f)
+        
+        assert graph == graph2
+        
     
     def test_canonize(self):
         # Test case 1: Simple linear chain with single bonds

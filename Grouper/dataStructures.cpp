@@ -925,14 +925,30 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
 
 std::string GroupGraph::serialize() const {
     std::ostringstream oss;
+
+    auto escapeString = [](const std::string& input) -> std::string {
+        std::ostringstream oss;
+        for (char c : input) {
+            switch (c) {
+                case '\n': oss << "\\n"; break;
+                case '\t': oss << "\\t"; break;
+                case '\r': oss << "\\r"; break;
+                case '\\': oss << "\\\\"; break;
+                case '\"': oss << "\\\""; break;
+                default: oss << c; break;
+            }
+        }
+        return oss.str();
+    };
+
     oss << "{\n  \"nodes\": [\n";
     for (const auto& pair : nodes) {
         const Group& node = pair.second;
         oss << "    {\n      \"id\": " << pair.first
-            << ",\n      \"ntype\": \"" << node.ntype
-            << "\",\n      \"pattern\": \"" << node.pattern
+            << ",\n      \"ntype\": \"" << escapeString(node.ntype)
+            << "\",\n      \"pattern\": \"" << escapeString(node.pattern)
             << "\",\n      \"isSmarts\": " << (node.isSmarts ? "true" : "false")
-            << "\",\n      \"ports\": [";
+            << ",\n      \"ports\": [";
         for (size_t i = 0; i < node.ports.size(); ++i) {
             if (i > 0) oss << ",";
             oss << node.ports[i];
