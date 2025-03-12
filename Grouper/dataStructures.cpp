@@ -127,7 +127,7 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
             throw std::invalid_argument("Hub ID "+ std::to_string(hub) +" is greater than the number of atoms in the group");
         }
     }
-    
+
     for (const auto& [id, node] : atomGraph.nodes) {
         atomFreeValency[id] = node.valency;
     }
@@ -168,7 +168,7 @@ std::vector<int> GroupGraph::Group::hubOrbits() const {
     // Step 1: Convert group to a nauty-compatible atomic graph
     int m = SETWORDSNEEDED(n);
     std::vector<setword> adj(n * m, 0);
-    
+
     // Map atoms to nauty node indices
     std::unordered_map<int, int> atom_to_nauty;
     int index = 0;
@@ -579,7 +579,7 @@ void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int st
         for (int j = 0; j < num_edges; j++) {
             if ((nauty_edges[j][0] == new_v1 && nauty_edges[j][1] == new_v2) ||
                 (nauty_edges[j][0] == new_v2 && nauty_edges[j][1] == new_v1)) {
-                
+
                 // Merge edge orbits using Union-Find
                 uf.unite(i, j);
             }
@@ -1009,7 +1009,7 @@ void GroupGraph::deserialize(const std::string& data) {
 
             // Create and insert the group
             Group group(ntype, pattern, hubs, isSmarts);
-            
+
             // If ports were specified, override the default ports
             if (node_data.contains("ports")) {
                 group.ports = node_data["ports"].get<std::vector<PortType>>();
@@ -1073,7 +1073,7 @@ void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
     *adj = new graph[*n * (*m)]();
 
     std::fill(*adj, *adj + (*n * (*m)), 0); // Initialize adjacency matrix to 0
-    
+
     // Build adjacency list
     for (const auto& [nodeID, group] : nodes) {
         int g_node = group_to_nauty[nodeID];
@@ -1484,6 +1484,22 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
 void AtomGraph::fromSmarts(const std::string& smarts) {
     nodes.clear();
     edges.clear();
+
+    // Attempt to load via rdkit
+    const auto& mol = createMol(smarts, true);
+    if (mol) {
+        for (size_t i=0; i<mol->getNumAtoms(); ++i) {
+            const auto& atom = mol->getAtomWithIdx(i);
+            addNode(atom->getSymbol());
+        }
+        for (size_t i=0; i<mol->getNumBonds(); i++) {
+            const auto& bond = mol->getBondWithIdx(i);
+            double border = bond->getBondTypeAsDouble();
+            int borderInt = (int)border;
+            addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt);
+        }
+        return; // Return early if identified through rdkit and createMol cpp
+    };
 
     std::unordered_map<std::string, int> standardElementValency = {
         {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
