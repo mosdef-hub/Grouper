@@ -86,33 +86,29 @@ def fragment(
             list(t)
             for t in zip(*sorted(zip(queries, nodeDefs), key=size_sorter, reverse=True))
         )
-    empty_graph = ((), (), (), ())
-    atomsRange = range(mol.GetNumAtoms())
-    matchesList = [((), tuple(atomsRange), copy.copy(empty_graph))]
+
+    matchesList = [MatchState(mol.GetNumAtoms())]
     for i, query in enumerate(queries):
         # print(f"\nQuerying {[a.GetSymbol() for a in query.GetAtoms()]}")
-        updateMatches = set()
-        for current_match in matchesList:
+        updateMatchesSet = set()
+        print(f"{matchesList=}")
+        for currentMatchState in matchesList:
             # should return [match] if query doesn't change anything
             # should return list of matches, corresponding to multiple query options
-            new_matches = _generate_new_matches(mol, query, current_match, i)
-            # print(f"{new_matches=}")
-            for new_match in new_matches:
-                updateMatches.add(
-                    new_match
-                )  # hash function handles adding same match twice
-        if updateMatches:  # only update if matches have been found
+            newMatchesList = _generate_new_matches(mol, query, currentMatchState, i)
+            print(f"{newMatchesList=}")
+            for newMatchState in newMatchesList:
+                updateMatchesSet.add(newMatchState)  # matchState is hashable
+        if updateMatchesSet:  # only update if matches have been found
             matchesList = list(
-                updateMatches
+                updateMatchesSet
             )  # reset matchesList for next round of matching
-
-    # print(f"\n{matchesList=}\n{len(matchesList)=}") # TODO: MatchesList is flaky, order is not preserved
-
+    # Filter all matches based on fragment arguments
     if incompleteGraphHandler == "remove" or incompleteGraphHandler == "raise error":
         fullyMatchedList = []
-        for match in matchesList:
-            if not match[1]:
-                fullyMatchedList.append(match)
+        for matchState in matchesList:
+            if matchState.isFullyFragmented():
+                fullyMatchedList.append(matchState)
         matchesList = fullyMatchedList
         if incompleteGraphHandler == "raise error" and not matchesList:
             raise ValueError(
@@ -123,11 +119,11 @@ def fragment(
             return []
         n_nodes = mol.GetNumAtoms()
         for (
-            match
+            matchState
         ) in matchesList:  # loop to select smallest possible number of nodes matched
-            if len(match[2][1]) < n_nodes:
-                n_nodes = len(match[2][1])
-                matchesList = [match]  # only use best match
+            if len(matchState.all_group_indices) < n_nodes:
+                n_nodes = len(matchState.all_group_indices)
+                matchesList = [matchState]  # only use best match
     allGroupGraphList = [
         _group_graph_from_match(
             possible_fragmentation, nodeDefs, incompleteGraphHandler
@@ -138,36 +134,77 @@ def fragment(
     return allGroupGraphList
 
 
-def _update_matches_by_state(mol, groupsList, match, groupStr, queryIndex):
-    """Take a list of groups, check compatibility with current matching state of molecule, and try to add to state."""
-    # matched atoms, unmatched atoms, ((grouped_atoms), (grouped_atom_indices), (group_indices), (grouped_bonds))
-    updated_match = ((), (), ((), (), (), ()))
-    matched_atoms = match[0]
-    unmatched_atoms = match[1]
-    groups = match[2][0]
-    groupAtomIndices = match[2][1]
-    groupIndex = match[2][2]
-    bondsTuple = match[2][3]
+class MatchState:
+    __slots__ = (
+        "all_matched_atoms",
+        "all_unmatched_atoms",
+        "all_group_names",
+        "all_group_indices",
+        "nodeDefs_indices",
+        "group_bonds",
+    )
+
+    def __init__(self, n_atoms):
+        self.all_matched_atoms = ()
+        self.all_unmatched_atoms = tuple(range(n_atoms))
+        self.all_group_names = ()
+        self.all_group_indices = ()
+        self.nodeDefs_indices = ()
+        self.group_bonds = ()
+
+    def isFullyFragmented(self):
+        return not self.all_unmatched_atoms
+
+    def __eq__(self, other):
+        return (
+            self.all_matched_atoms == other.all_matched_atoms
+            and self.all_unmatched_atoms == other.all_unmatched_atoms
+            and self.all_group_names == other.all_group_names
+            and self.all_group_indices == other.all_group_indices
+            and self.nodeDefs_indices == other.nodeDefs_indices
+            and self.group_bonds == other.group_bonds
+        )
+
+    def __hash__(self):
+        return hash(
+            (
+                self.all_matched_atoms,
+                self.all_unmatched_atoms,
+                self.all_group_names,
+                self.all_group_indices,
+                self.nodeDefs_indices,
+                self.group_bonds,
+            )
+        )
+
+    def __repr__(self):
+        return (
+            f"{self.all_unmatched_atoms=}\n{self.all_group_names=}\n{self.group_bonds=}"
+        )
+
+
+def _update_matches_by_state(mol, groupsList, oldMatchState, groupStr, nodeDefsIndex):
+    matchState = copy.deepcopy(oldMatchState)
+    """Take a list of groups, check compatibility with current matchState molecule, and update slots."""
     for group in groupsList:
-        # skip group if atoms in group already matched
+        # skip group only if atoms in group already used in another group
         groupFlag = False  # flag for catching if group matched already
         for atom in group:
-            if atom in match[0]:
-                groupFlag = True  # this group has already been identified
+            if atom in matchState.all_matched_atoms:
+                groupFlag = True  # this group has already been used
         if groupFlag:
-            continue
-        matched_atoms += group
-        unmatched_atoms = tuple(filter(lambda y: y not in group, unmatched_atoms))
-        groups += (groupStr,)
-        groupAtomIndices += (group,)
-        groupIndex += (queryIndex,)
-        groupAttachments = _get_group_bonds(mol, group, groupAtomIndices)
-        bondsTuple += groupAttachments
-    return (
-        matched_atoms,
-        unmatched_atoms,
-        (groups, groupAtomIndices, groupIndex, bondsTuple),
-    )  # return a fresh match
+            continue  # at least one previous atom was already found
+        matchState.all_matched_atoms += group
+        matchState.all_unmatched_atoms = tuple(
+            filter(lambda y: y not in group, matchState.all_unmatched_atoms)
+        )
+        matchState.all_group_names += (groupStr,)
+        matchState.all_group_indices += (group,)
+        matchState.nodeDefs_indices += (nodeDefsIndex,)
+        matchState.group_bonds += _get_group_bonds(
+            mol, group, matchState.all_group_indices
+        )
+    return matchState  # return a fresh match
 
 
 def _identify_bond_partner_group_and_hub(currentGroups, bondedAtomIndex):
@@ -198,7 +235,7 @@ def _get_group_bonds(mol, group, latest_group_indices):
             # take bondedAtom, find group Index and group Hub
             bonded_groupIndex, bonded_hubIndex = _identify_bond_partner_group_and_hub(
                 latest_group_indices[:-1], bondedAtomIndex
-            )
+            )  # latest_group_indices[:-1] because we don't want to count group, which is already added to latest_group_indices
             if bonded_groupIndex != -1:
                 bonds.append(
                     ((newest_groupIndex, i), (bonded_groupIndex, bonded_hubIndex))
@@ -206,8 +243,10 @@ def _get_group_bonds(mol, group, latest_group_indices):
     return tuple(bonds)
 
 
-def _generate_new_matches(mol, query, match, queryIndex, returnHandler="all matches"):
-    # Substructs are all possible gruops
+def _generate_new_matches(
+    mol, query, matchState, nodeDefsIndex, returnHandler="all matches"
+):
+    # Substructs are all possible groups
     substructsList = mol.GetSubstructMatches(query)
     # Generate all maximal sets of compatible groups
     # i.e. [(0,1), (0,3)] -> [[(0,1)], [(0,3)]]
@@ -226,17 +265,18 @@ def _generate_new_matches(mol, query, match, queryIndex, returnHandler="all matc
             f"Invalid returnHandler: {returnHandler}. Must be one of `all matches`, `fast match`, or `single match`"
         )
 
-    new_matchesList = []
+    print(f"##########{iterPossibleStates=}\n\n")
+    newMatchesList = []
     for state in iterPossibleStates:
         groupStr = tuple(
             a.GetSymbol() for a in query.GetAtoms()
         )  # used for debugging matches
         # print(f"{state=}")
-        new_match = _update_matches_by_state(
-            mol, state, match, groupStr, queryIndex
+        newMatch = _update_matches_by_state(
+            mol, state, matchState, groupStr, nodeDefsIndex
         )  # return `match` if no match possible
-        new_matchesList.append(new_match)
-    return new_matchesList  # list of hashable matches
+        newMatchesList.append(newMatch)
+    return newMatchesList  # list of hashable matches
 
 
 def _get_maximal_compatible_tuples(tupleofGroups):
@@ -357,28 +397,29 @@ def _mask_number_clashes(groupList, group):
     return maskList
 
 
-def _group_graph_from_match(query_match, nodesList, incompleteGraphHandler):
+def _group_graph_from_match(matchState, nodesList, incompleteGraphHandler):
     """Take a matched group object and return a GroupGraph."""
     groupG = GroupGraph()
-    groups = query_match[2][2]  # change it so this is group indexes
+    groupsTuple = matchState.nodeDefs_indices
     # ("C", "C"), ("C", "O") : (0,1), (2,3) ((0,1), (1,0))
     # Group from groupTuple -> name, ports, hubs,
-    for group in groups:  # group is an index from the original nodes
+    for group in groupsTuple:  # group is an index from the original nodes
         group_node = nodesList[group]
         groupG.add_node(
             group_node.type, group_node.pattern, group_node.hubs, group_node.is_smarts
         )
     # Add edges
-    edges = query_match[2][3]
-    for edge in edges:
-        # need port, not hub for edges
-        group0 = edge[0][0]  # this info should be saved in bonds tuple
-        group1 = edge[1][0]
+    edgesTuple = matchState.group_bonds
+    for edge in edgesTuple:
+        group0 = edge[0][0]  # group 0 index
+        group1 = edge[1][0]  # group 1 index
+        # need a port, not hub for creating GroupGraph edges
         port0 = _get_next_available_port_from_hub(groupG, group0, edge[0][1])
         port1 = _get_next_available_port_from_hub(groupG, group1, edge[1][1])
         if port0 is not None and port1 is not None:
             groupG.add_edge((group0, port0), (group1, port1))
         elif incompleteGraphHandler == "raise error":
+            # raise errors if we generated a failing graph
             if port0 is None:
                 raise ValueError(
                     f"No more ports in {group0=} to connect to {group1=} for {groupG=}"
