@@ -237,8 +237,15 @@ def _get_group_bonds(mol, group, latest_group_indices):
                 latest_group_indices[:-1], bondedAtomIndex
             )  # latest_group_indices[:-1] because we don't want to count group, which is already added to latest_group_indices
             if bonded_groupIndex != -1:
+                bond_order = int(
+                    bond.GetBondTypeAsDouble()
+                )  # NOTE: Since we have ints, aromatic 1.5 bonds are treated as single bonds
                 bonds.append(
-                    ((newest_groupIndex, i), (bonded_groupIndex, bonded_hubIndex))
+                    (
+                        (newest_groupIndex, i),
+                        (bonded_groupIndex, bonded_hubIndex),
+                        bond_order,
+                    )
                 )  # add a new bond
     return tuple(bonds)
 
@@ -398,11 +405,10 @@ def _mask_number_clashes(groupList, group):
 
 
 def _group_graph_from_match(matchState, nodesList, incompleteGraphHandler):
-    """Take a matched group object and return a GroupGraph."""
+    """Take a MatchState object and return a GroupGraph."""
     groupG = GroupGraph()
+    # Group from matchState.nodeDefs_indices, which tells you which groups were found
     groupsTuple = matchState.nodeDefs_indices
-    # ("C", "C"), ("C", "O") : (0,1), (2,3) ((0,1), (1,0))
-    # Group from groupTuple -> name, ports, hubs,
     for group in groupsTuple:  # group is an index from the original nodes
         group_node = nodesList[group]
         groupG.add_node(
@@ -410,14 +416,12 @@ def _group_graph_from_match(matchState, nodesList, incompleteGraphHandler):
         )
     # Add edges
     edgesTuple = matchState.group_bonds
-    for edge in edgesTuple:
-        group0 = edge[0][0]  # group 0 index
-        group1 = edge[1][0]  # group 1 index
-        # need a port, not hub for creating GroupGraph edges
-        port0 = _get_next_available_port_from_hub(groupG, group0, edge[0][1])
-        port1 = _get_next_available_port_from_hub(groupG, group1, edge[1][1])
+    for (group0, hub0), (group1, hub1), bond_order in edgesTuple:
+        # need the port, but have the hub for creation of GroupGraph edges
+        port0 = _get_next_available_port_from_hub(groupG, group0, hub0)
+        port1 = _get_next_available_port_from_hub(groupG, group1, hub1)
         if port0 is not None and port1 is not None:
-            groupG.add_edge((group0, port0), (group1, port1))
+            groupG.add_edge((group0, port0), (group1, port1), bond_order)
         elif incompleteGraphHandler == "raise error":
             # raise errors if we generated a failing graph
             if port0 is None:
@@ -445,7 +449,6 @@ def _get_next_available_port_from_hub(groupG, nodeIndex, hub):
     for portIndex, checkHub in enumerate(group.hubs):
         if hub == checkHub and portIndex not in used_ports:
             return portIndex
-    # raise ValueError(f"In {groupG=}, no available {hub=} for {group=}, for Group {nodeIndex}")
 
 
 def _get_hubs_from_string(pattern):
