@@ -1,7 +1,8 @@
 """Module for breaking down smiles molecules into Groups and GroupGraphs."""
 
 import copy
-from typing import Literal, Union
+from collections import Counter
+from typing import List, Literal, Union
 
 from rdkit import Chem
 
@@ -16,6 +17,7 @@ def fragment(
     ] = "single match",
     nodeDefsSorter: Literal["size", "priority", "list"] = "list",
     incompleteGraphHandler: Literal["remove", "keep", "raise error"] = "remove",
+    matchHubs: bool = False,
 ) -> list:
     """Fragmenter a smiles definied molecule based on a list of nodes.
 
@@ -42,7 +44,39 @@ def fragment(
         - "remove": remove incomplete graphs, aka graphs that are not fully connected or fragmented.
         - "keep": keep incomplete graphs
         - "raise error": raise an error if no complete graphs are found
+    matchHubs : bool, default False
+        Whether or not to parse the hubs into the SMARTS string of the Group in nodeDefs is an iterable of Grouper.Groups.
+        By default, only the SMARTS or SMILES string of the Group is used for RDKit substructure matching. To make matches also
+        take into account where hubs have been positioned around the Group, set this to True.
+        Note: This will only work if the Group is an iterable of Grouper.Groups, and the Groups are written as SMARTS.
+        Note: This will not be accounted for if returnHandler is set to "exhaustive", which automatically internally
+            accounts for the hubs connectivity.
 
+
+    Notes
+    -----
+    1. `matchHubs` can result in different matching behavior, since there are not enough
+        hubs to for the middle carbon to form two bonds in the example below.
+    ```python
+    group1 = Grouper.Group("group1", "[C]", [0], True)
+    fragment("CCC", [group1], matchHubs=True) == []
+    gG = Grouper.GroupGraph()
+    gG.add_node("group1", "[C]", [0]*4, True)
+    gG.add_node("group1", "[C]", [0]*4, True)
+    gG.add_node("group1", "[C]", [0]*4, True)
+    gG.add_edge((0,0), (1,0), 1)
+    gG.add_edge((2,0), (1,1), 1)
+    fragment("CCC", [group1], matchHubs=False) == GroupGraph
+    ```
+
+    2. returnHandler="exhaustive" can be slow for large matching structures due to accounting for all
+    possible symmetries of the groups supplied in `nodeDefs`.
+
+    3. If a list of SMARTS is supplied to `nodeDefs` instead of a list of Groups, then the final graphs
+    will have nodes where every possible hub is added to the Group based on the subatoms valency and connectivity.
+    This is recommended for the most intuitive matching behavior.
+
+    Returns
     -------
     list of Grouper.GroupGraph
         A list of GroupGraphs that represent the possible fragmentations of the molecule.
@@ -50,42 +84,11 @@ def fragment(
     # some preliminary type checking and error handling
     # Handle both GroupExtension and Groups
     mol = Chem.MolFromSmiles(smiles)  # convert to RDKit mol
-    queries = []
     if not smiles or not nodeDefs:  #
         return []
-    if not isinstance(nodeDefs, list):  # indexible list
-        nodeDefs = list(nodeDefs)
-    if isinstance(nodeDefs, list) and isinstance(nodeDefs[0], str):  # create groups
-        newNodeDefs = []
-        for i, pattern in enumerate(nodeDefs):
-            query = Chem.MolFromSmarts(pattern)
-            is_smarts = True
-            if not query:  # failed at parsing smarts, try smiles
-                query = Chem.MolFromSmiles(pattern)
-                is_smarts = False
-            hubs = _get_hubs_from_string(pattern)
-            try:
-                newNodeDefs.append(Group(f"type {i}", pattern, hubs, is_smarts))
-            except ValueError:  # TODO: add better handling of loading patterns to group
-                newNodeDefs.append(Group(f"type {i}", pattern, hubs, is_smarts))
-            queries.append(query)
-        nodeDefs = newNodeDefs
-    else:
-        for group in nodeDefs:
-            if group.is_smarts:
-                queries.append(Chem.MolFromSmarts(group.pattern))
-            else:
-                queries.append(Chem.MolFromSmiles(group.pattern))
-    # sort queries
-    if nodeDefsSorter == "size":
-        size_sorter = lambda pair: (
-            pair[0].GetNumHeavyAtoms(),
-            sum(atom.GetMass() for atom in pair[0].GetAtoms()),
-        )
-        queries, nodeDefs = (
-            list(t)
-            for t in zip(*sorted(zip(queries, nodeDefs), key=size_sorter, reverse=True))
-        )
+    queries, nodeDefs = _generate_queries_from_nodedefs(
+        nodeDefs, nodeDefsSorter, matchHubs
+    )
 
     matchesList = [MatchState(mol.GetNumAtoms())]
     for i, query in enumerate(queries):
@@ -494,3 +497,195 @@ def _get_hubs_from_string(pattern):
         hubs.append(0)  # add in one more possible bonding state
 
     return hubs
+
+
+def _smarts_with_ports(smarts: str, hubs: List[int]):
+    """Take a SMARTS string, and return the SMARTS that match the specified hubs in the group.
+    i.e smarts="[C]", hubs=[0] is a CH3 or CH4, so the explicit_smarts should be "[CH4,CH3]"
+    as opposed to ["C"], hubs=[0,0,0], which is explicit_smarts "[CH1,CH2,CH3,CH4]"
+    Note: "[CH1]" will not match CH2 and CH3 queries
+    """
+    standardElementValencyMap = {
+        "H": 1,
+        "B": 3,
+        "C": 4,
+        "N": 3,
+        "O": 2,
+        "F": 1,
+        "P": 3,
+        "S": 2,
+        "Cl": 1,
+        "Br": 1,
+        "I": 1,
+    }
+    mol = Chem.MolFromSmarts(smarts)
+    num_portsCounter = Counter(hubs)
+    new_smartsStr = ""
+    smarts_atomsList = _split_smarts_by_atom(smarts)  # each atom's smarts string
+    for i, (atom, atomSmarts) in enumerate(zip(mol.GetAtoms(), smarts_atomsList)):
+        atomStr = atomSmarts
+        replaceStr = ""
+        symbol = atom.GetSymbol()
+        atomStr = _handle_branching(atomStr)  # handle branching
+        atomStr = _handle_and_statements(
+            atomStr, symbol
+        )  # put and statements first in []
+        valence = standardElementValencyMap.get(atom.GetSymbol(), None)
+        bonds_occupied = sum([bond.GetBondTypeAsDouble() for bond in atom.GetBonds()])
+        n_ports = num_portsCounter[i]
+        # 2 hubs-> CH2, CH1, CH0 # ports means at least valence - bonds - ports hydrogens
+        # 1 hubs -> CH2, CH1
+        # 0 hubs -> CH2
+        maxn_H = int(
+            valence - bonds_occupied
+        )  # max hydrogens is valence - bonds_occupied, min is valence - bonds - n_ports
+        for j in range(maxn_H - n_ports, maxn_H + 1):
+            replaceStr += symbol + "H" + str(j) + ","
+        replaceStr = replaceStr[:-1]  # remove last comma
+        atomStr = atomStr.replace(symbol, replaceStr)
+        new_smartsStr += atomStr
+    return new_smartsStr
+
+
+def _handle_branching(atomStr):
+    """Handle branching in a smarts string."""
+    innermost_left_paren = atomStr.rfind("(")
+    if innermost_left_paren == -1:
+        outStr = "["
+    else:
+        outStr = atomStr[: innermost_left_paren + 1] + "["
+    innermost_right_paren = atomStr.find(")")
+    if innermost_left_paren == -1:
+        outStr += atomStr[innermost_left_paren + 1 :] + "]"
+    else:
+        outStr += (
+            atomStr[innermost_left_paren + 1 : innermost_right_paren]
+            + "]"
+            + atomStr[innermost_right_paren:]
+        )
+    return outStr
+
+
+def _handle_and_statements(smarts, symbol):
+    """Will only handle ;, not & or ,"""
+    indices_left = smarts.count("(")
+    indices_right = smarts.count(")")
+
+    splitSmarts = smarts.strip("()[]").split(";")
+    translation_table = dict.fromkeys(map(ord, "[]()"), None)
+    outStr = "["
+    for subString in splitSmarts:
+        if symbol in subString:
+            continue
+        else:
+            outStr += subString.translate(translation_table) + ";"
+    outStr += symbol + "]"  # add element symbol last
+    # add back in parantheses
+    outStr = indices_left * "(" + outStr + indices_right * ")"
+    return outStr
+
+
+def _split_smarts_by_atom(smarts):
+    """Split a smarts string into a list for each atom."""
+    standardElementValencyMap = {
+        "H": 1,
+        "B": 3,
+        "C": 4,
+        "N": 3,
+        "O": 2,
+        "F": 1,
+        "P": 3,
+        "S": 2,
+        "Cl": 1,
+        "Br": 1,
+        "I": 1,
+    }
+    atomsList = [""]
+    added_atom_once = False
+    cleanSmarts = smarts.replace("[", "").replace("]", "")
+    for char in cleanSmarts:
+        if char == "(":
+            added_atom_once = False
+            atomsList.append("(")
+            continue
+        elif char == ")":
+            atomsList[-1] += ")"
+            atomsList.append("")
+            added_atom_once = False
+            continue
+        elif char in standardElementValencyMap and not added_atom_once:
+            # only add once, stay here
+            added_atom_once = True
+        elif char in standardElementValencyMap and added_atom_once:
+            atomsList.append(char)
+            continue
+        atomsList[-1] += char
+
+    # handle extra bits
+    outSymbolsList = []
+    i = 0
+    while i < len(atomsList):
+        symbol = atomsList[i]
+        if symbol == "":
+            pass
+        elif symbol == ")":
+            outSymbolsList[-1] += symbol
+        elif symbol == "(":
+            outSymbolsList.append(symbol)
+            i += 1
+            outSymbolsList[-1] += atomsList[i]
+        else:
+            outSymbolsList.append(symbol)
+        i += 1
+
+    return outSymbolsList
+
+
+def _generate_queries_from_nodedefs(nodeDefs, nodeDefsSorter, matchHubs):
+    """Generate a list of RDKit.Chem.Mol queries from the nodeDefs."""
+    queries = []
+    if not isinstance(nodeDefs, list):  # indexible list
+        nodeDefs = list(nodeDefs)
+    if isinstance(nodeDefs[0], str):  # create groups
+        newNodeDefs = []
+        for i, pattern in enumerate(nodeDefs):
+            query = Chem.MolFromSmarts(pattern)
+            is_smarts = True
+            if not query:  # failed at parsing smarts, try smiles
+                query = Chem.MolFromSmiles(pattern)
+                is_smarts = False
+            hubs = _get_hubs_from_string(pattern)
+            try:
+                newNodeDefs.append(Group(f"type {i}", pattern, hubs, is_smarts))
+            except ValueError:  # TODO: add better handling of loading patterns to group
+                newNodeDefs.append(Group(f"type {i}", pattern, hubs, is_smarts))
+            queries.append(query)
+        nodeDefs = newNodeDefs
+    elif matchHubs:
+        for group in nodeDefs:
+            if group.is_smarts:
+                # import pdb; pdb.set_trace()
+                queries.append(
+                    Chem.MolFromSmarts(_smarts_with_ports(group.pattern, group.hubs))
+                )
+            else:
+                queries.append(  # only apply hubs if a SMARTS string was given
+                    Chem.MolFromSmiles(group.pattern)
+                )
+    else:  # by defaults just use the smarts given
+        for group in nodeDefs:
+            if group.is_smarts:
+                queries.append(Chem.MolFromSmarts(group.pattern))
+            else:
+                queries.append(Chem.MolFromSmiles(group.pattern))
+    # sort queries
+    if nodeDefsSorter == "size":
+        size_sorter = lambda pair: (
+            pair[0].GetNumHeavyAtoms(),
+            sum(atom.GetMass() for atom in pair[0].GetAtoms()),
+        )
+        queries, nodeDefs = (
+            list(t)
+            for t in zip(*sorted(zip(queries, nodeDefs), key=size_sorter, reverse=True))
+        )
+    return queries, nodeDefs

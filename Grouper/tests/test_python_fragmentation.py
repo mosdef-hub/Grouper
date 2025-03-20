@@ -6,6 +6,7 @@ from Grouper.fragmentation import (
     _get_hubs_from_string,
     _get_maximal_compatible_tuples,
     _get_next_available_port_from_hub,
+    _smarts_with_ports,
     fragment,
 )
 from Grouper.tests.base_test import BaseTest
@@ -241,24 +242,24 @@ class TestGeneralFragmentations(BaseTest):
         out = fragment("O=C(O)OO", node_defs)
         assert truth in out
 
-    def test_fragment_with_hubs(self):
+    def test_fragment_match_hubs(self):
         node_defs = set()
-        node_defs.add(Group("oxyl", "O", [0, 0]))  # oxyl group
-        node_defs.add(Group("ester", "C(=O)O", [0, 2]))  # Ester group
-        node_defs.add(Group("amine", "N", [0, 0, 0]))  # Amine group
+        node_defs.add(Group("oxyl", "O", [0, 0], True))  # oxyl group
+        node_defs.add(Group("ester", "C(=O)O", [0, 2], True))  # Ester group
+        node_defs.add(Group("amine", "N", [0, 0, 0], True))  # Amine group
         node_defs.add(
-            Group("alkene_secondary_amine", "C(N(C))", [0, 0])
+            Group("alkene_secondary_amine", "C(N(C))", [0, 0], True)
         )  # can be made of amine and alkene
-        node_defs.add(Group("alkene", "C", [0, 0, 0]))
+        node_defs.add(Group("alkene", "C", [0, 0, 0], True))
 
         truth = GroupGraph()
-        truth.add_node("alkene_secondary_amine", "C(N(C))", [0, 0])
-        truth.add_node("alkene", "C", [0, 0, 0])
-        truth.add_node("amine", "N", [0, 0, 0])
-        truth.add_node("alkene", "C", [0, 0, 0])
-        truth.add_node("alkene", "C", [0, 0, 0])
-        truth.add_node("alkene", "C", [0, 0, 0])
-        truth.add_node("alkene", "C", [0, 0, 0])
+        truth.add_node("alkene_secondary_amine", "C(N(C))", [0, 0], True)
+        truth.add_node("alkene", "C", [0, 0, 0], True)
+        truth.add_node("amine", "N", [0, 0, 0], True)
+        truth.add_node("alkene", "C", [0, 0, 0], True)
+        truth.add_node("alkene", "C", [0, 0, 0], True)
+        truth.add_node("alkene", "C", [0, 0, 0], True)
+        truth.add_node("alkene", "C", [0, 0, 0], True)
         truth.add_edge((0, 1), (1, 0))
         truth.add_edge((1, 1), (2, 0))
         truth.add_edge((2, 1), (3, 0))
@@ -266,11 +267,13 @@ class TestGeneralFragmentations(BaseTest):
         truth.add_edge((3, 2), (5, 0))
         truth.add_edge((5, 1), (6, 0))
 
-        out = fragment("CCC(C)NCCNC", node_defs)
+        out = fragment("CCC(C)NCCNC", node_defs, matchHubs=True)
         print(
             "This test is failing, need to take into account ports of a group into SMARTS String"
         )
-        assert truth in out, out
+        assert out[0] == truth
+        out = fragment("CCC(C)NCCNC", node_defs, matchHubs=False)
+        assert out == []
 
         node1 = Group("1methyl", "C", [0, 0, 0])
         node2 = Group("2methyl", "C", [0, 0])
@@ -382,6 +385,100 @@ class TestFragmentationUtilities(BaseTest):
         groupG.add_edge((0, 1), (2, 0))
         solution = 2
         question = _get_next_available_port_from_hub(groupG, 0, 0)
+        assert question == solution, question
+
+    def test_smarts_with_ports(self):
+        """TODO: Benzene aromatic rings, two character elements, +- charges, and &/, booleans."""
+        # group = Group("amine", "CNC", [0,0], is_smarts=True)
+        # solution = "[CH1,CH2,CH3][NH1][CH3]"
+        # question = _smarts_with_ports(group.pattern, group.hubs)
+        # assert question == solution, question
+
+        # smarts = "[C]"
+        # hubs = [0,0]
+        # solution = "[CH2,CH3,CH4]"
+        # question = _smarts_with_ports(smarts, hubs)
+        # assert question == solution, question
+
+        # smarts = "[C]C"
+        # hubs = [0,0]
+        # solution = "[CH1,CH2,CH3][CH3]"
+        # question = _smarts_with_ports(smarts, hubs)
+        # assert question == solution, question
+
+        # smarts = "[C]ON"
+        # hubs = [0,0,0,2,2]
+        # solution = "[CH0,CH1,CH2,CH3][OH0][NH0,NH1,NH2]"
+        # question = _smarts_with_ports(smarts, hubs)
+        # assert question == solution, question
+
+        # smarts = "[C]CN"
+        # hubs= [0,0]
+        # solution = '[CH1,CH2,CH3][CH2][NH2]'
+        # question = _smarts_with_ports(smarts, hubs)
+        # assert question == solution, question
+
+        # smarts = "[C]CCC"
+        # hubs = [0,0,1,1,2]
+        # solution = '[CH1,CH2,CH3][CH0,CH1,CH2][CH1,CH2][CH3]'
+        # question = _smarts_with_ports(smarts, hubs)
+        # assert question == solution, question
+
+        # smarts = "[C;R](C)N" # rings and branches
+        # hubs= [0,0]
+        # solution = '[R;CH0,CH1,CH2]([CH3])[NH2]'
+        # question = _smarts_with_ports(smarts, hubs)
+        # assert question == solution, question
+
+        # smarts = "[C](C(=O)O)NC" # double bond
+        # hubs= [0,0,4,5,5,5]
+        # solution = "[CH0,CH1,CH2]([CH0]([OH0])[OH1])[NH0,NH1][CH0,CH1,CH2,CH3]"
+        # question = _smarts_with_ports(smarts, hubs)
+        # assert question == solution, question
+
+        # smarts = "O=C1CCC(C)CC1" # ring
+        # hubs= [5, 7]
+        # solution = "[OH0][CH0][CH2][CH2][CH1]([CH2,CH3])[CH2][CH1,CH2]"
+        # question = _smarts_with_ports(smarts, hubs)
+        # assert question == solution, question
+
+        # smarts = "c1ccccc1" # benzene
+        # hubs= [0,1,2]
+        # solution = "[c1][c][c][c][c][c1]"
+        # question = _smarts_with_ports(smarts, hubs)
+        # # No support for aromatics yet
+        # with pytest.raises(AssertionError):
+        #     assert question == solution, question
+
+        # smarts = "[C&R]" # benzene
+        # hubs= [0,0]
+        # solution = "[R;CH2,CH3,CH4]"
+        # question = _smarts_with_ports(smarts, hubs)
+        # # No support boolean &, yet
+        # with pytest.raises(AssertionError):
+        #     assert question == solution, question
+
+        # smarts = "[C]([Br])[Cl]" # two character elements
+        # hubs= [0]
+        # solution = "[CH1,CH2]([BrH0])[Cl;H0]"
+        # question = _smarts_with_ports(smarts, hubs)
+        # # No support two character elements yet
+        # with pytest.raises(AssertionError):
+        #     assert question == solution, question
+
+        # smarts = "[C][N+](=O)[O-]" # charges
+        # hubs= [0]
+        # solution = "[CH2,CH3][N+H0](OH0)[O-H0]"
+        # question = _smarts_with_ports(smarts, hubs)
+        # # No support for charges
+        # with pytest.raises(AssertionError):
+        #     assert question == solution, question
+
+        smarts = "C(N(C))"  # charges
+        hubs = [0, 0]
+        solution = "[CH1,CH2,CH3]([NH1]([CH3]))"
+        question = _smarts_with_ports(smarts, hubs)
+        # No support for charges
         assert question == solution, question
 
 
