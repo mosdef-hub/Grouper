@@ -22,7 +22,7 @@ class TestGeneralFragmentations(BaseTest):
         queries = [query1, query2, query3]
         solution = 2
 
-        question = fragment(smiles, queries, returnHandler="all matches")
+        question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == 2, question
 
     def test_two_fragmentations(self):
@@ -32,7 +32,7 @@ class TestGeneralFragmentations(BaseTest):
         queries = [query1, query2]
         solution = 2
 
-        question = fragment(smiles, queries, returnHandler="all matches")
+        question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == 2, question
 
     def test_larger_fragmentation(self):
@@ -44,7 +44,7 @@ class TestGeneralFragmentations(BaseTest):
         queries = [query1, query2, query3, query4]
         solution = 2
 
-        question = fragment(smiles, queries, returnHandler="all matches")
+        question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == solution, question
 
     def test_branching_fragmentations(self):
@@ -55,7 +55,7 @@ class TestGeneralFragmentations(BaseTest):
         queries = [query1, query2, query3]
         solution = 1
 
-        question = fragment(smiles, queries, returnHandler="all matches")
+        question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == solution, question
 
     def test_optimal_fragmentations_only(self):
@@ -66,7 +66,7 @@ class TestGeneralFragmentations(BaseTest):
         queries = [query1, query2, query3]
         solution = 1
 
-        question = fragment(smiles, queries, returnHandler="all matches")
+        question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == solution, question
 
     def test_trim_potential_fragmentations(self):
@@ -75,7 +75,7 @@ class TestGeneralFragmentations(BaseTest):
         queries = [query1]
         solution = 1
 
-        question = fragment(smiles, queries, returnHandler="all matches")
+        question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == solution, question
 
     def test_complex_possible_OC_fragmentations_from_strings(self):
@@ -87,7 +87,7 @@ class TestGeneralFragmentations(BaseTest):
         queries = [query1, query2, query3, query4]
         solution = 3
 
-        question = fragment(smiles, queries, returnHandler="all matches")
+        question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == solution, question
 
     def test_fragment_ring(self):
@@ -97,7 +97,7 @@ class TestGeneralFragmentations(BaseTest):
         queries = [query1, query2]
         solution = 1
 
-        question = fragment(smiles, queries, returnHandler="all matches")
+        question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == solution, question
         assert (
             len(question[0].nodes) == 7
@@ -108,7 +108,7 @@ class TestGeneralFragmentations(BaseTest):
         smiles = "CNC(C(C)O)C(N)CCN"
         # smiles = 'C-N-C(C-(C)-O)C-(N)-CC-N'
         solution = 1
-        question = fragment(smiles, queries, returnHandler="all matches")
+        question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == solution, question
         assert len(question[0].nodes) == 8, question  # 1 CO, 2 CC, 2 C, 3 N
         assert len(question[0].edges) == 7, (
@@ -268,10 +268,8 @@ class TestGeneralFragmentations(BaseTest):
         truth.add_edge((5, 1), (6, 0))
 
         out = fragment("CCC(C)NCCNC", node_defs, matchHubs=True)
-        print(
-            "This test is failing, need to take into account ports of a group into SMARTS String"
-        )
         assert out[0] == truth
+        # without matchHubs, no matches are found
         out = fragment("CCC(C)NCCNC", node_defs, matchHubs=False)
         assert out == []
 
@@ -356,7 +354,7 @@ class TestFragmentationUtilities(BaseTest):
             Group("ether", "O", [0, 0], is_smarts=True),
         ]
 
-        question = fragment(smiles, nodesList, returnHandler="single match")[0]
+        question = fragment(smiles, nodesList, returnHandler="ideal")[0]
         solution = {
             (1, 0, 0, 0, 1),
             (3, 3, 2, 0, 1),
@@ -571,7 +569,7 @@ class TestFragmentationOptions(BaseTest):
             assert question.nodes[i] == solution[i], (question, i)
 
     def test_fragmentation_returnHandler(self):
-        # Test 3.1 returnHandler: "single match"
+        # Test 3.1 returnHandler: "ideal"
         node_defs = [
             Group("ester", "COC", [0, 0, 2, 2]),
             Group("amine", "CN", [0, 0, 1, 1]),
@@ -590,10 +588,10 @@ class TestFragmentationOptions(BaseTest):
         solution.add_edge((1, 2), (2, 0))
         solution.add_edge((0, 1), (3, 0))
         solution.add_edge((2, 2), (4, 0))
-        question = fragment(smiles, node_defs, returnHandler="single match")[0]
+        question = fragment(smiles, node_defs, returnHandler="ideal")[0]
         assert question == solution, question
 
-        # Test 3.2 returnHandler "all matches"
+        # Test 3.2 returnHandler "ideal"
         solution1 = GroupGraph()
         solution1.add_node("ester", "COC", [0, 0, 1, 1])
         solution1.add_node("amine", "CN", [0, 0, 1, 1])
@@ -604,11 +602,11 @@ class TestFragmentationOptions(BaseTest):
         solution1.add_edge((1, 2), (2, 0))
         solution1.add_edge((0, 1), (3, 0))
         solution1.add_edge((2, 2), (4, 0))
-        question = fragment(smiles, node_defs, returnHandler="all matches")
-        assert question[0] == solution  # both are equally good interpretations
+        question = fragment(smiles, node_defs, returnHandler="ideal")
+        assert question[0] == solution  # both are equidealy good interpretations
         assert question[1] == solution1
 
-        # Test 3.3 returnHandler "fast match"
+        # Test 3.3 returnHandler "quick"
         node_defs = [
             Group("ethyl", "CC", [0, 0, 1, 1]),
             Group("amine", "N", [0, 0]),
@@ -616,7 +614,7 @@ class TestFragmentationOptions(BaseTest):
         ]
         smiles = "CCNCN"
 
-        question = fragment(smiles, node_defs, returnHandler="fast match")[0]
+        question = fragment(smiles, node_defs, returnHandler="quick")[0]
         solution = GroupGraph()
         solution.add_node("ethyl", "CC", [0, 0, 1, 1])
         solution.add_node("amine", "N", [0, 0])

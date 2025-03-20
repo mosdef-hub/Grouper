@@ -7,14 +7,13 @@ from typing import List, Literal, Union
 from rdkit import Chem
 
 from Grouper import Group, GroupGraph
+from Grouper import fragment as cpp_fragment
 
 
 def fragment(
     smiles: str,
     nodeDefs: Union[list, set, tuple],
-    returnHandler: Literal[
-        "single match", "all matches", "fast match"
-    ] = "single match",
+    returnHandler: Literal["ideal", "quick", "exhuastive"] = "ideal",
     nodeDefsSorter: Literal["size", "priority", "list"] = "list",
     incompleteGraphHandler: Literal["remove", "keep", "raise error"] = "remove",
     matchHubs: bool = False,
@@ -27,11 +26,13 @@ def fragment(
         A full molecule smiles string
     nodeDefs : list of Grouper.Group> or list of Grouper.GroupExtension
         A set of Groups or GroupExtensions to use for fragmenting molecules.
-    returnHandler : string, default "single match"
-        How to handle multiple matches. Options are: "single match", "all matches", "fast match"
-        - "single match": return a single match, which is the best match found using the least number of nodes.
-        - "fast match": return a single match, which is the best match found without trying all branching of matches.
-        - "all matches": return all matches, which is a list of all possible matches.
+    returnHandler : string, default "ideal"
+        How to handle multiple matches. Options are: "ideal", "quick", "exhaustive"
+        - "ideal": return a list of matches that are ideal "i.e. the shortes possible matches using the given order of nodeDefs.
+        - "quick": return the match that is found first, discarding the rest along the way. This can lead to the possibility of missing a
+            possible match as the acceptable match might get discarded along the way.
+        - "exhaustive": return all possible matches, which accounts for possible symmetry matches. Is much slower but more robust than the
+            other two returnHandlers.
     nodeDefsSorter : string, default "size"
         How to sort the nodeDefs. Options are: "size", "priority"
         - "size": sort by size of the group, where size is defined first as the number
@@ -86,6 +87,8 @@ def fragment(
     mol = Chem.MolFromSmiles(smiles)  # convert to RDKit mol
     if not smiles or not nodeDefs:  #
         return []
+    if returnHandler == "exhaustive":  # call cpp fragmenter for exhaustive matching
+        return cpp_fragment(smiles, set(nodeDefs))
     queries, nodeDefs = _generate_queries_from_nodedefs(
         nodeDefs, nodeDefsSorter, matchHubs
     )
@@ -98,7 +101,9 @@ def fragment(
         for currentMatchState in matchesList:
             # should return [match] if query doesn't change anything
             # should return list of matches, corresponding to multiple query options
-            newMatchesList = _generate_new_matches(mol, query, currentMatchState, i)
+            newMatchesList = _generate_new_matches(
+                mol, query, currentMatchState, i, returnHandler
+            )
             print(f"{newMatchesList=}")
             for newMatchState in newMatchesList:
                 updateMatchesSet.add(newMatchState)  # matchState is hashable
@@ -117,16 +122,6 @@ def fragment(
             raise ValueError(
                 "No complete graphs found. Please use a different set of nodDefs."
             )
-    if returnHandler == "single match":
-        if not matchesList:  # return null if empty
-            return []
-        n_nodes = mol.GetNumAtoms()
-        for (
-            matchState
-        ) in matchesList:  # loop to select smallest possible number of nodes matched
-            if len(matchState.all_group_indices) < n_nodes:
-                n_nodes = len(matchState.all_group_indices)
-                matchesList = [matchState]  # only use best match
     allGroupGraphList = [
         _group_graph_from_match(
             possible_fragmentation, nodeDefs, incompleteGraphHandler
@@ -253,26 +248,20 @@ def _get_group_bonds(mol, group, latest_group_indices):
     return tuple(bonds)
 
 
-def _generate_new_matches(
-    mol, query, matchState, nodeDefsIndex, returnHandler="all matches"
-):
+def _generate_new_matches(mol, query, matchState, nodeDefsIndex, returnHandler="ideal"):
     # Substructs are all possible groups
     substructsList = mol.GetSubstructMatches(query)
     # Generate all maximal sets of compatible groups
     # i.e. [(0,1), (0,3)] -> [[(0,1)], [(0,3)]]
     # list of states, which is a list of substructures
     # print(f"{substructsList=}")
-    if returnHandler == "fast match":
+    if returnHandler.lower() == "quick":
         iterPossibleStates = _get_first_compatible_tuples(substructsList)
-    elif (
-        returnHandler == "all matches"
-    ):  # may also do getExhaustiveCompatibleSubSets for returnHandler
-        iterPossibleStates = _get_maximal_compatible_tuples(substructsList)
-    elif returnHandler == "single match":
+    elif returnHandler.lower() == "ideal":
         iterPossibleStates = _get_maximal_compatible_tuples(substructsList)
     else:
         raise ValueError(
-            f"Invalid returnHandler: {returnHandler}. Must be one of `all matches`, `fast match`, or `single match`"
+            f"Invalid returnHandler: {returnHandler}. Must be one of `ideal`, `quick`, or `exhaustive`"
         )
 
     print(f"##########{iterPossibleStates=}\n\n")
@@ -664,7 +653,6 @@ def _generate_queries_from_nodedefs(nodeDefs, nodeDefsSorter, matchHubs):
     elif matchHubs:
         for group in nodeDefs:
             if group.is_smarts:
-                # import pdb; pdb.set_trace()
                 queries.append(
                     Chem.MolFromSmarts(_smarts_with_ports(group.pattern, group.hubs))
                 )
