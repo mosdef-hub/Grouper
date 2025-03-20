@@ -1283,30 +1283,6 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     for (const auto& h : hubs) {
         queryNeededFreeValency[h]++;
     }
-    // Add a count for the bonds that are in the mol graph
-    // for (const auto& [nodeid, dstSet] : query.edges) {
-    //     int totalBondCount = 0;
-    //     for (const auto& [dst, order] : dstSet) {
-    //         totalBondCount += order;
-    //     }
-    //     queryNeededFreeValency[nodeid] += totalBondCount;
-    // }
-    // std::cout<<"Query Hub Counts: "<<std::endl;
-    // for (const auto& [id, count] : queryNeededFreeValency) {
-    //     std::cout << id << ": " << count << std::endl;
-    // }
-    // std::cout << std::endl;
-
-    // std::cout<<"Query Graph: "<<std::endl;
-    // std::cout<<query.printGraph()<<std::endl;
-    // std::cout<<"This Graph: "<<std::endl;
-    // std::cout<<this->printGraph()<<std::endl;
-
-    // std::cout<<"Query Hub Counts: "<<std::endl;
-    // for (const auto& [id, count] : queryNeededFreeValency) {
-    //     std::cout << id << ": " << count << std::endl;
-    // }
-    // std::cout << std::endl;
 
     // Step 1: Pre-filter nodes in the graph based on query node attributes
     std::unordered_map<NodeIDType, std::vector<NodeIDType>> candidateNodes; // Maps query nodes to possible candidates in the main graph
@@ -1325,50 +1301,19 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
         }
     }
 
-    // std::cout << "Candidate Nodes: " << std::endl;
-    // for (const auto& [queryNode, candidates] : candidateNodes) {
-    //     std::cout << queryNode << ": ";
-    //     for (const auto& candidate : candidates) {
-    //         std::cout << candidate << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
-    // std::cout << std::endl;
-
     // Step 2: Backtracking function to explore mappings
     std::function<void(std::unordered_map<NodeIDType, NodeIDType>&, std::unordered_set<NodeIDType>&)> backtrack =
         [&](std::unordered_map<NodeIDType, NodeIDType>& currentMapping, std::unordered_set<NodeIDType>& usedNodes) {
-            // Debug: Print the current mapping
-            // std::cout << "Current Mapping: ";
-            // for (const auto& mapping : currentMapping) {
-            //     std::cout << "(" << mapping.first << " -> " << mapping.second << ") ";
-            // }
-            // std::cout << std::endl;
             // If all query nodes are mapped, validate hubs
             if (currentMapping.size() == query.nodes.size()) {
                 // Check if the hubs specified match the query node hubs
                 for (const auto& [id, count] : queryNeededFreeValency) {
                     NodeIDType graphNodeid = currentMapping[id];
-                    // printf("Query Group: %d", id);
-                    // printf("Graph Group: %d", graphNodeid);
-                    // printf("this->getFreeValency(graphNodeid): %d", this->getFreeValency(graphNodeid));
-                    // printf("count: %d", count);
-                    // printf("\n");
+
                     if(this->getFreeValency(graphNodeid) != count) { // Check if number of bonds for query node matches the number of hubs
                         return;
                     }
                 }
-                // printf("Hubs Matched");
-                // Check if the bonds are the same
-                // for (const auto& [queryNodeid, dstSet] : query.edges) {
-                //     for (const auto& [dst, order] : dstSet) {
-                //         NodeIDType graphNodeid = currentMapping[queryNodeid];
-                //         auto it = edges.find(graphNodeid);
-                //         if (it == edges.end() || it->second.find(std::make_pair(currentMapping[dst], order)) == it->second.end()) {
-                //             return;
-                //         }
-                //     }
-                // }
                 for(const auto& [src, dst, order] : query.edges) {
                     NodeIDType graphNodeid = currentMapping[src];
                     auto it = edges.find(std::make_tuple(graphNodeid, currentMapping[dst], order));
@@ -1376,8 +1321,6 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
                         return;
                     }
                 }
-                // printf("Bonds Matched\n");
-
 
                 // Add the valid match
                 std::vector<std::pair<NodeIDType, NodeIDType>> match;

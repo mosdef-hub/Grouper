@@ -96,16 +96,13 @@ def fragment(
 
     matchesList = [MatchState(mol.GetNumAtoms())]
     for i, query in enumerate(queries):
-        # print(f"\nQuerying {[a.GetSymbol() for a in query.GetAtoms()]}")
         updateMatchesDict = OrderedDict()  # use dict to keep order of set
-        # print(f"{matchesList=}")
         for currentMatchState in matchesList:
             # should return [match] if query doesn't change anything
             # should return list of matches, corresponding to multiple query options
             newMatchesList = _generate_new_matches(
                 mol, query, currentMatchState, i, returnHandler
             )
-            # print(f"{newMatchesList=}")
             for newMatchState in newMatchesList:
                 updateMatchesDict.update(
                     {newMatchState: None}
@@ -216,8 +213,6 @@ def _identify_bond_partner_group_and_hub(currentGroups, bondedAtomIndex):
     for j, group_by_index in enumerate(currentGroups):
         for k, atomid in enumerate(group_by_index):
             if atomid == bondedAtomIndex:
-                bonded_groupIndex = j
-                bonded_hubIndex = k
                 return (j, k)
     return -1, -1
 
@@ -257,9 +252,8 @@ def _generate_new_matches(mol, query, matchState, nodeDefsIndex, returnHandler="
     # Substructs are all possible groups
     substructsList = mol.GetSubstructMatches(query)
     # Generate all maximal sets of compatible groups
-    # i.e. [(0,1), (0,3)] -> [[(0,1)], [(0,3)]]
+    # i.e. [(0,1), (0,3)] -> [[(0,1)], [(0,3)]], since both have index 0.
     # list of states, which is a list of substructures
-    # print(f"{substructsList=}")
     if returnHandler.lower() == "quick":
         iterPossibleStates = _get_first_compatible_tuples(substructsList)
     elif returnHandler.lower() == "ideal":
@@ -269,13 +263,11 @@ def _generate_new_matches(mol, query, matchState, nodeDefsIndex, returnHandler="
             f"Invalid returnHandler: {returnHandler}. Must be one of `ideal`, `quick`, or `exhaustive`"
         )
 
-    # print(f"##########{iterPossibleStates=}\n\n")
     newMatchesList = []
     for state in iterPossibleStates:
         groupStr = tuple(
             a.GetSymbol() for a in query.GetAtoms()
-        )  # used for debugging matches
-        # print(f"{state=}")
+        )  # The atom strings that will be used to define the group
         newMatch = _update_matches_by_state(
             mol, state, matchState, groupStr, nodeDefsIndex
         )  # return `match` if no match possible
@@ -292,7 +284,6 @@ def _get_maximal_compatible_tuples(tupleofGroups):
     compatibleGroupsList = [(tupleofGroups[0],)]
     for group in tupleofGroups[1:]:  # iter over remaining groups
         loopUpdateGroupsSet = set()
-        # print(f"{compatibleGroupsList=}")
         for groupTuple in compatibleGroupsList:  # iter over previously paired groups
             # check compatibility function
             loopUpdateGroupsSet.add(groupTuple)
@@ -300,16 +291,12 @@ def _get_maximal_compatible_tuples(tupleofGroups):
             clashes = _mask_number_clashes(
                 groupTuple, group
             )  # indexList that corresponds to clashes
-            n_clashes = sum(clashes)
-            # print(f"{clashes=}")
             compatibleGroups = tuple(
                 [group for group, mask in zip(groupTuple, clashes) if not mask]
             )
-            # print(f"{group=}: {compatibleGroups=}")
             loopUpdateGroupsSet.add(compatibleGroups + (group,))
 
         # take longest element of set
-        # print(f"{loopUpdateGroupsSet=}")
         compatibleGroupsList = list(loopUpdateGroupsSet)
     maxLength = max(len(compatibleGroups) for compatibleGroups in compatibleGroupsList)
     compatibleGroupsList = list(
@@ -317,7 +304,6 @@ def _get_maximal_compatible_tuples(tupleofGroups):
         for compatibleGroups in compatibleGroupsList
         if len(compatibleGroups) == maxLength
     )  # keep only longest options
-    # print(f"{compatibleGroupsList=}")
     return compatibleGroupsList
 
 
@@ -330,7 +316,6 @@ def _get_first_compatible_tuples(tupleofGroups):
     # compatibleGroupsList = [(tupleofGroups[0],)]
     compatibleGroupsList = [tupleofGroups[0]]
     for group in tupleofGroups[1:]:  # iter over remaining groups
-        # print(f"{compatibleGroupsList=}")
         # check compatibility function
         clashes = _mask_number_clashes(
             compatibleGroupsList, group
@@ -396,7 +381,6 @@ def _mask_number_clashes(groupList, group):
     maskList = []
     for compGroup in groupList:
         compSet = set(compGroup)
-        # print(f"{compSet=} == {groupSet=}")
         maskList.append(not compSet.isdisjoint(groupSet))
     return maskList
 
@@ -673,12 +657,17 @@ def _generate_queries_from_nodedefs(nodeDefs, nodeDefsSorter, matchHubs):
                 queries.append(Chem.MolFromSmiles(group.pattern))
     # sort queries
     if nodeDefsSorter == "size":
-        size_sorter = lambda pair: (
-            pair[0].GetNumHeavyAtoms(),
-            sum(atom.GetMass() for atom in pair[0].GetAtoms()),
-        )
         queries, nodeDefs = (
             list(t)
-            for t in zip(*sorted(zip(queries, nodeDefs), key=size_sorter, reverse=True))
+            for t in zip(
+                *sorted(zip(queries, nodeDefs), key=_size_sorter, reverse=True)
+            )
         )
     return queries, nodeDefs
+
+
+def _size_sorter(pair):
+    return (
+        pair[0].GetNumHeavyAtoms(),
+        sum(atom.GetMass() for atom in pair[0].GetAtoms()),
+    )
