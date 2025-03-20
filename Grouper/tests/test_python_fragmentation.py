@@ -522,7 +522,6 @@ class TestFragmentationOptions(BaseTest):
 
     def test_fragmentation_nodeDefsSorter(self):
         # Test 2.1: nodeDefsSorter "size", "priority" "list"
-        # NOTE: THIS TEST IS FLAKY, IF DON"T have SINGLE MATCH TAKING LEAST NUMBER OF NODES
         #   Will return different groups ordered
         node_defs = [
             Group("amine", "N", [0, 0]),
@@ -538,9 +537,7 @@ class TestFragmentationOptions(BaseTest):
             Group("amine", "N", [0, 0]),
             Group("alkyl", "C", [0, 0]),
         ]
-        question = fragment(smiles, node_defs, nodeDefsSorter="size")[
-            0
-        ]  # this test is flaky!
+        question = fragment(smiles, node_defs, nodeDefsSorter="size")[0]
         for i in range(len(question.nodes)):
             assert question.nodes[i] == solution[i]  # , (question, i)
 

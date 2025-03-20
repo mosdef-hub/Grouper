@@ -1,7 +1,7 @@
 """Module for breaking down smiles molecules into Groups and GroupGraphs."""
 
 import copy
-from collections import Counter
+from collections import Counter, OrderedDict
 from typing import List, Literal, Union
 
 from rdkit import Chem
@@ -29,6 +29,7 @@ def fragment(
     returnHandler : string, default "ideal"
         How to handle multiple matches. Options are: "ideal", "quick", "exhaustive"
         - "ideal": return a list of matches that are ideal "i.e. the shortes possible matches using the given order of nodeDefs.
+            The list that is returned are sorted on the shortest `GroupGraph.Groups`.
         - "quick": return the match that is found first, discarding the rest along the way. This can lead to the possibility of missing a
             possible match as the acceptable match might get discarded along the way.
         - "exhaustive": return all possible matches, which accounts for possible symmetry matches. Is much slower but more robust than the
@@ -96,20 +97,22 @@ def fragment(
     matchesList = [MatchState(mol.GetNumAtoms())]
     for i, query in enumerate(queries):
         # print(f"\nQuerying {[a.GetSymbol() for a in query.GetAtoms()]}")
-        updateMatchesSet = set()
-        print(f"{matchesList=}")
+        updateMatchesDict = OrderedDict()  # use dict to keep order of set
+        # print(f"{matchesList=}")
         for currentMatchState in matchesList:
             # should return [match] if query doesn't change anything
             # should return list of matches, corresponding to multiple query options
             newMatchesList = _generate_new_matches(
                 mol, query, currentMatchState, i, returnHandler
             )
-            print(f"{newMatchesList=}")
+            # print(f"{newMatchesList=}")
             for newMatchState in newMatchesList:
-                updateMatchesSet.add(newMatchState)  # matchState is hashable
-        if updateMatchesSet:  # only update if matches have been found
+                updateMatchesDict.update(
+                    {newMatchState: None}
+                )  # matchState is hashable
+        if updateMatchesDict:  # only update if matches have been found
             matchesList = list(
-                updateMatchesSet
+                updateMatchesDict.keys()
             )  # reset matchesList for next round of matching
     # Filter all matches based on fragment arguments
     if incompleteGraphHandler == "remove" or incompleteGraphHandler == "raise error":
@@ -122,6 +125,8 @@ def fragment(
             raise ValueError(
                 "No complete graphs found. Please use a different set of nodDefs."
             )
+    # sort by least number of nodes
+    matchesList.sort(key=lambda x: len(x.all_group_indices))
     allGroupGraphList = [
         _group_graph_from_match(
             possible_fragmentation, nodeDefs, incompleteGraphHandler
@@ -264,7 +269,7 @@ def _generate_new_matches(mol, query, matchState, nodeDefsIndex, returnHandler="
             f"Invalid returnHandler: {returnHandler}. Must be one of `ideal`, `quick`, or `exhaustive`"
         )
 
-    print(f"##########{iterPossibleStates=}\n\n")
+    # print(f"##########{iterPossibleStates=}\n\n")
     newMatchesList = []
     for state in iterPossibleStates:
         groupStr = tuple(
