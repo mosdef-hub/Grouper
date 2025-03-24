@@ -89,6 +89,9 @@ def fragment(
     if not smiles or not nodeDefs:  #
         return []
     if returnHandler == "exhaustive":  # call cpp fragmenter for exhaustive matching
+        _, nodeDefs = _generate_queries_from_nodedefs(
+            nodeDefs, nodeDefsSorter, matchHubs
+        )
         return cpp_fragment(smiles, set(nodeDefs))
     queries, nodeDefs = _generate_queries_from_nodedefs(
         nodeDefs, nodeDefsSorter, matchHubs

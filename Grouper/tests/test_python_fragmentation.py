@@ -132,37 +132,37 @@ class TestGeneralFragmentations(BaseTest):
         node_defs.add(Group("hydroxyl", "O", [0]))
         node_defs.add(Group("alkene", "C=C", [0, 0, 1, 1]))
 
-        truth = GroupGraph()
-        truth.add_node("hydroxyl", "O", [0])
-        truth.add_node("alkene", "C=C", [0, 0, 1, 1])
-        truth.add_edge((0, 0), (1, 0))
+        solution = GroupGraph()
+        solution.add_node("hydroxyl", "O", [0])
+        solution.add_node("alkene", "C=C", [0, 0, 1, 1])
+        solution.add_edge((0, 0), (1, 0))
 
         smiles = "C=CO"
 
-        out = fragment(smiles, node_defs)
-        assert truth in out
+        question = fragment(smiles, node_defs)
+        assert solution in question
 
     def test_full_fragmentation_double_bond(self):
         node_defs = set()
         node_defs.add(Group("amine", "N", [0, 0]))
         node_defs.add(Group("alkene", "C=C", [0, 0, 1, 1]))
 
-        truth = GroupGraph()
-        truth.add_node("amine", "N", [0, 0])
-        truth.add_node("alkene", "C=C", [0, 0, 1, 1])
-        truth.add_edge((0, 0), (1, 0))
+        solution = GroupGraph()
+        solution.add_node("amine", "N", [0, 0])
+        solution.add_node("alkene", "C=C", [0, 0, 1, 1])
+        solution.add_edge((0, 0), (1, 0))
 
         smiles = "C=CN"
 
-        out = fragment(smiles, node_defs)
-        assert truth in out
+        question = fragment(smiles, node_defs)
+        assert solution in question
 
     def test_invalid_smiles(self):
         node_defs = set()
         smiles = ""
 
-        out = fragment(smiles, node_defs)
-        assert out == []
+        question = fragment(smiles, node_defs)
+        assert question == []
 
         node_defs = set()
         smiles = "C==C"  # Invalid SMILES
@@ -180,17 +180,17 @@ class TestGeneralFragmentations(BaseTest):
         node_defs.add(Group("alkene", "C=C", [0, 0, 1, 1]))
         node_defs.add(Group("oxygen", "O", [0, 0]))
 
-        truth = GroupGraph()
-        truth.add_node("oxygen", "O", [0, 0])
-        truth.add_node("alkene", "C=C", [0, 0, 1, 1])
-        truth.add_node("amine", "N", [0])
-        truth.add_edge((0, 0), (1, 0))
-        truth.add_edge((0, 1), (2, 0))
+        solution = GroupGraph()
+        solution.add_node("oxygen", "O", [0, 0])
+        solution.add_node("alkene", "C=C", [0, 0, 1, 1])
+        solution.add_node("amine", "N", [0])
+        solution.add_edge((0, 0), (1, 0))
+        solution.add_edge((0, 1), (2, 0))
 
         smiles = "C=CON"
 
-        out = fragment(smiles, node_defs)
-        assert truth in out
+        question = fragment(smiles, node_defs)
+        assert solution in question
 
     def test_multi_fragment_COO(self):
         node_defs = set()
@@ -202,45 +202,45 @@ class TestGeneralFragmentations(BaseTest):
         node_defs.add(Group("alkene_secondary_amine", "CNC", [0, 0, 1, 2, 2]))
         node_defs.add(Group("alkene", "C", [0, 0, 0]))
 
-        truth = GroupGraph()
-        truth.add_node("ester", "C(=O)O", [0, 2])
-        truth.add_node("oxyl", "O", [0, 0])
-        truth.add_node("ester", "C(=O)(O)", [0, 2])
-        truth.add_edge((0, 1), (1, 0))
-        truth.add_edge((1, 1), (2, 0))
+        solution = GroupGraph()
+        solution.add_node("ester", "C(=O)O", [0, 2])
+        solution.add_node("oxyl", "O", [0, 0])
+        solution.add_node("ester", "C(=O)(O)", [0, 2])
+        solution.add_edge((0, 1), (1, 0))
+        solution.add_edge((1, 1), (2, 0))
 
-        out = fragment("O=COOC(=O)O", node_defs)
-        assert truth in out
+        question = fragment("O=COOC(=O)O", node_defs)
+        assert solution in question
 
-        truth = GroupGraph()
-        truth.add_node("ester", "C(=O)O", [0, 2])
-        truth.add_node("alkene_secondary_amine", "C(N(C))", [0, 0])
-        truth.add_node("amine", "N", [0, 0, 0])
-        truth.add_edge((0, 1), (2, 0))
-        truth.add_edge((1, 1), (2, 1))
+        solution = GroupGraph()
+        solution.add_node("ester", "C(=O)O", [0, 2])
+        solution.add_node("alkene_secondary_amine", "C(N(C))", [0, 0])
+        solution.add_node("amine", "N", [0, 0, 0])
+        solution.add_edge((0, 1), (2, 0))
+        solution.add_edge((1, 1), (2, 1))
 
-        out = fragment("CNCNOC=O", node_defs)
-        assert truth in out
+        question = fragment("CNCNOC=O", node_defs)
+        assert solution in question
 
-        truth = GroupGraph()
-        truth.add_node("alkene", "C", [0, 0, 0])
-        truth.add_node("amine", "N", [0, 0, 0])
-        truth.add_node("oxyl", "O", [0, 0])
-        truth.add_edge((0, 1), (1, 0))
-        truth.add_edge((1, 1), (2, 0))
+        solution = GroupGraph()
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("amine", "N", [0, 0, 0])
+        solution.add_node("oxyl", "O", [0, 0])
+        solution.add_edge((0, 1), (1, 0))
+        solution.add_edge((1, 1), (2, 0))
 
-        out = fragment("CNO", node_defs)
-        assert truth in out
+        question = fragment("CNO", node_defs)
+        assert solution in question
 
-        truth = GroupGraph()
-        truth.add_node("oxyl", "O", [0, 0])
-        truth.add_node("oxyl", "O", [0, 0])
-        truth.add_node("ester", "C(=O)O", [0, 2])
-        truth.add_edge((0, 1), (1, 0))
-        truth.add_edge((1, 1), (2, 0))
+        solution = GroupGraph()
+        solution.add_node("oxyl", "O", [0, 0])
+        solution.add_node("oxyl", "O", [0, 0])
+        solution.add_node("ester", "C(=O)O", [0, 2])
+        solution.add_edge((0, 1), (1, 0))
+        solution.add_edge((1, 1), (2, 0))
 
-        out = fragment("O=C(O)OO", node_defs)
-        assert truth in out
+        question = fragment("O=C(O)OO", node_defs)
+        assert solution in question
 
     def test_fragment_match_hubs(self):
         node_defs = set()
@@ -252,55 +252,55 @@ class TestGeneralFragmentations(BaseTest):
         )  # can be made of amine and alkene
         node_defs.add(Group("alkene", "C", [0, 0, 0], True))
 
-        truth = GroupGraph()
-        truth.add_node("alkene_secondary_amine", "C(N(C))", [0, 0], True)
-        truth.add_node("alkene", "C", [0, 0, 0], True)
-        truth.add_node("amine", "N", [0, 0, 0], True)
-        truth.add_node("alkene", "C", [0, 0, 0], True)
-        truth.add_node("alkene", "C", [0, 0, 0], True)
-        truth.add_node("alkene", "C", [0, 0, 0], True)
-        truth.add_node("alkene", "C", [0, 0, 0], True)
-        truth.add_edge((0, 1), (1, 0))
-        truth.add_edge((1, 1), (2, 0))
-        truth.add_edge((2, 1), (3, 0))
-        truth.add_edge((3, 1), (4, 0))
-        truth.add_edge((3, 2), (5, 0))
-        truth.add_edge((5, 1), (6, 0))
+        solution = GroupGraph()
+        solution.add_node("alkene_secondary_amine", "C(N(C))", [0, 0], True)
+        solution.add_node("alkene", "C", [0, 0, 0], True)
+        solution.add_node("amine", "N", [0, 0, 0], True)
+        solution.add_node("alkene", "C", [0, 0, 0], True)
+        solution.add_node("alkene", "C", [0, 0, 0], True)
+        solution.add_node("alkene", "C", [0, 0, 0], True)
+        solution.add_node("alkene", "C", [0, 0, 0], True)
+        solution.add_edge((0, 1), (1, 0))
+        solution.add_edge((1, 1), (2, 0))
+        solution.add_edge((2, 1), (3, 0))
+        solution.add_edge((3, 1), (4, 0))
+        solution.add_edge((3, 2), (5, 0))
+        solution.add_edge((5, 1), (6, 0))
 
-        out = fragment("CCC(C)NCCNC", node_defs, matchHubs=True)
-        assert out[0] == truth
-        # without matchHubs, no matches are found
-        out = fragment("CCC(C)NCCNC", node_defs, matchHubs=False)
-        assert out == []
+        question = fragment("CCC(C)NCCNC", node_defs, matchHubs=True)
+        assert question[0] == solution
+        # withquestion matchHubs, no matches are found
+        question = fragment("CCC(C)NCCNC", node_defs, matchHubs=False)
+        assert question == []
 
         node1 = Group("1methyl", "C", [0, 0, 0])
         node2 = Group("2methyl", "C", [0, 0])
 
-        truth = GroupGraph()
-        truth.add_node("1methyl", "C", [0])
-        truth.add_node("1methyl", "C", [0])
-        truth.add_node("2methyl", "C", [0, 0])
-        truth.add_edge((0, 0), (2, 0))
-        truth.add_edge((1, 0), (2, 1))
+        solution = GroupGraph()
+        solution.add_node("1methyl", "C", [0])
+        solution.add_node("1methyl", "C", [0])
+        solution.add_node("2methyl", "C", [0, 0])
+        solution.add_edge((0, 0), (2, 0))
+        solution.add_edge((1, 0), (2, 1))
 
         node_defs = {node2, node1}  # {node2}
-        out = fragment("CCC", node_defs)
-        assert truth in out, out
+        question = fragment("CCC", node_defs)
+        assert solution in question, question
 
-        truth = GroupGraph()
-        truth.add_node("carbon", "C", [0, 0, 0, 0])
-        truth.add_node("ether", "CO", [0, 1])
-        truth.add_node("ether", "CO", [0, 1])
-        truth.add_edge((0, 0), (2, 0))
-        truth.add_edge((2, 1), (1, 0))
+        solution = GroupGraph()
+        solution.add_node("carbon", "C", [0, 0, 0, 0])
+        solution.add_node("ether", "CO", [0, 1])
+        solution.add_node("ether", "CO", [0, 1])
+        solution.add_edge((0, 0), (2, 0))
+        solution.add_edge((2, 1), (1, 0))
 
         node1 = Group("4methyl", "C", [0, 0, 0, 0])
         node2 = Group("methanol", "CO", [0, 0, 0, 1])  # methanol
         node3 = Group("ether", "CO", [0, 0, 0, 1])  # ether
 
         node_defs = {node3, node2, node1}  # {node2}
-        out = fragment("CCOCO", node_defs)
-        assert truth in out, out
+        question = fragment("CCOCO", node_defs)
+        assert solution in question, question
 
 
 class TestFragmentationUtilities(BaseTest):
@@ -621,3 +621,84 @@ class TestFragmentationOptions(BaseTest):
         solution.add_edge((1, 0), (2, 0))
         solution.add_edge((2, 0), (3, 0))
         assert question == solution, question
+
+        # Test 3.4 returnHandler "exhaustive"
+        node_defs = set()
+        node_defs.add(Group("oxyl", "O", [0, 0]))  # oxyl group
+        node_defs.add(Group("ester", "C(=O)O", [0, 2]))  # Ester group
+        node_defs.add(Group("amine", "N", [0, 0, 0]))  # Amine group
+        node_defs.add(
+            Group("alkene_secondary_amine", "C(N(C))", [0, 0])
+        )  # can be made of amine and alkene
+        node_defs.add(Group("alkene", "C", [0, 0, 0]))
+
+        solution = GroupGraph()
+        solution.add_node("alkene_secondary_amine", "C(N(C))", [0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("amine", "N", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_edge((0, 1), (1, 0))
+        solution.add_edge((1, 1), (2, 0))
+        solution.add_edge((2, 1), (3, 0))
+        solution.add_edge((3, 1), (4, 0))
+        solution.add_edge((3, 2), (5, 0))
+        solution.add_edge((5, 1), (6, 0))
+
+        question = fragment("CCC(C)NCCNC", node_defs, returnHandler="exhaustive")
+
+        assert solution in question
+        assert len(question) == 1
+
+        # Test 3.5 returnHandler "exhaustive" multiple solutions
+        node_defs = set()
+        node_defs.add(Group("amine", "N", [0, 0, 0]))  # Amine group
+        node_defs.add(
+            Group("alkene_secondary_amine", "C(N(C))", [0, 0, 0, 1, 2, 2, 2])
+        )  # can be made of amine and alkene
+        node_defs.add(Group("alkene", "C", [0, 0, 0]))
+
+        solution = GroupGraph()
+        solution.add_node("alkene_secondary_amine", "C(N(C))", [0, 0, 0, 1, 2, 2, 2])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("amine", "N", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_edge((0, 1), (1, 0))
+        solution.add_edge((1, 1), (2, 0))
+        solution.add_edge((2, 1), (3, 0))
+        solution.add_edge((3, 1), (4, 0))
+        solution.add_edge((3, 2), (5, 0))
+        solution.add_edge((5, 1), (6, 0))
+
+        question = fragment("CCC(C)NCCNC", node_defs, returnHandler="exhaustive")
+
+        assert solution in question
+        assert len(question) == 9
+
+        # Test 3.6 returnHandler "exhaustive" with smiles
+        node_defs = ["O", "C(=O)O", "N", "C(N(C))", "C"]
+
+        solution = GroupGraph()
+        solution.add_node("alkene_secondary_amine", "C(N(C))", [0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("amine", "N", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_node("alkene", "C", [0, 0, 0])
+        solution.add_edge((0, 1), (1, 0))
+        solution.add_edge((1, 1), (2, 0))
+        solution.add_edge((2, 1), (3, 0))
+        solution.add_edge((3, 1), (4, 0))
+        solution.add_edge((3, 2), (5, 0))
+        solution.add_edge((5, 1), (6, 0))
+
+        question = fragment("CCC(C)NCCNC", node_defs, returnHandler="exhaustive")
+
+        assert solution in question
+        assert len(question) == 9
