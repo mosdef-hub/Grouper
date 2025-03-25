@@ -5,8 +5,8 @@ from Grouper._Grouper import (
     Group,
     GroupGraph,
     exhaustive_generate,
-    fragment,
+    exhaustive_fragment,
     random_generate,
 )
 
-from .fragmentation import fragment as python_fragment
+from .fragmentation import fragment

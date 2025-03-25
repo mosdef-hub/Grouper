@@ -158,7 +158,7 @@ PYBIND11_MODULE(_Grouper, m) {
         py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
         py::arg("negative_constraints") = std::unordered_set<std::string>{}
     );
-    m.def("fragment", &fragment,
+    m.def("exhaustive_fragment", &fragment,
         py::arg("smiles"),
         py::arg("node_defs")
     );

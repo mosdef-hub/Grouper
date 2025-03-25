@@ -7,7 +7,7 @@ from typing import List, Literal, Union
 from rdkit import Chem
 
 from Grouper import Group, GroupGraph
-from Grouper import fragment as cpp_fragment
+from Grouper import exhaustive_fragment
 
 
 def fragment(
@@ -92,7 +92,7 @@ def fragment(
         _, nodeDefs = _generate_queries_from_nodedefs(
             nodeDefs, nodeDefsSorter, matchHubs
         )
-        return cpp_fragment(smiles, set(nodeDefs))
+        return exhaustive_fragment(smiles, set(nodeDefs))
     queries, nodeDefs = _generate_queries_from_nodedefs(
         nodeDefs, nodeDefsSorter, matchHubs
     )
