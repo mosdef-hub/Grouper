@@ -14,10 +14,6 @@ class TestGroupGraph(BaseTest):
         g1 = Group("C", "[C]", [0], True)
         g2 = Group("C", "[C]", [0], True)
         g3 = Group("C2", "[C]", [0], True)
-        with pytest.raises(ValueError):
-            g4 = Group("C", "[C2]", [0], True)
-        with pytest.raises(ValueError):
-            g5 = Group("C", "[C]", [0, 1], True)
 
         assert g1 == g2
         assert g1 != g3

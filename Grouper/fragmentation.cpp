@@ -309,7 +309,7 @@ std::vector<GroupGraph> fragment(
                     throw std::invalid_argument("Parent node not found.");
                 }
 
-                tempGraph.addNode(parent->ntype, parent->pattern, parent->hubs);
+                tempGraph.addNode(parent->ntype, parent->pattern, parent->hubs, parent->isSmarts);
 
                 for (const auto& [queryid, molid] : match) {
                     tempAtomToNodeid[molid] = currentId;
