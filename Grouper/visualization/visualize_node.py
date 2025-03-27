@@ -5,25 +5,25 @@ from PIL import Image, ImageDraw, ImageFont
 from rdkit import Chem
 from rdkit.Chem import Draw
 
-from Grouper.libraries.Libraries import NodeTrace
+from Grouper.libraries.Libraries import GroupExtension
 from Grouper import Group
 
 
-def visualize_node_trace(
-    node_trace: NodeTrace,
+def visualize_group_extension(
+    group_extension: GroupExtension,
     text: Optional[Union[str, bool]] = "Matching Subgraph",
     sanitize_smiles: bool = False,
     highlight_color: Tuple[float, float, float, float] = (1.0, 0.5, 0.5, 1.0),
     draw_options: dict = None,
 ) -> Image.Image:
-    """A method to visualize a node trace, which definies a node and what that node is connected to.
+    """A method to visualize a GroupExtension, which definies a node and what that node is connected to.
 
     Uses RDKit and PIL to create an image of the Group Node and where is definited
     to be located in a molecule. Extra arguments can help tune the look of this output image.
 
     Parameters
     ----------
-    node_trace : Grouper.libraries.Libraries.NodeTrace
+    group_extension : Grouper.libraries.Libraries.GroupExtension
         The Node with chemical information (SMARTS) to parse and visualize
     text : str, optional, default="Matching Subgraph"
         Text to place as a legend under the graph. The color matches the highlighted portion,
@@ -48,9 +48,9 @@ def visualize_node_trace(
     3. RDKit SMARTS: https://www.rdkit.org/docs/RDKit_Book.html#smarts-support-and-extensions
     4. RDKit SMILES: https://www.rdkit.org/docs/RDKit_Book.html#smiles-support-and-extensions
     """
-    mol = Chem.MolFromSmarts(node_trace.smarts)  # -CH2-
+    mol = Chem.MolFromSmarts(group_extension.smarts)  # -CH2-
     if not mol:
-        raise ValueError(f"Could not parse SMARTS: {node_trace.smarts}")
+        raise ValueError(f"Could not parse SMARTS: {group_extension.smarts}")
 
     # Clean ups structures
     mol.UpdatePropertyCache()
@@ -61,14 +61,14 @@ def visualize_node_trace(
     # initialize SMARTS and SMILES objects for molecule
     # note, sanitize can sometimes improve the implicit/explicit hydrogens found in RDKit. Only turn on if you verify the SMARTS string is matched properly
     smarts_subgraph = Chem.MolFromSmiles(
-        node_trace.node.smarts, sanitize=sanitize_smiles
+        group_extension.node.smarts, sanitize=sanitize_smiles
     )
     if not smarts_subgraph:
-        raise ValueError(f"Could not parse SMILES: {node_trace.node.smiles}")
+        raise ValueError(f"Could not parse SMILES: {group_extension.node.smiles}")
     match_atoms = list(mol.GetSubstructMatch(smarts_subgraph))
     if not match_atoms:
         raise ValueError(
-            f"Could not find substructure match for node {node_trace.node.type} in SMARTS: {node_trace.smarts}"
+            f"Could not find substructure match for node {group_extension.node.type} in SMARTS: {group_extension.smarts}"
         )
 
     # identify atoms to highlight
@@ -123,7 +123,7 @@ def visualize_group(
 
     Parameters
     ----------
-    node_trace : Grouper.libraries.Libraries.NodeTrace
+    group_extension : Grouper.libraries.Libraries.GroupExtension
         The Node with chemical information (SMARTS) to parse and visualize
     text : str, optional, default="Matching Subgraph"
         Text to place as a legend under the graph. The color matches the highlighted portion,
