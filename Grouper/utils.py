@@ -398,7 +398,7 @@ def convert_to_nx(G: GroupGraph) -> nxGroupGraph:
         return nxGroupGraph()
     nxG = nxGroupGraph(G.node_types)
     for node_id, node in G.nodes.items():
-        nxG.add_node(node_id, node.type, node.smarts, node.hubs)
+        nxG.add_node(node_id, node.type, node.pattern, node.hubs, node.is_smarts)
     for edge in G.edges:
         src = (edge[0], edge[1])
         dst = (edge[2], edge[3])
