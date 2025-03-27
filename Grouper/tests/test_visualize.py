@@ -41,7 +41,7 @@ class TestGroupGraph(BaseTest):
         ),
     )
     def test_visualize_group_extension(self, smarts, smiles, hubs):
-        nt = GroupExtension(Group("desc", smiles, hubs), "", smarts, None)
+        nt = GroupExtension(Group("desc", smiles, hubs, True), "", smarts, None)
         img = visualize_group_extension(nt)
         assert img
 
@@ -75,7 +75,7 @@ class TestGroupGraph(BaseTest):
         # smartsList = ["[C](-[C])(-[C])(-[C])", "[NX3](-[C])(-[O-])(-[O-])", "[CX3]([C])(-[H])(-[H])","c1ccccc1", "c1(-[O](-[C]))ccccc1", "[C]", "bad_smarts"]
         # smilesList = ["CCCC", "N(=O)(O)", "[C]([H])([C])", "N", "C=O", "bad_smiles", "C"]
         # hubsList = [[0], [0], [0], [0,0], [0,0,1], [], []]
-        nt = GroupExtension(Group("desc", smiles, hubs), "", smarts, None)
         with pytest.raises((ValueError, AttributeError)) as e:
+            nt = GroupExtension(Group("desc", smiles, hubs, True), "", smarts, None)
             visualize_group_extension(nt)
             print(e, smarts, smiles, hubs)
