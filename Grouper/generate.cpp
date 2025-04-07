@@ -175,7 +175,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
     if (vcolg_output_file.empty()) {
         // Call nauty
-        std::string geng_command = "geng " + std::to_string(n_nodes) + " -ctf > geng_out.txt";
+        std::string geng_command = "geng " + std::to_string(n_nodes) + " -cf > geng_out.txt";
         std::string vcolg_command = "vcolg geng_out.txt -T -m" + std::to_string(node_defs.size()) + " > vcolg_out.txt";
         system(geng_command.c_str());
         system(vcolg_command.c_str());
