@@ -1447,108 +1447,170 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
         return; // Return early if identified through rdkit and createMol cpp
     };
 
+    // After RDKit fallback fails...
     std::unordered_map<std::string, int> standardElementValency = {
-        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1},
+        {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1},
     };
 
-    std::vector<NodeIDType> centralNodeVec; // List to handle branching
-    std::unordered_map<int, NodeIDType> ringClosures; // Map for ring closure indices
-    int prevDepth = 0; // For determining if there's branching
-    int currentDepth = 0; // How many parantheses deep are you at in the string
+    std::vector<NodeIDType> centralNodeVec;
+    std::unordered_map<int, NodeIDType> ringClosures;
 
+    int prevDepth = 0;
+    int currentDepth = 0;
     NodeIDType currentNode = 0;
-    int bondOrder = 1; // Default to single bond
+    int bondOrder = 1;
 
     for (size_t i = 0; i < smarts.length(); ++i) {
         char c = smarts[i];
 
-        if (standardElementValency.count(std::string(1, c))) {
-            // Handle atom
-            addNode(std::string(1, c));
+        if (c == '[') {
+            // Bracketed atom, extract until ']'
+            size_t end = smarts.find(']', i);
+            if (end == std::string::npos) {
+                throw std::invalid_argument("Unclosed bracket in SMARTS string: `" + smarts + "`");
+            }
+
+            std::string bracketContent = smarts.substr(i + 1, end - i - 1);
+            i = end; // advance index
+
+            // Extract atomic symbol and optional charge
+            std::string symbol;
+            int charge = 0;
+
+            // Simple regex-free parser
+            size_t j = 0;
+            if (j + 1 < bracketContent.size() && islower(bracketContent[j + 1])) {
+                symbol = bracketContent.substr(j, 2);
+                j += 2;
+            } else {
+                symbol = bracketContent.substr(j, 1);
+                j += 1;
+            }
+
+            // Look for '+' or '-'
+            while (j < bracketContent.size()) {
+                if (bracketContent[j] == '+') {
+                    charge++;
+                    j++;
+                    while (j < bracketContent.size() && std::isdigit(bracketContent[j])) {
+                        charge += bracketContent[j] - '0';
+                        j++;
+                    }
+                } else if (bracketContent[j] == '-') {
+                    charge--;
+                    j++;
+                    while (j < bracketContent.size() && std::isdigit(bracketContent[j])) {
+                        charge -= bracketContent[j] - '0';
+                        j++;
+                    }
+                } else {
+                    j++;
+                }
+            }
+
+            // Use standard valence if known, adjusted by charge
+            int maxValence = 4;
+            if (standardElementValency.count(symbol)) {
+                maxValence = standardElementValency[symbol] + charge;
+            }
+
+            addNode(symbol, maxValence);
             currentNode = nodes.size() - 1;
 
-            // In the initial state, no bonds occur, so just add the node
+            if (centralNodeVec.size() <= currentDepth) {
+                centralNodeVec.resize(currentDepth + 1, currentNode);
+            }
+
             if (centralNodeVec.empty()) {
                 centralNodeVec.push_back(currentNode);
-            } else if (currentDepth <= prevDepth) { // at the end of a branch, so overwrite previous source node
+            } else if (currentDepth <= prevDepth) {
                 addEdge(centralNodeVec[currentDepth], currentNode, bondOrder);
                 centralNodeVec[currentDepth] = currentNode;
-            } else { // bond goes to the actively building branch
-                addEdge(centralNodeVec[currentDepth-1], currentNode, bondOrder);
+            } else {
+                addEdge(centralNodeVec[currentDepth - 1], currentNode, bondOrder);
                 centralNodeVec[currentDepth] = currentNode;
             }
+
+            bondOrder = 1;
             prevDepth = currentDepth;
         }
-        else if (c == '(')
-        {
-            // Going one level deeper into molecule branching
+        else if (std::isalpha(c)) {
+            // Non-bracket atom, try 2-letter or 1-letter element
+            std::string symbol;
+            if (i + 1 < smarts.length() && islower(smarts[i + 1])) {
+                symbol = smarts.substr(i, 2);
+                i++;
+            } else {
+                symbol = std::string(1, c);
+            }
+
+            if (!standardElementValency.count(symbol)) {
+                throw std::invalid_argument("Unknown atom type: " + symbol);
+            }
+
+            addNode(symbol, standardElementValency[symbol]);
+            currentNode = nodes.size() - 1;
+
+            if (centralNodeVec.size() <= currentDepth) {
+                centralNodeVec.resize(currentDepth + 1, currentNode);
+            }
+
+            if (centralNodeVec.empty()) {
+                centralNodeVec.push_back(currentNode);
+            } else if (currentDepth <= prevDepth) {
+                addEdge(centralNodeVec[currentDepth], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            } else {
+                addEdge(centralNodeVec[currentDepth - 1], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            }
+
+            bondOrder = 1;
+            prevDepth = currentDepth;
+        }
+        else if (c == '(') {
             currentDepth++;
         }
-        else if (c == ')')
-        {
-            // Stepping one level out of molecule branching
+        else if (c == ')') {
             currentDepth--;
         }
-        else if (std::isdigit(c))
-        {
-            // Handle ring closure
-            // NodeIDType currentNode = nodes.size() - 1;
-            int ringIndex = c - '0'; // char conversion to int
+        else if (std::isdigit(c)) {
+            int ringIndex = c - '0';
             if (ringClosures.find(ringIndex) != ringClosures.end()) {
-                // Connect the current node to the ring closure with the current bond order
                 addEdge(currentNode, ringClosures[ringIndex], bondOrder);
-                bondOrder = 1; // Reset bond order to single after use
+                bondOrder = 1;
                 ringClosures.erase(ringIndex);
             } else {
-                // Store the current node as the ring closure point
                 ringClosures[ringIndex] = currentNode;
             }
         }
-        else if (c == '-')
-        {
-            // Set bond order to single, this may be useless
+        else if (c == '-') {
             bondOrder = 1;
         }
-        else if (c == '=')
-        {
-            // Set bond order to double
+        else if (c == '=') {
             bondOrder = 2;
         }
-        else if (c == '#')
-        {
-            // Set bond order to triple
+        else if (c == '#') {
             bondOrder = 3;
         }
-        else if ((c == '[') || (c == ']'))
-        {
-            // Some symbols that need to be considered with more specifics
-            ;
-        }
-        else
-        {
-            // Handle unsupported characters (e.g., invalid SMARTS)
-            throw std::invalid_argument(
-                "Unsupported character in SMARTS: `"
-                + std::string(1, c)
-                + "` for SMILES "
-                + std::string(smarts)
-            );
+        else {
+            throw std::invalid_argument("Unsupported character in SMARTS: `" + std::string(1, c) + "` for SMILES `" + smarts + "`");
         }
     }
 
-    // Basic error checking for unclosed rings
     if (!ringClosures.empty()) {
         std::cerr << "Unclosed rings detected: ";
         for (const auto& entry : ringClosures) {
             std::cerr << entry.first << " ";
         }
         std::cerr << std::endl;
-        throw std::invalid_argument(
-                "Unclosed ring detected in SMILES string `"
-                + std::string(smarts)
-                + "`"
-            );
+        throw std::invalid_argument("Unclosed ring detected in SMILES string `" + smarts + "`");
     }
+    if (currentDepth != 0) {
+        throw std::invalid_argument("Unmatched parentheses in SMILES string `" + smarts + "`");
+    }
+
 }
 
 void AtomGraph::fromSmiles(const std::string& smiles) {
