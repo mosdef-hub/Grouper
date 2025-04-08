@@ -1432,19 +1432,25 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
     const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
     const auto& mol = createMol(smarts, true);
     if (mol) {
-        for (size_t i=0; i<mol->getNumAtoms(); ++i) {
-            const auto& atom = mol->getAtomWithIdx(i);
-            int atomicNumber = atom->getAtomicNum();
-            int maxValence = pt->getDefaultValence(atomicNumber) + atom->getFormalCharge();
-            addNode(atom->getSymbol(), maxValence);
+        try {
+            for (size_t i=0; i<mol->getNumAtoms(); ++i) {
+                const auto& atom = mol->getAtomWithIdx(i);
+                int atomicNumber = atom->getAtomicNum();
+                int maxValence = pt->getDefaultValence(atomicNumber) - atom->getFormalCharge();
+                addNode(atom->getSymbol(), maxValence);
+            }
+            for (size_t i=0; i<mol->getNumBonds(); i++) {
+                const auto& bond = mol->getBondWithIdx(i);
+                double border = bond->getBondTypeAsDouble();
+                int borderInt = (int)border;
+                addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt);
+            }
+            return; // Return early if identified through rdkit and createMol cpp
         }
-        for (size_t i=0; i<mol->getNumBonds(); i++) {
-            const auto& bond = mol->getBondWithIdx(i);
-            double border = bond->getBondTypeAsDouble();
-            int borderInt = (int)border;
-            addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt);
+        catch (const std::exception& e) {
+            std::cout << "RDKit parsing failed: " << e.what() << std::endl;
+            // Continue to fallback parsing
         }
-        return; // Return early if identified through rdkit and createMol cpp
     };
 
     // After RDKit fallback fails...
