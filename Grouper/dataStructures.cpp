@@ -1436,7 +1436,7 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
             for (size_t i=0; i<mol->getNumAtoms(); ++i) {
                 const auto& atom = mol->getAtomWithIdx(i);
                 int atomicNumber = atom->getAtomicNum();
-                int maxValence = pt->getDefaultValence(atomicNumber) - atom->getFormalCharge();
+                int maxValence = pt->getDefaultValence(atomicNumber) + atom->getFormalCharge();
                 addNode(atom->getSymbol(), maxValence);
             }
             for (size_t i=0; i<mol->getNumBonds(); i++) {
