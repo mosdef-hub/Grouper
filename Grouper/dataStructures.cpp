@@ -1418,8 +1418,6 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
  *
  * TODO: Plenty more symbols to support.
  * `R,!,X,ints,*,@`
- * TODO: Add possibility to leverage RDKit parsing alternatively
- * TODO: Handle two letter elements, such as Br, Cl etc.
  *
  * @tparam pattern a string that will be processed into AtomGraph
  * @return void
