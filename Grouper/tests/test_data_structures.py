@@ -5,6 +5,71 @@ from Grouper import Atom, AtomGraph, Group, GroupGraph
 from Grouper.tests.base_test import BaseTest
 import pickle
 
+
+class TestAtom(BaseTest):
+    def test_atom_initialization(self):
+        atom = Atom("C", 4)
+        assert atom.type == "C"
+        assert atom.valency == 4
+
+    def test_atom_comparison(self):
+        atom1 = Atom("C", 4)
+        atom2 = Atom("C", 4)
+        atom3 = Atom("N", 3)
+        assert atom1 == atom2
+        assert atom1 != atom3
+
+    pass
+
+class TestGroup(BaseTest):
+    def test_group_equality(self):
+        g1 = Group("C", "[C]", [0], True)
+        g2 = Group("C", "[C]", [0], True)
+        g3 = Group("C2", "[C]", [0], True)
+
+        assert g1 == g2
+        assert g1 != g3
+
+    def test_group_hash(self):
+        g1 = Group("C", "[C]", [0], True)
+        g2 = Group("C", "[C]", [0], True)
+        g3 = Group("C2", "[C]", [0], True)
+
+        assert hash(g1) == hash(g2)
+        assert hash(g1) != hash(g3)
+
+    def test_brackets(self):
+        gG = GroupGraph()
+        g = Group("cl", "[Cl]C=C[Br]", [0], True)
+        gG.add_node(g.type, g.pattern, g.hubs, True)
+        assert (gG.to_smiles() == "[Cl]C=C[Br]") or (gG.to_smiles() == "ClC=CBr")
+
+    def test_charged_species(self):
+        # Existing tests
+        Group('CH2NO2', 'C[N+](=O)[O]', [0], True)
+        Group("cl", "[Cl-]C=C[Br]", [0], True)
+        Group("cl", "[Cl+]C=C[Br]", [0], True)
+        Group("nat", "[Na+]", [0], True)
+
+        # New tests for aromatic compounds and different salts
+        Group("benz", "c1ccccc1[N+](=O)[O-]", [0], False)  # Aromatic nitrobenzene
+        Group("pyrid", "c1ccncc1[Cl-]", [0], True)  # Aromatic pyridinium chloride
+        Group("ammonium", "[NH4+][Cl-]", [0], True)  # Ammonium chloride
+        Group("sodium_acetate", "[Na+][O-]C=O", [0], True)  # Sodium acetate
+        Group("potassium_permanganate", "[K+][MnO4-]", [0], True)  # Potassium permanganate
+
+    def test_group_initialization(self):
+        group = Group("C", "[C]", [0], True)
+        assert group.type == "C"
+        assert group.pattern == "[C]"
+        assert group.hubs == [0]
+        assert group.is_smarts is True
+
+    def test_group_to_string(self):
+        group = Group("carbon", "C", [0,0,0,0])
+        assert str(group) == 'Group  (carbon) (C) : \n    Ports 0 1 2 3 \n    Hubs  0 0 0 0 '
+
+
 class TestGroupGraph(BaseTest):
     def to_set_of_sets(self, matches):
         """Helper function for set comparison."""

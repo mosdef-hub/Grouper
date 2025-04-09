@@ -73,6 +73,43 @@ std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmart
     return std::unique_ptr<RDKit::ROMol>(isSmarts ? RDKit::SmartsToMol(pattern) : RDKit::SmilesToMol(pattern));
 }
 
+// Function to convert rdkit ROMol to AtomGraph
+void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGraph &aG) {
+    const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
+    std::cout<<"Creating AtomGraph from RDKit ROMol..."<<std::endl;
+    for (size_t i=0; i<mol->getNumAtoms(); ++i) {
+        const auto& atom = mol->getAtomWithIdx(i);
+        int atomicNumber = atom->getAtomicNum();
+        // Calculate explicit valence
+        // int valence = atom->calcExplicitValence();                             // This appears to be broken in RDKit, always returns 2 for [N+] in C[N+]=C
+        // Iterate over the bonds and sum the bond orders
+        int valence = 0;
+        for (size_t i=0; i<mol->getNumBonds(); i++) {
+            const auto& bond = mol->getBondWithIdx(i);
+            double border = bond->getBondTypeAsDouble();
+            int borderInt = (int)border;
+            if (bond->getBeginAtomIdx() == atom->getIdx()) {
+                valence += borderInt;
+            }
+            else if (bond->getEndAtomIdx() == atom->getIdx()) {
+                valence += borderInt;
+            }
+        }
+        int defaultValence = pt->getDefaultValence(atomicNumber);
+        std::cout<< "defaultValence: " << defaultValence << " " << "valence: " << valence << std::endl;
+        valence = std::max(valence, defaultValence);
+        aG.addNode(atom->getSymbol(), valence);
+        std::cout<<"Added atom: " << atom->getSymbol() << " with valence: " << valence << std::endl;
+    }
+    for (size_t i=0; i<mol->getNumBonds(); i++) {
+        const auto& bond = mol->getBondWithIdx(i);
+        double border = bond->getBondTypeAsDouble();
+        int borderInt = (int)border;
+        aG.addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt);
+    }
+}
+
+
 // Core methods
 GroupGraph::GroupGraph()
     : nodes(), edges(), nodetypes() {}
@@ -1427,31 +1464,15 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
     edges.clear();
     
     // Attempt to load via rdkit
-    const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
     const auto& mol = createMol(smarts, true);
     if (mol) {
-        try {
-            for (size_t i=0; i<mol->getNumAtoms(); ++i) {
-                const auto& atom = mol->getAtomWithIdx(i);
-                int atomicNumber = atom->getAtomicNum();
-                int maxValence = pt->getDefaultValence(atomicNumber) + atom->getFormalCharge();
-                addNode(atom->getSymbol(), maxValence);
-            }
-            for (size_t i=0; i<mol->getNumBonds(); i++) {
-                const auto& bond = mol->getBondWithIdx(i);
-                double border = bond->getBondTypeAsDouble();
-                int borderInt = (int)border;
-                addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt);
-            }
-            return; // Return early if identified through rdkit and createMol cpp
-        }
-        catch (const std::exception& e) {
-            std::cout << "RDKit parsing failed: " << e.what() << std::endl;
-            // Continue to fallback parsing
-        }
+        createAtomGraphFromRDKit(mol, *this);
+        return;
     };
 
-    // After RDKit fallback fails...
+    std::cout<<"Attempting to load from custom parser..." << std::endl;
+
+    // If RDKit fails...
     std::unordered_map<std::string, int> standardElementValency = {
         {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1},
         {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1},
@@ -1620,6 +1641,15 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
 void AtomGraph::fromSmiles(const std::string& smiles) {
     nodes.clear();
     edges.clear();
+
+    // Attempt to load via rdkit
+    const auto& mol = createMol(smiles, false);
+    if (mol) {
+        createAtomGraphFromRDKit(mol, *this);
+        return;
+    };
+
+    std::cout<<"Attempting to load from custom parser..." << std::endl;
 
     std::unordered_map<std::string, int> standardElementValency = {
         {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}, {"c", 4}, {"n", 3}, {"o", 2}, {"s", 2}
