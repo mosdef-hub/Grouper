@@ -1,8 +1,13 @@
-"""Module for pre-loading libraries of GroupGraphs."""
+"""Module for pre-loading libraries of GroupGraphs.
 
-# from genGrouper.library import Library, Basis, Joback
+This module defines classes for managing and querying libraries commonly used in group contribution methods.
+It includes predefined libraries for Joback, UNIFAC, and SaftGammaMie methods.
+"""
+
 from collections import namedtuple
 from typing import Dict, Union
+import rdkit.Chem
+import rdkit.Chem.Draw
 
 from Grouper import Group
 
@@ -11,21 +16,43 @@ GroupExtension = namedtuple("GroupExtension", ["node", "doi", "extended_smarts",
 
 
 class BasisSet(object):
+    """Base class for managing a library of chemical groups.
+
+    Attributes:
+        node_traces_ (list): A list of GroupExtension objects representing the nodes in the library.
+    """
+
     def __init__(self):
-        # trace = (Group(name, smiles, hubs), doi,  smarts, priorty) # could also name moiety
+        """Initialize an empty BasisSet."""
         self.node_traces_ = []
 
     def __repr__(self):
+        """Return a string representation of the BasisSet."""
         return f"{self.__class__.__name__} has {len(self.node_traces_)} unique nodes."
 
     def add_node(
         self, node: Group, doi: str = None, smarts: str = None, priority: int = None
     ):
+        """Add a node to the library.
+
+        Args:
+            node (Group): The chemical group to add.
+            doi (str, optional): DOI reference for the group. Defaults to None.
+            smarts (str, optional): SMARTS pattern for the group. Defaults to None.
+            priority (int, optional): Priority of the group. Defaults to None.
+        """
         trace = GroupExtension(node, doi, smarts, priority)
         self.node_traces_.append(trace)
 
     def query_nodes(self, query: Dict[str, Union[str, int]]):
-        """Query the library for nodes that match the query."""
+        """Query the library for nodes that match the query.
+
+        Args:
+            query (dict): A dictionary of attributes and their values to match.
+
+        Returns:
+            list: A list of nodes that match the query.
+        """
         matched_nodes = []
         for node in self.node_traces:
             if any([getattr(node, var) == value for var, value in query.items()]):
@@ -33,31 +60,59 @@ class BasisSet(object):
         return matched_nodes
 
     def get_nodes(self):
-        """Return an iterator of the nodes in the Library."""
+        """Return an iterator of the nodes in the library.
+
+        Yields:
+            Group: The next node in the library.
+        """
         for trace in self.node_traces:
             yield trace.node
 
     def visualize_library(self):
-        """Do rdkit visualization"""
-        # rdkit.Chem.Draw.MolToBlockImage(list_of_mols, n_mols_per_row)
-        pass
+        """Visualize the library using RDKit.
+
+        Note:
+            This method is not yet implemented.
+        """
+        mols = []
+        for node in self.get_nodes():
+            mol = rdkit.Chem.MolFromSmarts(node.pattern)
+            if mol:
+                mols.append(mol)
+        return rdkit.Chem.Draw.MolsToGridImage(mols, molsPerRow=10, subImgSize=(200, 200), legends=[node.type for node in self.get_nodes()])
 
     @property
     def node_traces(self):
+        """Get the list of node traces."""
         return self.node_traces_
 
     @node_traces.setter
     def node_traces(self, value):
+        """Set the list of node traces.
+
+        Args:
+            value (list): A list of GroupExtension objects.
+        """
         self.node_traces_ = value
 
     @property
     def n_nodes(self):
+        """Get the number of nodes in the library.
+
+        Returns:
+            int: The number of nodes.
+        """
         return len(self.node_traces_)
 
+
 class Joback(BasisSet):
-    """Joback group contribution method for estimating physical properties of organic compounds."""
+    """Joback group contribution method for estimating physical properties of organic compounds.
+
+    This class predefines a library of chemical groups based on the Joback method.
+    """
 
     def __init__(self):
+        """Initialize the Joback library with predefined nodes."""
         super().__init__()
         self.node_traces = [
             GroupExtension(Group("-CH3", "C", [0]), "", "[CX4H3]", None),
@@ -158,9 +213,23 @@ class Joback(BasisSet):
             GroupExtension(Group("-S- (ring)", "S", [0, 0]), "", "[#16X2H0;R]", None),
         ]
 
+    def __repr__(self):
+        """Return a string representation of the Joback library."""
+        return f"""
+            {self.__class__.__name__} has {len(self.node_traces)} unique nodes. 
+            The nodes are: {', '.join([node.node.type for node in self.node_traces])}.
+            Refer to https://doi.org/10.1080/00986448708960487 for more details of the nodes.
+        """
+
 
 class Unifac(BasisSet):
+    """UNIFAC group contribution method for estimating activity coefficients.
+
+    This class predefines a library of chemical groups based on the UNIFAC method.
+    """
+
     def __init__(self):
+        """Initialize the UNIFAC library with predefined nodes."""
         super().__init__()
         self.node_traces = [
             GroupExtension(Group('CH3', 'C', [0]), '', '[CX4;H3;!R]', None),
@@ -237,13 +306,34 @@ class Unifac(BasisSet):
             GroupExtension(Group('CONHCH2', 'C(=O)NC', [0,3]), '', '[CH2X4;!R][NH1X3;!R][CX3H0;!R]=[OX1H0;!R]', None),
         ]
 
+    def __repr__(self):
+        """Return a string representation of the UNIFAC library."""
+        return f"""
+            {self.__class__.__name__} has {len(self.node_traces)} unique nodes. 
+            The nodes are: {', '.join([str(node.node) for node in self.node_traces])}.
+            Refer to https://doi.org/10.1021/i200013a024 for more details of the nodes
+        """
+
 
 class SaftGammaMie(BasisSet):
+    """SAFT-gamma-Mie group contribution method for thermodynamic modeling.
+
+    This class is a placeholder for the SAFT-gamma-Mie library.
+    """
+
     def __init__(self):
+        """Initialize the SAFT-gamma-Mie library.
+
+        Note:
+            This library is not fully implemented yet.
+        """
         super().__init__()
         self.node_traces = [
             GroupExtension(Group("-CH3", "[CH3]", [0], True), "", "[CX4H3]", None),
         ]
+        print("This library is not fully implemented yet... please check back later.")
+        
 
 
 Libraries = {"saftgm": SaftGammaMie, "joback": Joback, "UNIFAC": Unifac}
+"""Dictionary mapping library names to their corresponding classes."""
