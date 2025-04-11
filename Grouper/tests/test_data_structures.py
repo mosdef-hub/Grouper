@@ -19,8 +19,6 @@ class TestAtom(BaseTest):
         assert atom1 == atom2
         assert atom1 != atom3
 
-    pass
-
 class TestGroup(BaseTest):
     def test_group_equality(self):
         g1 = Group("C", "[C]", [0], True)
@@ -57,6 +55,10 @@ class TestGroup(BaseTest):
         Group("ammonium", "[NH4+][Cl-]", [0], True)  # Ammonium chloride
         Group("sodium_acetate", "[Na+][O-]C=O", [0], True)  # Sodium acetate
         Group("potassium_permanganate", "[K+][MnO4-]", [0], True)  # Potassium permanganate
+
+
+    def test_disconnected_graph(self):
+        Group("C", "[C].[C]", [0], True)
 
     def test_group_initialization(self):
         group = Group("C", "[C]", [0], True)
