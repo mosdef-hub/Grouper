@@ -1,8 +1,21 @@
 import pytest
 
 from Grouper import Group
-from Grouper.libraries.Libraries import BasisSet, Libraries, GroupExtension
+from Grouper.libraries.Libraries import (
+    BasisSet,
+    GroupExtension,
+    Joback,
+    SaftGammaMie,
+    Unifac,
+)
 from Grouper.tests.base_test import BaseTest
+
+Libraries = {
+    "base": BasisSet,
+    "saftgm": SaftGammaMie,
+    "joback": Joback,
+    "UNIFAC": Unifac,
+}
 
 
 class TestLibraries(BaseTest):
@@ -11,10 +24,7 @@ class TestLibraries(BaseTest):
         [("saftgm", 1), ("joback", 41), ("UNIFAC", 72), ("base", 0)],
     )
     def test_build_library(self, library, n_graphs):
-        if library == "base":
-            library = BasisSet()
-        else:
-            library = Libraries[library]()
+        library = Libraries[library]()
         assert library.n_nodes == n_graphs
 
     def test_node_trace(self):
@@ -37,7 +47,9 @@ class TestLibraries(BaseTest):
 
     def test_query_node(self):
         library = Libraries["joback"]()
-        nt = library.query_nodes({"extended_smarts": "[$([!R;#6X3H0]);!$([!R;#6X3H0]=[#8])]"})[0]
+        nt = library.query_nodes(
+            {"extended_smarts": "[$([!R;#6X3H0]);!$([!R;#6X3H0]=[#8])]"}
+        )[0]
         assert nt.node == Group("=C<", "C", [0, 0, 0])
 
     def test_list_nodes(self):
