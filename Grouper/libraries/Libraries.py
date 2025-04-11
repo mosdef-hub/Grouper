@@ -333,7 +333,3 @@ class SaftGammaMie(BasisSet):
         ]
         print("This library is not fully implemented yet... please check back later.")
         
-
-
-Libraries = {"saftgm": SaftGammaMie, "joback": Joback, "UNIFAC": Unifac}
-"""Dictionary mapping library names to their corresponding classes."""
