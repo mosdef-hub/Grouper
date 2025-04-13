@@ -893,7 +893,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
             // RDKit::Atom newAtom = **atom;
             // molecularGraph->addAtom(&newAtom, true);
             int atomicNumber = (*atom)->getAtomicNum();
-            int maxValence = pt->getDefaultValence(atomicNumber);
+            int maxValence = pt->getDefaultValence(atomicNumber) + (*atom)->getFormalCharge();
             atomGraph->addNode((*atom)->getSymbol(), maxValence);
 
         }
@@ -1427,13 +1427,16 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
 void AtomGraph::fromSmarts(const std::string& smarts) {
     nodes.clear();
     edges.clear();
-
+    
     // Attempt to load via rdkit
+    const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
     const auto& mol = createMol(smarts, true);
     if (mol) {
         for (size_t i=0; i<mol->getNumAtoms(); ++i) {
             const auto& atom = mol->getAtomWithIdx(i);
-            addNode(atom->getSymbol());
+            int atomicNumber = atom->getAtomicNum();
+            int maxValence = pt->getDefaultValence(atomicNumber) + atom->getFormalCharge();
+            addNode(atom->getSymbol(), maxValence);
         }
         for (size_t i=0; i<mol->getNumBonds(); i++) {
             const auto& bond = mol->getBondWithIdx(i);
