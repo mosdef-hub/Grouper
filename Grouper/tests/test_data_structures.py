@@ -64,28 +64,28 @@ class TestGroupGraph(BaseTest):
         graph.add_node("type1", "C", [0, 0])
 
         assert len(graph.nodes) == 1
-        assert set(n.type for n in graph.nodes.values()) == set(["type1"])
-        assert set(n.pattern for n in graph.nodes.values()) == set(["C"])
-        assert [n.ports for n in graph.nodes.values()] == [[0, 1]]
-        assert [n.hubs for n in graph.nodes.values()] == [[0, 0]]
+        assert set(n.type for n in graph.nodes.values()) == {"type1"}
+        assert set(n.pattern for n in graph.nodes.values()) == {"C"}
+        assert set(tuple(n.ports) for n in graph.nodes.values()) == {(0, 1)}
+        assert set(tuple(n.hubs) for n in graph.nodes.values()) == {(0, 0)}
         
         graph.add_node("type1")
 
         # Adding a node with different type and pattern
         graph.add_node("type2", "C", [0])
         assert len(graph.nodes) == 3
-        assert set(n.type for n in graph.nodes.values()) == set(["type1", "type1", "type2"])
-        assert set(n.pattern for n in graph.nodes.values()) == set(["C", "C", "C"])
-        assert [n.ports for n in graph.nodes.values()] == [[0], [0, 1], [0,1]]
-        assert [n.hubs for n in graph.nodes.values()] == [[0], [0, 0], [0, 0]]
+        assert set(n.type for n in graph.nodes.values()) == {"type1", "type1", "type2"}
+        assert set(n.pattern for n in graph.nodes.values()) == {"C"}
+        assert set(tuple(n.ports) for n in graph.nodes.values()) == {(0,), (0, 1)}
+        assert set(tuple(n.hubs) for n in graph.nodes.values()) == {(0,), (0, 0)}
 
         group = Group("alkene", "C=C", [0,0,1,1])
         graph.add_node(group)
         assert len(graph.nodes) == 4
-        assert set(n.type for n in graph.nodes.values()) == set(["type1", "type1", "type2", "alkene"])
-        assert set(n.pattern for n in graph.nodes.values()) == set(["C", "C", "C", "C=C"])
-        assert [n.ports for n in graph.nodes.values()] == [[0], [0, 1], [0,1], [0, 1, 2, 3]]
-        assert [n.hubs for n in graph.nodes.values()] == [[0], [0, 0], [0, 0], [0, 0, 1, 1]]
+        assert set(n.type for n in graph.nodes.values()) == {"type1", "type1", "type2", "alkene"}
+        assert set(n.pattern for n in graph.nodes.values()) == {"C", "C=C"}
+        assert set(tuple(n.ports) for n in graph.nodes.values()) == {(0,), (0, 1), (0, 1, 2, 3)}
+        assert set(tuple(n.hubs) for n in graph.nodes.values()) == {(0,), (0, 0), (0, 0, 1, 1)}
 
 
 
