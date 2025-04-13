@@ -20,6 +20,7 @@
 #include <GraphMol/AtomIterators.h>
 #include <GraphMol/BondIterators.h>
 #include <GraphMol/PeriodicTable.h>
+#include <GraphMol/MolOps.h>
 #include <RDGeneral/types.h>
 
 #include <nauty/nauty.h>
@@ -96,10 +97,8 @@ void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGrap
             }
         }
         int defaultValence = pt->getDefaultValence(atomicNumber);
-        std::cout<< "defaultValence: " << defaultValence << " " << "valence: " << valence << std::endl;
         valence = std::max(valence, defaultValence);
         aG.addNode(atom->getSymbol(), valence);
-        std::cout<<"Added atom: " << atom->getSymbol() << " with valence: " << valence << std::endl;
     }
     for (size_t i=0; i<mol->getNumBonds(); i++) {
         const auto& bond = mol->getBondWithIdx(i);
@@ -158,13 +157,13 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     else {
         atomGraph.fromSmiles(pattern);
     }
-    std::unordered_map<int, int> atomFreeValency;
     for (int hub : hubs) {
         if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
             throw std::invalid_argument("Hub ID "+ std::to_string(hub) +" is greater than the number of atoms in the group");
         }
     }
-
+    // Valency Checks
+    std::unordered_map<int, int> atomFreeValency;
     for (const auto& [id, node] : atomGraph.nodes) {
         atomFreeValency[id] = node.valency;
     }
@@ -180,6 +179,11 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     std::unique_ptr<RDKit::ROMol> mol = createMol(pattern, isSmarts);
     if (!mol) {
         throw std::invalid_argument("Invalid SMARTS or SMILES: " + pattern + " provided");
+    }
+    // Validate connected molecules
+    std::vector<boost::shared_ptr<RDKit::ROMol>> moleculesVector = RDKit::MolOps::getMolFrags(*mol);
+    if (moleculesVector.size()>1) {
+        throw GrouperParseException("Invalid pattern " + pattern + " with a detached molecules.");
     }
     this->ntype = ntype;
     this->pattern = pattern;
@@ -1462,7 +1466,7 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
 void AtomGraph::fromSmarts(const std::string& smarts) {
     nodes.clear();
     edges.clear();
-    
+
     // Attempt to load via rdkit
     const auto& mol = createMol(smarts, true);
     if (mol) {
