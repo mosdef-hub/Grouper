@@ -79,6 +79,16 @@ class TestGroupGraph(BaseTest):
         assert [n.ports for n in graph.nodes.values()] == [[0], [0, 1], [0,1]]
         assert [n.hubs for n in graph.nodes.values()] == [[0], [0, 0], [0, 0]]
 
+        group = Group("alkene", "C=C", [0,0,1,1])
+        graph.add_node(group)
+        assert len(graph.nodes) == 4
+        assert set(n.type for n in graph.nodes.values()) == set(["type1", "type1", "type2", "alkene"])
+        assert set(n.pattern for n in graph.nodes.values()) == set(["C", "C", "C", "C=C"])
+        assert [n.ports for n in graph.nodes.values()] == [[0], [0, 1], [0,1], [0, 1, 2, 3]]
+        assert [n.hubs for n in graph.nodes.values()] == [[0], [0, 0], [0, 0], [0, 0, 1, 1]]
+
+
+
     def test_add_edge(self):
         graph = GroupGraph()
         graph.add_node("type1", "C", [0, 0])
@@ -388,6 +398,13 @@ class TestAtomGraph(BaseTest):
         agraph.add_node("C", 4)
         assert set(n.type for n in agraph.nodes.values()) == set(["C"])
         assert set(n.valency for n in agraph.nodes.values()) == set([4])
+
+        atom = Atom("C", 4)
+        agraph.add_node(atom)
+        assert set(n.type for n in agraph.nodes.values()) == set(["C", "C"])
+        assert set(n.valency for n in agraph.nodes.values()) == set([4, 4])
+        assert len(agraph.nodes) == 2
+        assert len(agraph.edges) == 0
 
     def test_from_smiles(self):
         graph = AtomGraph()

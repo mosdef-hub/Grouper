@@ -460,6 +460,32 @@ void GroupGraph::addNode(
     }
 }
 
+void GroupGraph::addNode(Group group) {
+    // Error handling
+    if (group.ntype.empty()) {
+        throw std::invalid_argument("Group type must be provided");
+    }
+    if (group.pattern.empty()) {
+        throw std::invalid_argument("Group pattern must be provided");
+    }
+    if (group.hubs.empty()) {
+        throw std::invalid_argument("Group hubs must be provided");
+    }
+    for (int hub : group.hubs) {
+        if (hub < 0) {
+            throw std::invalid_argument("Hub ID must be greater than or equal to 0");
+        }
+    }
+    for (const auto& entry : nodes) {
+        if (entry.second.ntype == group.ntype && entry.second.pattern != group.pattern && entry.second.hubs != group.hubs) {
+            throw std::invalid_argument("Group type already exists with different SMARTS/SMILES or hubs");
+        }
+    }
+    int id = nodes.size();
+    nodes[id] = group;
+    nodetypes[group.ntype] = group.hubs;
+}
+
 bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, unsigned int bondOrder, bool verbose) {
     NodeIDType from = std::get<0>(fromNodePort);
     PortType fromPort = std::get<1>(fromNodePort);
@@ -1232,6 +1258,11 @@ void AtomGraph::addNode(const std::string& type, const int valency) {
     int id = nodes.size();
     nodes[id] = Atom(type, valency);
 
+}
+
+void AtomGraph::addNode(Atom atom) {
+    int id = nodes.size();
+    nodes[id] = atom;
 }
 
 void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
