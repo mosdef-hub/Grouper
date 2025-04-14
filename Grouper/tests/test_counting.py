@@ -12,6 +12,7 @@ from typing import List, Tuple, Set
 import networkx as nx
 import igraph
 import itertools
+from tqdm import tqdm
 
 class TestCounting(BaseTest):
     @staticmethod
@@ -123,106 +124,132 @@ class TestCounting(BaseTest):
                 return True
             except Exception as e:
                 return False
-
-        node_types = {
+            
+        all_atoms = {
             Group("oxygen", "O", [0, 0]),
-            Group("carbon", "C", [0, 0, 0,0]),
-            Group("nitrogen", "N", [0, 0,0]),
+            Group("carbon", "C", [0, 0, 0, 0]),
+            Group("nitrogen", "N", [0, 0, 0]),
+            Group("fluorine", "F", [0])
         }
-        id_to_node = {i:node for i, node in enumerate(node_types)}
+        def powerset(iterable):
+            """
+            powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)
+            """
+            xs = list(iterable)
+            # note we return an iterator rather than a list
+            return itertools.chain.from_iterable(itertools.combinations(xs,n) for n in range(len(xs)+1))
 
-        exhausted_space = exhaustive_generate(
-            n_nodes=3,
-            node_defs=node_types,
-            num_procs=1,
-            vcolg_output_file="",
-            positive_constraints={},
-            negative_constraints=set(),
-            config_path="",
-        )
-        total_unique_graphs = 0
-        # Count number of lines in vcolg output file
-        with open("vcolg_out.txt", "r") as f:
-            lines = f.readlines()
-            print(lines)
-            for line in lines:
-                n_vertices, colors, edge_list = self.parse_vcolg_txt(line, set(range(len(node_types))))
-                if is_valid_molecule(edge_list, id_to_node, colors):
-                    total_unique_graphs += 1
 
-        assert len(exhausted_space) == total_unique_graphs, f"Expected {len(exhausted_space)} unique graphs, got {total_unique_graphs}"
+
+        for combo in powerset(all_atoms):
+            if len(combo) == 0:
+                continue
+            combo = set(combo)
+
+            id_to_node = {i:node for i, node in enumerate(combo)}
+
+            exhausted_space = exhaustive_generate(
+                n_nodes=4,
+                node_defs=combo,
+                num_procs=-1,
+                vcolg_output_file="",
+                positive_constraints={},
+                negative_constraints=set(),
+                config_path="",
+            )
+            total_unique_graphs = 0
+            # Count number of lines in vcolg output file
+            with open("vcolg_out.txt", "r") as f:
+                lines = f.readlines()
+                for line in lines:
+                    n_vertices, colors, edge_list = self.parse_vcolg_txt(line, set(range(len(combo))))
+                    if is_valid_molecule(edge_list, id_to_node, colors):
+                        total_unique_graphs += 1
+
+            assert len(exhausted_space) == total_unique_graphs, f"Expected {len(exhausted_space)} unique graphs, got {total_unique_graphs}"
 
 
     def test_group_graph_count(self):
+        for n_nodes in range(2, 5):
+            node_types = {
+                # 0: Group("benzene", "C1=CC=CC=C1", [0,1,2,3,4,5]),
+                # 0: Group('alkene', 'C=C', [0, 0, 1,1]),
+                0: Group("ester", "C(O)=O", [0,1]), 
+                # 2: Group("amine", "N", [0,0,0]),
+            }
+            # generate uncolored graphs
+            os.system(f"geng -c {n_nodes} > geng_output.txt")
+            # generate colored graphs
+            os.system(f"vcolg geng_output.txt -T -m{len(node_types)} > vcolg_out.txt")
+            # calculate hub reps
+            pattern_inventory = set()
+            # determine every possible port pairing for each edge
+            with open("vcolg_out.txt", "r") as f:
+                lines = f.readlines()
+                for line in tqdm(lines, desc="Generating patterns", total=len(lines)):
+                    unfiltered_edge_inventory = {} # (src,dst) -> list of all possible port pairings
+                    n_vertices, colors, edge_list = self.parse_vcolg_txt(line, set(range(len(node_types))))
+                    gG = GroupGraph()
+                    # add nodes
+                    for i in range(n_vertices):
+                        gG.add_node(node_types[colors[i]].type, node_types[colors[i]].pattern, node_types[colors[i]].hubs)
+                    # Generate GroupGraph with all possible bonding patterns
+                    for (src, dst) in edge_list:
+                        unfiltered_edge_inventory[(src, dst)] = []
+                        # get all possible port pairings
+                        src_ports = node_types[colors[src]].ports
+                        dst_ports = node_types[colors[dst]].ports
+                        combos = itertools.product(src_ports, dst_ports)
+                        # print(list(combos))
+                        unfiltered_edge_inventory[(src, dst)] = list(combos)
 
-        def compute_edge_permutations(edge_orbits):
-            """
-            Computes edge permutations given edge orbits.
+                    for ports in itertools.product(*unfiltered_edge_inventory.values()):
 
-            :param edge_orbits: List of integers where each unique number represents an orbit.
-            :return: List of edge permutations.
-            """
-            orbit_map = {}  # Maps orbit ID to edge indices
-            for i, orbit in enumerate(edge_orbits):
-                if orbit not in orbit_map:
-                    orbit_map[orbit] = []
-                orbit_map[orbit].append(i)
+                        # if set(list(ports)) == set([(0,0), (0,1), (1,2)]):
+                        #     import pdb
+                        #     pdb.set_trace()
 
-            edge_permutations = [list(range(len(edge_orbits)))]  # Start with identity permutation
+                        try:
+                            gG.clear_edges()
+                            for i, (src, dst) in enumerate(edge_list):
+                                src_port, dst_port = ports[i]
+                                # src_hub, dst_hub = node_types[colors[src]].hubs[src_port], node_types[colors[dst]].hubs[dst_port]
+                                # print("Adding edge:", (src, src_hub), (dst, dst_hub))
+                                gG.add_edge( (src, src_port), (dst, dst_port))
 
-            # Generate permutations within each orbit group
-            for orbit_group in orbit_map.values():
-                if len(orbit_group) > 1:  # Only permute if there are multiple edges in an orbit
-                    new_perms = []
-                    for perm in itertools.permutations(orbit_group):
-                        perm_map = {old: new for old, new in zip(orbit_group, perm)}
-                        permuted_edges = [perm_map[i] if i in perm_map else i for i in range(len(edge_orbits))]
-                        new_perms.append(permuted_edges)
-                    edge_permutations.extend(new_perms)
+                            if gG.to_smiles() == "O=C1OOC(=O)C(=O)OOC1=O":
+                                import pdb
+                                pdb.set_trace()
+                                
+                            pattern_inventory.add(gG.to_smiles())
+                        except Exception as e:
+                            continue
 
-            return np.array(edge_permutations)
+            exhausted_space = exhaustive_generate(
+                n_nodes=n_nodes,
+                node_defs=set(node_types.values()),
+                num_procs=-1,
+                vcolg_output_file="",
+                positive_constraints={},
+                negative_constraints=set(),
+                config_path="",
+            )
 
-        node_types = {
-            0: Group("benzene", "C1=CC=CC=C1", [0,1,2,3,4,5]),
-            1: Group("ester", "C(O)=O", [0,1])
-        }
-        # node_colored_graphs = [ # these the node colored graphs of the 3 node line graph with 2 colors 
-        #     "3 2 0 0 0  0 2 1 2",
-        #     "3 2 0 0 1  0 2 1 2",
-        #     "3 2 1 0 0  0 2 1 2",
-        #     "3 2 1 0 1  0 2 1 2",
-        #     "3 2 1 1 0  0 2 1 2",
-        #     "3 2 1 1 1  0 2 1 2",
-        # ]
-        node_colored_graphs = [
-            "3 3 0 0 0  0 1 0 2 1 2"
-        ]
+            # find missing graphs in the exhaustive space
+            missing_graphs = set()
+            for graph in exhausted_space:
+                if graph.to_smiles() not in pattern_inventory:
+                    missing_graphs.add(graph.to_smiles())
+                    print(graph)
+            if missing_graphs:
+                print("Missing graphs in pattern inventory:", missing_graphs)
 
-        # Calculate possible maximum degree for each node
-        # Calculate the possible connections for each node given the maximum degree
-        # Apply the enumeration theorem to count the number of unique graphs
-        # Apply list constraints to filter
+            exhausted_space = set(g.to_smiles() for g in exhausted_space)
+            missing_graphs = set()
+            for graph in pattern_inventory:
+                if graph not in exhausted_space:
+                    missing_graphs.add(graph)
+            if missing_graphs:
+                print("Missing graphs in exhausted space:", missing_graphs)
 
-        # solutions for b-b-b
-        # solution = [b0_b1**2, b0_b2**2, b0_b3**2, b1_b2**2, b1_b3**2, b2_b3**2, b0_b0*b0_b1, b0_b0*b0_b2, b0_b0*b0_b3, b0_b0*b1_b1, b0_b0*b1_b2, b0_b0*b1_b3, b0_b0*b2_b2, b0_b0*b2_b3, b0_b0*b3_b3, b0_b1*b0_b2, b0_b1*b0_b3, b0_b1*b1_b1, b0_b1*b1_b2, b0_b1*b1_b3, b0_b1*b2_b2, b0_b1*b2_b3, b0_b1*b3_b3, b0_b2*b0_b3, b0_b2*b1_b1, b0_b2*b1_b2, b0_b2*b1_b3, b0_b2*b2_b2, b0_b2*b2_b3, b0_b2*b3_b3, b0_b3*b1_b1, b0_b3*b1_b2, b0_b3*b1_b3, b0_b3*b2_b2, b0_b3*b2_b3, b0_b3*b3_b3, b1_b1*b1_b2, b1_b1*b1_b3, b1_b1*b2_b2, b1_b1*b2_b3, b1_b1*b3_b3, b1_b2*b1_b3, b1_b2*b2_b2, b1_b2*b2_b3, b1_b2*b3_b3, b1_b3*b2_b2, b1_b3*b2_b3, b1_b3*b3_b3, b2_b2*b2_b3, b2_b2*b3_b3, b2_b3*b3_b3]
-        for line in node_colored_graphs[:1]:
-            n_vertices, colors, edge_list = self.parse_vcolg_txt(line, {0, 1})
-
-            G = NodeColoredGraph(edge_list, colors)
-            g = GroupGraph()
-            for i in range(n_vertices):
-                g.add_node(node_types[colors[i]].type, node_types[colors[i]].pattern, node_types[colors[i]].hubs)
-
-            # print("Edge permutations:", edge_permutations)
-            # permutation_group = PermutationGroup(edge_permutations)
-            # print("Permutation group:", permutation_group)
-
-            # Compute cycle index polynomial and apply the enumeration theorem
-            cycle_index_polynomial = G.get_cycle_index(permutation_group)
-            possible_graphs = G.apply_enumeration_theorem(cycle_index_polynomial, len(edge_types)+1)
-            inventory = G.generate_inventory({f't{i+1}':e for i,e in enumerate(edge_types.keys())}, cycle_index_polynomial, 2)
-            print("Inventory:", inventory)
-            filtered_inventory = G.filter_inventory(inventory, edge_types, colors=colors, edge_list=edge_list)
-            print("Filtered inventory:", filtered_inventory)
-        print("Total unique graphs:", len(filtered_inventory))
-        assert True
+            assert len(exhausted_space) == len(pattern_inventory), f"Expected {len(exhausted_space)} unique graphs, got {len(pattern_inventory)}"

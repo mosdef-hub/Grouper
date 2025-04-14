@@ -168,7 +168,24 @@ std::vector<std::vector<int>> generateOrbitCombinations(
         }
     };
 
+    printf("Edge colors: ");
+    for (const auto& color : edge_colors) {
+        printf("%d ", color);
+    }
+    printf("\n");
+    printf("Number of edges: %d\n", n_edges);
+
     generate_combinations(edge_colors, n_edges, {}, 0);
+
+    printf("All combinations:\n");
+    for (const auto& combination : all_combinations) {
+        printf("{ ");
+        for (const auto& color : combination) {
+            printf("%d ", color);
+        }
+        printf("}\n");
+    }
+    printf("\n");
 
     return all_combinations;
 }
@@ -270,8 +287,8 @@ void process_nauty_output(
     std::unordered_map<int, std::string> int_to_pattern;
     std::unordered_map<std::string, std::string> type_to_pattern;
     std::vector<GroupGraph> group_graphs_list;
-    std::unordered_set<std::vector<setword>, hash_vector> canon_set;
-    // std::unordered_set<std::string> canon_set;
+    // std::unordered_set<std::vector<setword>, hash_vector> canon_set;
+    std::unordered_set<std::string> canon_set;
 
 
     // Create necessary maps
@@ -349,6 +366,26 @@ void process_nauty_output(
         g, lab, ptn, orbits, options, stats // Pass nauty structures
     );
 
+    printf("Node colors: ");
+    for (const auto& color : colors) {
+        printf("%d ", color);
+    }
+    printf("Edge list: ");
+    for (const auto& edge : edge_list) {
+        printf("(%d, %d) ", edge.first, edge.second);
+    }
+    
+
+    printf("Node orbits: ");
+    for (const auto& orbit : nodeOrbits) {
+        printf("%d ", orbit);
+    }
+    printf("\nEdge orbits: ");
+    for (const auto& orbit : edgeOrbits) {
+        printf("%d ", orbit);
+    }
+    printf("\n");
+
     // Change the edge orbits to a vector of sets for generating colorings
     std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> edge_orbits_vector;
     std::unordered_set<int> unique_orbits;
@@ -401,15 +438,16 @@ void process_nauty_output(
         }
 
     //  Check if the graph is unique considering permutations
-        // if (canon_set.find(gG.toSmiles()) == canon_set.end()) {
-        //     canon_set.insert(gG.toSmiles());
-        //     graph_basis->insert(gG);
-        // }
-        auto aG = gG.toAtomicGraph();
-        if (canon_set.find(aG->canonize()) == canon_set.end()) {
-            canon_set.insert(aG->canonize());
+        if (canon_set.find(gG.toSmiles()) == canon_set.end()) {
+            canon_set.insert(gG.toSmiles());
             graph_basis->insert(gG);
         }
+        // auto aG = gG.toAtomicGraph();
+        // if (canon_set.find(aG->canonize()) == canon_set.end()) {
+        //     canon_set.insert(aG->canonize());
+        //     graph_basis->insert(gG);
+        //     printf("Graph: %s\n", gG.toSmiles().c_str());
+        // }
         // if (canon_set.find(gG.canonize()) == canon_set.end()) {
         //     canon_set.insert(gG.canonize());
         //     graph_basis->insert(gG);

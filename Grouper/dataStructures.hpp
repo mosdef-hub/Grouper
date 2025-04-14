@@ -81,6 +81,7 @@ public:
     std::vector<NodeIDType> nodeOrbits() const;
     std::vector<setword> toNautyGraph() const;
     std::vector<setword> canonize();
+    int getNodeIndex(int node_id) const;
     void fromSmiles(const std::string& smiles);
     void fromSmarts(const std::string& smarts);
     std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;

@@ -61,6 +61,7 @@ PYBIND11_MODULE(_Grouper, m) {
              py::arg("verbose") = false
         )
         .def("n_free_ports", &GroupGraph::numFreePorts)
+        .def("clear_edges", &GroupGraph::clearEdges)
         .def("compute_orbits",
             static_cast<std::pair<std::vector<int>, std::vector<int>> (GroupGraph::*)(
                 const std::vector<std::pair<int, int>>&,

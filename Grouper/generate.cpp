@@ -175,7 +175,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
     if (vcolg_output_file.empty()) {
         // Call nauty
-        std::string geng_command = "geng " + std::to_string(n_nodes) + " -cf > geng_out.txt";
+        std::string geng_command = "geng " + std::to_string(n_nodes) + " -c > geng_out.txt";
         std::string vcolg_command = "vcolg geng_out.txt -T -m" + std::to_string(node_defs.size()) + " > vcolg_out.txt";
         system(geng_command.c_str());
         system(vcolg_command.c_str());
@@ -210,8 +210,8 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     }
 
     std::unordered_set<GroupGraph> global_basis;
-    std::unordered_set<std::vector<setword>, hash_vector> canon_basis;
-    // std::unordered_set<std::string> canon_basis;
+    // std::unordered_set<std::vector<setword>, hash_vector> canon_basis;
+    std::unordered_set<std::string> canon_basis;
 
     omp_set_num_threads(num_procs);      // Set the number of threads to match
 
@@ -250,15 +250,15 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         #pragma omp critical
         {
             for (const auto& graph : local_basis) {
-                // if (canon_basis.find(graph.toSmiles()) == canon_basis.end()) {
-                //     canon_basis.insert(graph.toSmiles());
-                //     global_basis.insert(graph);
-                // }
-                auto aG = graph.toAtomicGraph();
-                if (canon_basis.find(aG->canonize()) == canon_basis.end()) {
-                    canon_basis.insert(aG->canonize());
+                if (canon_basis.find(graph.toSmiles()) == canon_basis.end()) {
+                    canon_basis.insert(graph.toSmiles());
                     global_basis.insert(graph);
                 }
+                // auto aG = graph.toAtomicGraph();
+                // if (canon_basis.find(aG->canonize()) == canon_basis.end()) {
+                //     canon_basis.insert(aG->canonize());
+                //     global_basis.insert(graph);
+                // }
                 // if (canon_basis.find(graph.canonize()) == canon_basis.end()) {
                 //     canon_basis.insert(graph.canonize());
                 //     global_basis.insert(graph);
