@@ -190,68 +190,130 @@ std::vector<std::vector<int>> generateOrbitCombinations(
     return all_combinations;
 }
 
-std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings(
-    const std::vector<std::pair<int, int>>& edge_list, // Edges in the graph
-    const std::vector<std::unordered_set<std::pair<int, int>, hash_pair>>& edge_orbits, // Edge orbits
-    const std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair>& available_colors // Available colors for each edge
-) {
-    std::vector<int> current_coloring(edge_list.size(), -1);  // Initialize coloring (all edges uncolored)
-    std::vector<std::vector<int>> all_colorings;  // Store all valid colorings
-    std::vector<std::vector<std::vector<int>>> colored_orbits;  // Store all valid colorings for each orbit
+/**
+ * A helper routine that tests whether a complete edge-coloring is canonical
+ * with respect to automorphisms.  Here we use a simple analogue of vcolg's
+ * ismax: for each orbit (a set of symmetric edges), we first determine the set
+ * of indices (according to a fixed ordering of edge_list) and then require that
+ * the color at the minimum index is at least as large as the colors on every
+ * other edge in the same orbit.
+ *
+ * @param coloring   Complete coloring (one color per edge)
+ * @param edge_list  The ordered list of edges.
+ * @param edge_orbits  The automorphism orbits (each a set of edges).
+ * @param edge_index_map A precomputed map from an edge to its index in edge_list.
+ *
+ * @return true if this coloring passes the maximality test.
+ */
+bool is_maximal_edge_coloring(
+    const std::vector<int>& coloring,
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<std::unordered_set<std::pair<int, int>, hash_pair>>& edge_orbits,
+    const std::unordered_map<std::pair<int, int>, int, hash_pair>& edge_index_map)
+{
+    for (const auto& orbit : edge_orbits) {
+        // Collect the indices (in the fixed ordering) of the edges in this orbit.
+        std::vector<int> indices;
+        for (const auto& edge : orbit) {
+            auto it = edge_index_map.find(edge);
+            if(it != edge_index_map.end()){
+                indices.push_back(it->second);
+            }
+        }
+        // If no index was found for this orbit, skip it.
+        if (indices.empty()) continue;
+        // Determine the canonical representative: here we simply choose the smallest index.
+        int canon_index = *std::min_element(indices.begin(), indices.end());
+        // For each edge in the orbit, we require that the color of the canonical edge
+        // is at least as high as that of every other edge.
+        for (int idx : indices) {
+            if (coloring[canon_index] < coloring[idx])
+                return false; // Reject: a symmetric edge received a "better" color.
+        }
+    }
+    return true;
+}
 
-    // Precompute a mapping from edge to its index in edge_list
+/**
+ * Recursively assigns colors to the edges (like the scan function in vcolg).
+ * When all edges are colored, it tests maximality (mimicking trythisone).
+ *
+ * @param edge_index   The current index in edge_list to assign a color.
+ * @param edge_list    The complete ordered list of edges.
+ * @param available_colors A mapping that gives for each edge the vector of allowed colors.
+ * @param edge_orbits    Automorphism orbits of edges.
+ * @param edge_index_map Precomputed map from each edge to its index in edge_list.
+ * @param current_coloring The partial coloring (length equals edge_list.size()).
+ * @param all_colorings  In/out: accumulates acceptable complete colorings.
+ */
+void scan_edge_coloring(
+    int edge_index,
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair>& available_colors,
+    const std::vector<std::unordered_set<std::pair<int, int>, hash_pair>>& edge_orbits,
+    const std::unordered_map<std::pair<int, int>, int, hash_pair>& edge_index_map,
+    std::vector<int>& current_coloring,
+    std::vector<std::vector<int>>& all_colorings)
+{
+    if (edge_index == static_cast<int>(edge_list.size())) {
+        // All edges are colored. Now test maximality.
+        if (is_maximal_edge_coloring(current_coloring, edge_list, edge_orbits, edge_index_map)) {
+            all_colorings.push_back(current_coloring);
+        }
+        return;
+    }
+
+    // Get the current edge.
+    const auto& edge = edge_list[edge_index];
+
+    // Retrieve the allowed colors for this edge.
+    auto it = available_colors.find(edge);
+    if (it == available_colors.end()) {
+        // If no colors are available (this should not happen if input is well-formed),
+        // then simply skip this edge.
+        scan_edge_coloring(edge_index + 1, edge_list, available_colors,
+                           edge_orbits, edge_index_map, current_coloring, all_colorings);
+        return;
+    }
+
+    const std::vector<int>& colors_for_edge = it->second;
+    // Try each allowed color.
+    for (int color : colors_for_edge) {
+        current_coloring[edge_index] = color;
+        scan_edge_coloring(edge_index + 1, edge_list, available_colors,
+                           edge_orbits, edge_index_map, current_coloring, all_colorings);
+    }
+    // Undo the assignment (backtrack)
+    current_coloring[edge_index] = -1;
+}
+
+/**
+ * Generates non-automorphic edge colorings using a recursive backtracking
+ * search that is modeled on the logic in vcolg.
+ *
+ * @param edge_list    The list of edges in the graph.
+ * @param edge_orbits  The automorphism orbits of edges.
+ * @param available_colors A mapping from each edge to the list of allowed colors.
+ * @return A vector of all acceptable complete colorings.
+ */
+std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<std::unordered_set<std::pair<int, int>, hash_pair>>& edge_orbits,
+    const std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair>& available_colors)
+{
+    std::vector<std::vector<int>> all_colorings;
+    // Initialize the current coloring: one entry per edge; -1 means "uncolored."
+    std::vector<int> current_coloring(edge_list.size(), -1);
+
+    // Precompute a mapping from an edge to its index in edge_list.
     std::unordered_map<std::pair<int, int>, int, hash_pair> edge_index_map;
     for (size_t i = 0; i < edge_list.size(); ++i) {
-        edge_index_map[edge_list[i]] = i;
+        edge_index_map[edge_list[i]] = static_cast<int>(i);
     }
 
-    // Generate possible colorings for each orbit
-    for (const auto& orbit : edge_orbits) {
-        std::vector<std::vector<int>> orbit_colorings = generateOrbitCombinations(orbit, available_colors);
-        colored_orbits.push_back(orbit_colorings);
-    }
-
-    // Convert edge orbits to a vector for easier indexing
-    std::vector<std::vector<std::pair<int, int>>> edge_orbits_vec;
-    for (const auto& orbit : edge_orbits) {
-        edge_orbits_vec.push_back(std::vector<std::pair<int, int>>(orbit.begin(), orbit.end()));
-    }
-
-    // Helper function to recursively combine colorings from orbits
-    std::function<void(int)> combineOrbits = [&](std::size_t i) {
-        if (i == colored_orbits.size()) {
-            // If we have processed all orbits, store the current coloring
-            all_colorings.push_back(current_coloring);
-            return;
-        }
-
-        // Loop through all colorings of the current orbit
-        for (const auto& coloring : colored_orbits[i]) {
-            // Apply the coloring to the corresponding edges in the current orbit
-            for (size_t color_idx = 0; color_idx < edge_orbits_vec[i].size(); ++color_idx) {
-                const auto& edge = edge_orbits_vec[i][color_idx];
-                if (edge_index_map.find(edge) != edge_index_map.end()) {
-                    int edge_index = edge_index_map[edge];
-                    current_coloring[edge_index] = coloring[color_idx];
-                }
-            }
-
-            // Recursively process the next orbit
-            combineOrbits(i + 1);
-
-            // Undo the coloring for backtracking
-            for (size_t color_idx = 0; color_idx < edge_orbits_vec[i].size(); ++color_idx) {
-                const auto& edge = edge_orbits_vec[i][color_idx];
-                if (edge_index_map.find(edge) != edge_index_map.end()) {
-                    int edge_index = edge_index_map[edge];
-                    current_coloring[edge_index] = -1;
-                }
-            }
-        }
-    };
-
-    // Start combining from the first orbit
-    combineOrbits(0);
+    // Start the recursive backtracking search.
+    scan_edge_coloring(0, edge_list, available_colors, edge_orbits, edge_index_map,
+                       current_coloring, all_colorings);
 
     return all_colorings;
 }
