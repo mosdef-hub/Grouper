@@ -820,3 +820,11 @@ class TestAtomGraph(BaseTest):
 
     #     # Benchmark the add_edge method
     #     benchmark(benchmark_add_edge)
+
+    def test_smiles_brackets(self):
+        assert Group("type1", "[C]", [0])
+        assert Group("type1", "[C][C]", [0])
+        assert Group("type1", "[Cl][N](C)[Li+]", [0])
+        gG = GroupGraph()
+        gG.add_node("type1", "C([Cl])([Br])[Li+]", [0])
+        assert gG.to_smiles() == "[Li+]C(Cl)Br"

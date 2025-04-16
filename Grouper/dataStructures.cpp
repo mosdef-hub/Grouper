@@ -1712,6 +1712,34 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
         } else if (c == '#') {
             // Set bond order to triple
             bondOrder = 3;
+        } else if (c == '[') {
+            // store characters within brackets for next element
+            std::string next_elem = "";
+            for (size_t j = i+1; j < smiles.size(); ++j) {// iter through next i elements
+                char bracketChar = smiles[j] ;
+                if (bracketChar == ']') {
+                    i = j; //reset to end of parsed brackets
+                    break;
+                }
+                else if (std::isalpha(bracketChar)){
+                    next_elem += bracketChar;
+                }
+            if (next_elem.length() < 1) {
+                throw GrouperParseException(
+                    "Failed to Parse SMILES of: " + smiles +
+                    " at element of " + smiles.substr(i, j)
+                );
+            }
+            }
+            int valency = standardElementValency[next_elem];
+            addNode(next_elem, valency);
+            NodeIDType currentNode = nodes.size() - 1;
+            // If there's a previous node, add an edge with the current bond order
+            if (lastNode != -1) {
+                addEdge(lastNode, currentNode, bondOrder);
+            }
+            lastNode = currentNode;
+            bondOrder = 1; // Reset bond order to single after use
         } else {
             // Handle unsupported characters (e.g., invalid SMILES)
             throw std::invalid_argument(
