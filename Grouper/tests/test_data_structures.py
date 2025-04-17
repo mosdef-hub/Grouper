@@ -132,22 +132,33 @@ class TestGroupGraph(BaseTest):
         graph.add_node("type1", "C", [0, 0])
 
         assert len(graph.nodes) == 1
-        assert set(n.type for n in graph.nodes.values()) == set(["type1"])
-        assert set(n.pattern for n in graph.nodes.values()) == set(["C"])
-        assert [n.ports for n in graph.nodes.values()] == [[0, 1]]
-        assert [n.hubs for n in graph.nodes.values()] == [[0, 0]]
 
+        assert set(n.type for n in graph.nodes.values()) == {"type1"}
+        assert set(n.pattern for n in graph.nodes.values()) == {"C"}
+        assert set(tuple(n.ports) for n in graph.nodes.values()) == {(0, 1)}
+        assert set(tuple(n.hubs) for n in graph.nodes.values()) == {(0, 0)}
+        
         graph.add_node("type1")
 
         # Adding a node with different type and pattern
         graph.add_node("type2", "C", [0])
+        
         assert len(graph.nodes) == 3
-        assert set(n.type for n in graph.nodes.values()) == set(
-            ["type1", "type1", "type2"]
-        )
-        assert set(n.pattern for n in graph.nodes.values()) == set(["C", "C", "C"])
-        assert [n.ports for n in graph.nodes.values()] == [[0], [0, 1], [0, 1]]
-        assert [n.hubs for n in graph.nodes.values()] == [[0], [0, 0], [0, 0]]
+        assert set(n.type for n in graph.nodes.values()) == {"type1", "type1", "type2"}
+        assert set(n.pattern for n in graph.nodes.values()) == {"C"}
+        assert set(tuple(n.ports) for n in graph.nodes.values()) == {(0,), (0, 1)}
+        assert set(tuple(n.hubs) for n in graph.nodes.values()) == {(0,), (0, 0)}
+
+        group = Group("alkene", "C=C", [0,0,1,1])
+        graph.add_node(group)
+        
+        assert len(graph.nodes) == 4
+        assert set(n.type for n in graph.nodes.values()) == {"type1", "type1", "type2", "alkene"}
+        assert set(n.pattern for n in graph.nodes.values()) == {"C", "C=C"}
+        assert set(tuple(n.ports) for n in graph.nodes.values()) == {(0,), (0, 1), (0, 1, 2, 3)}
+        assert set(tuple(n.hubs) for n in graph.nodes.values()) == {(0,), (0, 0), (0, 0, 1, 1)}
+
+
 
     def test_add_edge(self):
         graph = GroupGraph()
@@ -476,6 +487,13 @@ class TestAtomGraph(BaseTest):
         agraph.add_node("C", 4)
         assert set(n.type for n in agraph.nodes.values()) == set(["C"])
         assert set(n.valency for n in agraph.nodes.values()) == set([4])
+
+        atom = Atom("C", 4)
+        agraph.add_node(atom)
+        assert set(n.type for n in agraph.nodes.values()) == set(["C", "C"])
+        assert set(n.valency for n in agraph.nodes.values()) == set([4, 4])
+        assert len(agraph.nodes) == 2
+        assert len(agraph.edges) == 0
 
     def test_from_smiles(self):
         graph = AtomGraph()

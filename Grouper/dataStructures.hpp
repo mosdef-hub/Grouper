@@ -75,6 +75,7 @@ public:
     bool operator==(const AtomGraph& other) const;
 
     void addNode(const std::string& ntype = "", int valency = -1);
+    void addNode(Atom atom);
     void addEdge(NodeIDType src, NodeIDType dst, unsigned int order = 1);
     int getFreeValency(NodeIDType nid) const;
     std::string printGraph() const;
@@ -129,6 +130,7 @@ public:
         std::vector<NodeIDType> hubs,
         bool isSmarts = false
     );
+    void addNode(Group group);
     bool addEdge(
         std::tuple<NodeIDType, PortType> fromNodePort,
         std::tuple<NodeIDType, PortType> toNodePort,
