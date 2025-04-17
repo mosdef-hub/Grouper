@@ -170,13 +170,15 @@ class TestCounting(BaseTest):
 
 
     def test_group_graph_count(self):
-        for n_nodes in range(2, 5):
+        for n_nodes in range(2, 4):
             node_types = {
-                # 0: Group("benzene", "C1=CC=CC=C1", [0,1,2,3,4,5]),
-                # 0: Group('alkene', 'C=C', [0, 0, 1,1]),
-                0: Group("ester", "C(O)=O", [0,1]), 
-                # 2: Group("amine", "N", [0,0,0]),
+                Group("ester", "C(O)=O", [0,1]),
+                Group("amine", "N", [0,0,0]),
+                Group("carbon", "C", [0,0,0,0]),
+                Group("alkene", "C=C", [0, 0, 1, 1]),
+                # Group("benzene", "C1=CC=CC=C1", [0,1,2,3,4,5])
             }
+            node_types = {i: node for i, node in enumerate(node_types)}
             # generate uncolored graphs
             os.system(f"geng -c {n_nodes} > geng_output.txt")
             # generate colored graphs
@@ -200,27 +202,15 @@ class TestCounting(BaseTest):
                         src_ports = node_types[colors[src]].ports
                         dst_ports = node_types[colors[dst]].ports
                         combos = itertools.product(src_ports, dst_ports)
-                        # print(list(combos))
                         unfiltered_edge_inventory[(src, dst)] = list(combos)
 
                     for ports in itertools.product(*unfiltered_edge_inventory.values()):
-
-                        # if set(list(ports)) == set([(0,0), (0,1), (1,2)]):
-                        #     import pdb
-                        #     pdb.set_trace()
 
                         try:
                             gG.clear_edges()
                             for i, (src, dst) in enumerate(edge_list):
                                 src_port, dst_port = ports[i]
-                                # src_hub, dst_hub = node_types[colors[src]].hubs[src_port], node_types[colors[dst]].hubs[dst_port]
-                                # print("Adding edge:", (src, src_hub), (dst, dst_hub))
                                 gG.add_edge( (src, src_port), (dst, dst_port))
-
-                            if gG.to_smiles() == "O=C1OOC(=O)C(=O)OOC1=O":
-                                import pdb
-                                pdb.set_trace()
-                                
                             pattern_inventory.add(gG.to_smiles())
                         except Exception as e:
                             continue
