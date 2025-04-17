@@ -52,7 +52,6 @@ class TestCounting(BaseTest):
         aut_group = np.array(graph.graph.get_automorphisms_vf2())
         permutation_group = PermutationGroup(aut_group)
         cycle_index_polynomial = graph.get_cycle_index(permutation_group)
-        print(cycle_index_polynomial)
         n_types = 2
         n_nodes = len(node_colors)
         types = sympy.symbols(f"t1:{n_types+1}")
@@ -67,7 +66,6 @@ class TestCounting(BaseTest):
                 ]
             )
         )
-        print(p_g)
         n_unique_graphs = graph.apply_enumeration_theorem(
             cycle_index_polynomial, 2
         )
@@ -93,7 +91,6 @@ class TestCounting(BaseTest):
             dummy_graph = NodeColoredGraph(G.edges, [0,0,0])
             dummy_graph.graph = iG
             permutation_group = PermutationGroup(aut_group)
-            print("Permutation group:", permutation_group)
             cycle_index_polynomial = dummy_graph.get_cycle_index(permutation_group)
             n_unique_graphs = dummy_graph.apply_enumeration_theorem(
                 cycle_index_polynomial, n_atoms
@@ -218,7 +215,7 @@ class TestCounting(BaseTest):
             exhausted_space = exhaustive_generate(
                 n_nodes=n_nodes,
                 node_defs=set(node_types.values()),
-                num_procs=-1,
+                num_procs=1,
                 vcolg_output_file="",
                 positive_constraints={},
                 negative_constraints=set(),
@@ -230,7 +227,6 @@ class TestCounting(BaseTest):
             for graph in exhausted_space:
                 if graph.to_smiles() not in pattern_inventory:
                     missing_graphs.add(graph.to_smiles())
-                    print(graph)
             if missing_graphs:
                 print("Missing graphs in pattern inventory:", missing_graphs)
 

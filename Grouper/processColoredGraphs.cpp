@@ -443,7 +443,7 @@ std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings_Full(
 
 //***************************************************************************
 // Global variable for collecting vertex automorphism generators from nauty.
-static std::vector<std::vector<int>> vertex_aut_generators;
+thread_local std::vector<std::vector<int>> vertex_aut_generators;
 
 //***************************************************************************
 // Nauty's userautomproc callback for collecting vertex automorphism generators.
@@ -647,14 +647,15 @@ void process_nauty_output(
     }
 
     // Calculate node orbits using nauty then compute edge orbits
-    auto [nodeOrbits, edgeOrbits] = gG.computeOrbits(
-        edge_list, colors,
-        g, lab, ptn, orbits, options, stats // Pass nauty structures
-    );
+    // auto [nodeOrbits, edgeOrbits] = gG.computeOrbits(
+    //     edge_list, colors,
+    //     g, lab, ptn, orbits, options, stats // Pass nauty structures
+    // );
 
     // Generate edge automorphism group
     EdgeGroup edgeGroup = obtainEdgeAutomorphismGenerators(
-        edge_list, colors, g, lab, ptn, orbits, options, stats
+        edge_list, colors, 
+        g, lab, ptn, orbits, options, stats // Pass nauty structures
     );
 
     // printf("Edge group size: %d\n", edgeGroup.perms.size());
@@ -670,31 +671,31 @@ void process_nauty_output(
 
 
     // Change the edge orbits to a vector of sets for generating colorings
-    std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> edge_orbits_vector;
-    std::unordered_set<int> unique_orbits;
-    for (const auto& orbit : edgeOrbits) {
-        unique_orbits.insert(orbit);
-    }
-    // Put edge orbits in same order into a set
-    for (int i = 0; i < unique_orbits.size(); i++) {
-        edge_orbits_vector.push_back({});
-    }
-    std::unordered_map<int,int> orbit_to_index;
-    int index = 0;
-    for (const auto& orbit : unique_orbits) {
-        if (orbit_to_index.find(orbit) == orbit_to_index.end()) {
-            orbit_to_index[orbit] = index;
-            index++;
-        }
-    }
-    std::unordered_map<std::pair<int, int>, int, hash_pair> edge_to_index;
-    for (int i = 0; i < edge_list.size(); i++) {
-        edge_to_index[edge_list[i]] = i;
-    }
-    for (const auto& edge : edge_list) {
-        int edge_index = edge_to_index[edge];  // Get unique edge index
-        edge_orbits_vector[orbit_to_index[edgeOrbits[edge_index]]].insert(edge);
-    }
+    // std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> edge_orbits_vector;
+    // std::unordered_set<int> unique_orbits;
+    // for (const auto& orbit : edgeOrbits) {
+    //     unique_orbits.insert(orbit);
+    // }
+    // // Put edge orbits in same order into a set
+    // for (int i = 0; i < unique_orbits.size(); i++) {
+    //     edge_orbits_vector.push_back({});
+    // }
+    // std::unordered_map<int,int> orbit_to_index;
+    // int index = 0;
+    // for (const auto& orbit : unique_orbits) {
+    //     if (orbit_to_index.find(orbit) == orbit_to_index.end()) {
+    //         orbit_to_index[orbit] = index;
+    //         index++;
+    //     }
+    // }
+    // std::unordered_map<std::pair<int, int>, int, hash_pair> edge_to_index;
+    // for (int i = 0; i < edge_list.size(); i++) {
+    //     edge_to_index[edge_list[i]] = i;
+    // }
+    // for (const auto& edge : edge_list) {
+    //     int edge_index = edge_to_index[edge];  // Get unique edge index
+    //     edge_orbits_vector[orbit_to_index[edgeOrbits[edge_index]]].insert(edge);
+    // }
 
     // Compute all non-automorphic colorings
     // std::vector<std::vector<int>> unique_colorings = generateNonAutomorphicEdgeColorings(edge_list, edge_orbits_vector, possible_edge_colors);
@@ -719,44 +720,38 @@ void process_nauty_output(
         gG.clearEdges();
         // Add edges with the current coloring
         size_t edge_index = 0;
-        try {
-            for (const auto& edge : edge_list) {
-                // Ensure canonical order for undirected edge:
-                int s = edge.first;
-                int t = edge.second;
-            
-                int color = coloring[edge_index++];
-                // Use the canonical order for color conversion.
-                std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(colors[s])),
-                                                               node_types.at(int_to_node_type.at(colors[t])));
-                int sPort = colorPort.first;
-                int tPort = colorPort.second;
-                bool added = false;
+        bool all_edges_added = true;
+        for (const auto& edge : edge_list) {
+            // Ensure canonical order for undirected edge:
+            int s = edge.first;
+            int t = edge.second;
+        
+            int color = coloring[edge_index++];
+            // Use the canonical order for color conversion.
+            std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(colors[s])),
+                                                            node_types.at(int_to_node_type.at(colors[t])));
+            int sPort = colorPort.first;
+            int tPort = colorPort.second;
+            bool added = false;
+            try {
+                gG.addEdge({s, sPort}, {t, tPort});
+                added = true;
+            }
+            catch (...) {
                 try {
-                    gG.addEdge({s, sPort}, {t, tPort});
+                    gG.addEdge({s, tPort}, {t, sPort});
                     added = true;
                 }
                 catch (...) {
-                    try {
-                        gG.addEdge({s, tPort}, {t, sPort});
-                        added = true;
-                    }
-                    catch (...) {
-                        // std::cout << "Edge add failed for both port directions\n";
-                    }
-                }
-                if (!added) {
-                    throw std::runtime_error("Edge could not be added in any port order.");
+                    // std::cout << "Edge add failed for both port directions\n";
                 }
             }
-        } catch (const std::exception& e) {
-            // std::cout << "Error adding edge: " << e.what() << std::endl;
-            // printf("Failed coloring: { ");
-            // for (const auto& color : coloring) {
-            //     printf("%d ", color);
-            // }
-            // printf("}\n");
-            // printf("gG: %s\n", gG.printGraph().c_str());
+            if (!added) {
+                all_edges_added = false;
+                break;
+            }
+        }
+        if (!all_edges_added) {
             continue;
         }
     //  Check if the graph is unique considering permutations

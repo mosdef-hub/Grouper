@@ -215,6 +215,8 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
     omp_set_num_threads(num_procs);      // Set the number of threads to match
 
+    int n_finished = 0;
+
     std::cout<< "Using "<<num_procs << " processors" << std::endl;
     
     #pragma omp parallel
@@ -243,7 +245,8 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
             #pragma omp critical
             {
-                update_progress(i + 1, total_lines);
+                n_finished++;
+                update_progress(n_finished, total_lines);
             }
         }
 
