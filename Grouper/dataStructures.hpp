@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <memory>
 #include <tuple>
+#include <stdexcept>
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -104,8 +105,8 @@ public:
         bool operator!=(const Group& other) const;
         Group() : ntype(""), pattern(""), hubs(), ports() {}
         Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs, const bool isSmarts = false);
-        // Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs) 
-        // : Group(ntype, pattern, hubs, false) {} 
+        // Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs)
+        // : Group(ntype, pattern, hubs, false) {}
         std::vector<int> hubOrbits() const;
         std::vector<std::vector<int>> getPossibleAttachments(int degree) const;
         std::string toString() const;
@@ -275,5 +276,16 @@ namespace std {
         }
     };
 }
+
+class GrouperParseException : public std::exception {
+    private:
+    std::string message;
+
+public:
+    GrouperParseException(const std::string& msg) : message(msg) {}
+    const char* what() const noexcept override {
+        return message.c_str();
+    }
+};
 
 #endif // DATASTRUCTURES_H

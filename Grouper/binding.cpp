@@ -25,6 +25,7 @@ py::set convert_unordered_set(const std::unordered_set<GroupGraph>& cpp_set) {
 
 PYBIND11_MODULE(_Grouper, m) {
     m.doc() = "Grouper bindings for Python";
+    py::register_exception<GrouperParseException>(m, "GrouperParseException");
     py::class_<GroupGraph::Group>(m, "Group")
         .def(py::init<>())
         .def(py::init<const std::string&, const std::string&, const std::vector<int>&, bool>(),
@@ -165,7 +166,7 @@ PYBIND11_MODULE(_Grouper, m) {
         py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
         py::arg("negative_constraints") = std::unordered_set<std::string>{}
     );
-    m.def("fragment", &fragment,
+    m.def("exhaustive_fragment", &fragment,
         py::arg("smiles"),
         py::arg("node_defs")
     );

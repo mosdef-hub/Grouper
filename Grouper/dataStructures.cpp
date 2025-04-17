@@ -20,6 +20,7 @@
 #include <GraphMol/AtomIterators.h>
 #include <GraphMol/BondIterators.h>
 #include <GraphMol/PeriodicTable.h>
+#include <GraphMol/MolOps.h>
 #include <RDGeneral/types.h>
 
 #include <nauty/nauty.h>
@@ -73,6 +74,41 @@ std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmart
     return std::unique_ptr<RDKit::ROMol>(isSmarts ? RDKit::SmartsToMol(pattern) : RDKit::SmilesToMol(pattern));
 }
 
+// Function to convert rdkit ROMol to AtomGraph
+void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGraph &aG) {
+    const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
+    std::cout<<"Creating AtomGraph from RDKit ROMol..."<<std::endl;
+    for (size_t i=0; i<mol->getNumAtoms(); ++i) {
+        const auto& atom = mol->getAtomWithIdx(i);
+        int atomicNumber = atom->getAtomicNum();
+        // Calculate explicit valence
+        // int valence = atom->calcExplicitValence();                             // This appears to be broken in RDKit, always returns 2 for [N+] in C[N+]=C
+        // Iterate over the bonds and sum the bond orders
+        int valence = 0;
+        for (size_t i=0; i<mol->getNumBonds(); i++) {
+            const auto& bond = mol->getBondWithIdx(i);
+            double border = bond->getBondTypeAsDouble();
+            int borderInt = (int)border;
+            if (bond->getBeginAtomIdx() == atom->getIdx()) {
+                valence += borderInt;
+            }
+            else if (bond->getEndAtomIdx() == atom->getIdx()) {
+                valence += borderInt;
+            }
+        }
+        int defaultValence = pt->getDefaultValence(atomicNumber);
+        valence = std::max(valence, defaultValence);
+        aG.addNode(atom->getSymbol(), valence);
+    }
+    for (size_t i=0; i<mol->getNumBonds(); i++) {
+        const auto& bond = mol->getBondWithIdx(i);
+        double border = bond->getBondTypeAsDouble();
+        int borderInt = (int)border;
+        aG.addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt);
+    }
+}
+
+
 // Core methods
 GroupGraph::GroupGraph()
     : nodes(), edges(), nodetypes() {}
@@ -121,13 +157,13 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     else {
         atomGraph.fromSmiles(pattern);
     }
-    std::unordered_map<int, int> atomFreeValency;
     for (int hub : hubs) {
         if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
             throw std::invalid_argument("Hub ID "+ std::to_string(hub) +" is greater than the number of atoms in the group");
         }
     }
-    
+    // Valency Checks
+    std::unordered_map<int, int> atomFreeValency;
     for (const auto& [id, node] : atomGraph.nodes) {
         atomFreeValency[id] = node.valency;
     }
@@ -143,6 +179,11 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     std::unique_ptr<RDKit::ROMol> mol = createMol(pattern, isSmarts);
     if (!mol) {
         throw std::invalid_argument("Invalid SMARTS or SMILES: " + pattern + " provided");
+    }
+    // Validate connected molecules
+    std::vector<boost::shared_ptr<RDKit::ROMol>> moleculesVector = RDKit::MolOps::getMolFrags(*mol);
+    if (moleculesVector.size()>1) {
+        throw GrouperParseException("Invalid pattern " + pattern + " with a detached molecules.");
     }
     this->ntype = ntype;
     this->pattern = pattern;
@@ -168,7 +209,7 @@ std::vector<int> GroupGraph::Group::hubOrbits() const {
     // Step 1: Convert group to a nauty-compatible atomic graph
     int m = SETWORDSNEEDED(n);
     std::vector<setword> adj(n * m, 0);
-    
+
     // Map atoms to nauty node indices
     std::unordered_map<int, int> atom_to_nauty;
     int index = 0;
@@ -605,7 +646,7 @@ void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int st
         for (int j = 0; j < num_edges; j++) {
             if ((nauty_edges[j][0] == new_v1 && nauty_edges[j][1] == new_v2) ||
                 (nauty_edges[j][0] == new_v2 && nauty_edges[j][1] == new_v1)) {
-                
+
                 // Merge edge orbits using Union-Find
                 uf.unite(i, j);
             }
@@ -919,7 +960,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
             // RDKit::Atom newAtom = **atom;
             // molecularGraph->addAtom(&newAtom, true);
             int atomicNumber = (*atom)->getAtomicNum();
-            int maxValence = pt->getDefaultValence(atomicNumber);
+            int maxValence = pt->getDefaultValence(atomicNumber) + (*atom)->getFormalCharge();
             atomGraph->addNode((*atom)->getSymbol(), maxValence);
 
         }
@@ -1035,7 +1076,7 @@ void GroupGraph::deserialize(const std::string& data) {
 
             // Create and insert the group
             Group group(ntype, pattern, hubs, isSmarts);
-            
+
             // If ports were specified, override the default ports
             if (node_data.contains("ports")) {
                 group.ports = node_data["ports"].get<std::vector<PortType>>();
@@ -1099,7 +1140,7 @@ void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
     *adj = new graph[*n * (*m)]();
 
     std::fill(*adj, *adj + (*n * (*m)), 0); // Initialize adjacency matrix to 0
-    
+
     // Build adjacency list
     for (const auto& [nodeID, group] : nodes) {
         int g_node = group_to_nauty[nodeID];
@@ -1314,30 +1355,6 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     for (const auto& h : hubs) {
         queryNeededFreeValency[h]++;
     }
-    // Add a count for the bonds that are in the mol graph
-    // for (const auto& [nodeid, dstSet] : query.edges) {
-    //     int totalBondCount = 0;
-    //     for (const auto& [dst, order] : dstSet) {
-    //         totalBondCount += order;
-    //     }
-    //     queryNeededFreeValency[nodeid] += totalBondCount;
-    // }
-    // std::cout<<"Query Hub Counts: "<<std::endl;
-    // for (const auto& [id, count] : queryNeededFreeValency) {
-    //     std::cout << id << ": " << count << std::endl;
-    // }
-    // std::cout << std::endl;
-
-    // std::cout<<"Query Graph: "<<std::endl;
-    // std::cout<<query.printGraph()<<std::endl;
-    // std::cout<<"This Graph: "<<std::endl;
-    // std::cout<<this->printGraph()<<std::endl;
-
-    // std::cout<<"Query Hub Counts: "<<std::endl;
-    // for (const auto& [id, count] : queryNeededFreeValency) {
-    //     std::cout << id << ": " << count << std::endl;
-    // }
-    // std::cout << std::endl;
 
     // Step 1: Pre-filter nodes in the graph based on query node attributes
     std::unordered_map<NodeIDType, std::vector<NodeIDType>> candidateNodes; // Maps query nodes to possible candidates in the main graph
@@ -1356,50 +1373,19 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
         }
     }
 
-    // std::cout << "Candidate Nodes: " << std::endl;
-    // for (const auto& [queryNode, candidates] : candidateNodes) {
-    //     std::cout << queryNode << ": ";
-    //     for (const auto& candidate : candidates) {
-    //         std::cout << candidate << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
-    // std::cout << std::endl;
-
     // Step 2: Backtracking function to explore mappings
     std::function<void(std::unordered_map<NodeIDType, NodeIDType>&, std::unordered_set<NodeIDType>&)> backtrack =
         [&](std::unordered_map<NodeIDType, NodeIDType>& currentMapping, std::unordered_set<NodeIDType>& usedNodes) {
-            // Debug: Print the current mapping
-            // std::cout << "Current Mapping: ";
-            // for (const auto& mapping : currentMapping) {
-            //     std::cout << "(" << mapping.first << " -> " << mapping.second << ") ";
-            // }
-            // std::cout << std::endl;
             // If all query nodes are mapped, validate hubs
             if (currentMapping.size() == query.nodes.size()) {
                 // Check if the hubs specified match the query node hubs
                 for (const auto& [id, count] : queryNeededFreeValency) {
                     NodeIDType graphNodeid = currentMapping[id];
-                    // printf("Query Group: %d", id);
-                    // printf("Graph Group: %d", graphNodeid);
-                    // printf("this->getFreeValency(graphNodeid): %d", this->getFreeValency(graphNodeid));
-                    // printf("count: %d", count);
-                    // printf("\n");
+
                     if(this->getFreeValency(graphNodeid) != count) { // Check if number of bonds for query node matches the number of hubs
                         return;
                     }
                 }
-                // printf("Hubs Matched");
-                // Check if the bonds are the same
-                // for (const auto& [queryNodeid, dstSet] : query.edges) {
-                //     for (const auto& [dst, order] : dstSet) {
-                //         NodeIDType graphNodeid = currentMapping[queryNodeid];
-                //         auto it = edges.find(graphNodeid);
-                //         if (it == edges.end() || it->second.find(std::make_pair(currentMapping[dst], order)) == it->second.end()) {
-                //             return;
-                //         }
-                //     }
-                // }
                 for(const auto& [src, dst, order] : query.edges) {
                     NodeIDType graphNodeid = currentMapping[src];
                     auto it = edges.find(std::make_tuple(graphNodeid, currentMapping[dst], order));
@@ -1407,8 +1393,6 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
                         return;
                     }
                 }
-                // printf("Bonds Matched\n");
-
 
                 // Add the valid match
                 std::vector<std::pair<NodeIDType, NodeIDType>> match;
@@ -1506,8 +1490,6 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
  *
  * TODO: Plenty more symbols to support.
  * `R,!,X,ints,*,@`
- * TODO: Add possibility to leverage RDKit parsing alternatively
- * TODO: Handle two letter elements, such as Br, Cl etc.
  *
  * @tparam pattern a string that will be processed into AtomGraph
  * @return void
@@ -1516,113 +1498,193 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
     nodes.clear();
     edges.clear();
 
-    std::unordered_map<std::string, int> standardElementValency = {
-        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+    // Attempt to load via rdkit
+    const auto& mol = createMol(smarts, true);
+    if (mol) {
+        createAtomGraphFromRDKit(mol, *this);
+        return;
     };
 
-    std::vector<NodeIDType> centralNodeVec; // List to handle branching
-    std::unordered_map<int, NodeIDType> ringClosures; // Map for ring closure indices
-    int prevDepth = 0; // For determining if there's branching
-    int currentDepth = 0; // How many parantheses deep are you at in the string
+    std::cout<<"Attempting to load from custom parser..." << std::endl;
 
+    // If RDKit fails...
+    std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1},
+        {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1},
+    };
+
+    std::vector<NodeIDType> centralNodeVec;
+    std::unordered_map<int, NodeIDType> ringClosures;
+
+    int prevDepth = 0;
+    int currentDepth = 0;
     NodeIDType currentNode = 0;
-    int bondOrder = 1; // Default to single bond
+    int bondOrder = 1;
 
     for (size_t i = 0; i < smarts.length(); ++i) {
         char c = smarts[i];
 
-        if (standardElementValency.count(std::string(1, c))) {
-            // Handle atom
-            addNode(std::string(1, c));
+        if (c == '[') {
+            // Bracketed atom, extract until ']'
+            size_t end = smarts.find(']', i);
+            if (end == std::string::npos) {
+                throw std::invalid_argument("Unclosed bracket in SMARTS string: `" + smarts + "`");
+            }
+
+            std::string bracketContent = smarts.substr(i + 1, end - i - 1);
+            i = end; // advance index
+
+            // Extract atomic symbol and optional charge
+            std::string symbol;
+            int charge = 0;
+
+            // Simple regex-free parser
+            size_t j = 0;
+            if (j + 1 < bracketContent.size() && islower(bracketContent[j + 1])) {
+                symbol = bracketContent.substr(j, 2);
+                j += 2;
+            } else {
+                symbol = bracketContent.substr(j, 1);
+                j += 1;
+            }
+
+            // Look for '+' or '-'
+            while (j < bracketContent.size()) {
+                if (bracketContent[j] == '+') {
+                    charge++;
+                    j++;
+                    while (j < bracketContent.size() && std::isdigit(bracketContent[j])) {
+                        charge += bracketContent[j] - '0';
+                        j++;
+                    }
+                } else if (bracketContent[j] == '-') {
+                    charge--;
+                    j++;
+                    while (j < bracketContent.size() && std::isdigit(bracketContent[j])) {
+                        charge -= bracketContent[j] - '0';
+                        j++;
+                    }
+                } else {
+                    j++;
+                }
+            }
+
+            // Use standard valence if known, adjusted by charge
+            int maxValence = 4;
+            if (standardElementValency.count(symbol)) {
+                maxValence = standardElementValency[symbol] + charge;
+            }
+
+            addNode(symbol, maxValence);
             currentNode = nodes.size() - 1;
 
-            // In the initial state, no bonds occur, so just add the node
+            if (centralNodeVec.size() <= currentDepth) {
+                centralNodeVec.resize(currentDepth + 1, currentNode);
+            }
+
             if (centralNodeVec.empty()) {
                 centralNodeVec.push_back(currentNode);
-            } else if (currentDepth <= prevDepth) { // at the end of a branch, so overwrite previous source node
+            } else if (currentDepth <= prevDepth) {
                 addEdge(centralNodeVec[currentDepth], currentNode, bondOrder);
                 centralNodeVec[currentDepth] = currentNode;
-            } else { // bond goes to the actively building branch
-                addEdge(centralNodeVec[currentDepth-1], currentNode, bondOrder);
+            } else {
+                addEdge(centralNodeVec[currentDepth - 1], currentNode, bondOrder);
                 centralNodeVec[currentDepth] = currentNode;
             }
+
+            bondOrder = 1;
             prevDepth = currentDepth;
         }
-        else if (c == '(')
-        {
-            // Going one level deeper into molecule branching
+        else if (std::isalpha(c)) {
+            // Non-bracket atom, try 2-letter or 1-letter element
+            std::string symbol;
+            if (i + 1 < smarts.length() && islower(smarts[i + 1])) {
+                symbol = smarts.substr(i, 2);
+                i++;
+            } else {
+                symbol = std::string(1, c);
+            }
+
+            if (!standardElementValency.count(symbol)) {
+                throw std::invalid_argument("Unknown atom type: " + symbol);
+            }
+
+            addNode(symbol, standardElementValency[symbol]);
+            currentNode = nodes.size() - 1;
+
+            if (centralNodeVec.size() <= currentDepth) {
+                centralNodeVec.resize(currentDepth + 1, currentNode);
+            }
+
+            if (centralNodeVec.empty()) {
+                centralNodeVec.push_back(currentNode);
+            } else if (currentDepth <= prevDepth) {
+                addEdge(centralNodeVec[currentDepth], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            } else {
+                addEdge(centralNodeVec[currentDepth - 1], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            }
+
+            bondOrder = 1;
+            prevDepth = currentDepth;
+        }
+        else if (c == '(') {
             currentDepth++;
         }
-        else if (c == ')')
-        {
-            // Stepping one level out of molecule branching
+        else if (c == ')') {
             currentDepth--;
         }
-        else if (std::isdigit(c))
-        {
-            // Handle ring closure
-            // NodeIDType currentNode = nodes.size() - 1;
-            int ringIndex = c - '0'; // char conversion to int
+        else if (std::isdigit(c)) {
+            int ringIndex = c - '0';
             if (ringClosures.find(ringIndex) != ringClosures.end()) {
-                // Connect the current node to the ring closure with the current bond order
                 addEdge(currentNode, ringClosures[ringIndex], bondOrder);
-                bondOrder = 1; // Reset bond order to single after use
+                bondOrder = 1;
                 ringClosures.erase(ringIndex);
             } else {
-                // Store the current node as the ring closure point
                 ringClosures[ringIndex] = currentNode;
             }
         }
-        else if (c == '-')
-        {
-            // Set bond order to single, this may be useless
+        else if (c == '-') {
             bondOrder = 1;
         }
-        else if (c == '=')
-        {
-            // Set bond order to double
+        else if (c == '=') {
             bondOrder = 2;
         }
-        else if (c == '#')
-        {
-            // Set bond order to triple
+        else if (c == '#') {
             bondOrder = 3;
         }
-        else if ((c == '[') || (c == ']'))
-        {
-            // Some symbols that need to be considered with more specifics
-            ;
-        }
-        else
-        {
-            // Handle unsupported characters (e.g., invalid SMARTS)
-            throw std::invalid_argument(
-                "Unsupported character in SMARTS: `"
-                + std::string(1, c)
-                + "` for SMILES "
-                + std::string(smarts)
-            );
+        else {
+            throw std::invalid_argument("Unsupported character in SMARTS: `" + std::string(1, c) + "` for SMILES `" + smarts + "`");
         }
     }
 
-    // Basic error checking for unclosed rings
     if (!ringClosures.empty()) {
         std::cerr << "Unclosed rings detected: ";
         for (const auto& entry : ringClosures) {
             std::cerr << entry.first << " ";
         }
         std::cerr << std::endl;
-        throw std::invalid_argument(
-                "Unclosed ring detected in SMILES string `"
-                + std::string(smarts)
-                + "`"
-            );
+        throw std::invalid_argument("Unclosed ring detected in SMILES string `" + smarts + "`");
     }
+    if (currentDepth != 0) {
+        throw std::invalid_argument("Unmatched parentheses in SMILES string `" + smarts + "`");
+    }
+
 }
 
 void AtomGraph::fromSmiles(const std::string& smiles) {
     nodes.clear();
     edges.clear();
+
+    // Attempt to load via rdkit
+    const auto& mol = createMol(smiles, false);
+    if (mol) {
+        createAtomGraphFromRDKit(mol, *this);
+        return;
+    };
+
+    std::cout<<"Attempting to load from custom parser..." << std::endl;
 
     std::unordered_map<std::string, int> standardElementValency = {
         {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}, {"c", 4}, {"n", 3}, {"o", 2}, {"s", 2}
@@ -1681,6 +1743,34 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
         } else if (c == '#') {
             // Set bond order to triple
             bondOrder = 3;
+        } else if (c == '[') {
+            // store characters within brackets for next element
+            std::string next_elem = "";
+            for (size_t j = i+1; j < smiles.size(); ++j) {// iter through next i elements
+                char bracketChar = smiles[j] ;
+                if (bracketChar == ']') {
+                    i = j; //reset to end of parsed brackets
+                    break;
+                }
+                else if (std::isalpha(bracketChar)){
+                    next_elem += bracketChar;
+                }
+            if (next_elem.length() < 1) {
+                throw GrouperParseException(
+                    "Failed to Parse SMILES of: " + smiles +
+                    " at element of " + smiles.substr(i, j)
+                );
+            }
+            }
+            int valency = standardElementValency[next_elem];
+            addNode(next_elem, valency);
+            NodeIDType currentNode = nodes.size() - 1;
+            // If there's a previous node, add an edge with the current bond order
+            if (lastNode != -1) {
+                addEdge(lastNode, currentNode, bondOrder);
+            }
+            lastNode = currentNode;
+            bondOrder = 1; // Reset bond order to single after use
         } else {
             // Handle unsupported characters (e.g., invalid SMILES)
             throw std::invalid_argument(
