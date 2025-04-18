@@ -214,6 +214,16 @@ class TestGroupGraph(BaseTest):
         with pytest.raises(ValueError):
             graph.add_edge((1, 1), (2, 1))
 
+
+        graph = GroupGraph()
+        graph.add_node("ester", "C(O)=O", [0, 1])
+        graph.add_node("ester", "C(O)=O", [0, 1])
+        graph.add_node("ester", "C(O)=O", [0, 1])
+        graph.add_edge((0, 1), (1, 1))
+        graph.add_edge((0, 0), (2, 0))
+        with pytest.raises(ValueError):
+            graph.add_edge((1, 1), (2, 1))
+
     def test_equal(self):
         graph1 = GroupGraph()
         graph2 = GroupGraph()
@@ -447,6 +457,32 @@ class TestGroupGraph(BaseTest):
             0,
             0,
         ]
+
+
+    def test_calculate_orbits(self):
+        graph = GroupGraph()
+        graph.add_node("ester", "C(O)=O", [0, 1])
+        graph.add_node("ester", "C(O)=O", [0, 1])
+        graph.add_node("ester", "C(O)=O", [0, 1])
+        graph.add_node("ester", "C(O)=O", [0, 1])
+
+        edge_list = [ (0, 2),(0, 3),(1, 2),(1, 3) ]
+        node_colors = [0,0,0,0]
+        node_orbits, edge_orbits = graph.compute_orbits(edge_list, node_colors)
+        assert node_orbits == [0, 0, 0, 0]
+        assert edge_orbits == [0, 0, 0, 0]
+
+        graph = GroupGraph()
+        graph.add_node("ester", "C(O)=O", [0, 1])
+        graph.add_node("ester", "C(O)=O", [0, 1])
+        graph.add_node("ester", "C(O)=O", [0, 1])
+        graph.add_node("not-ester", "C", [0, 0])
+
+        edge_list = [ (0, 2),(0, 3),(1, 2),(1, 3) ]
+        node_colors = [0,0,0,1]
+        node_orbits, edge_orbits = graph.compute_orbits(edge_list, node_colors)
+        assert node_orbits == [0, 0, 2, 3]
+        assert edge_orbits == [0, 1, 0, 1]
 
 
 class TestAtomGraph(BaseTest):
@@ -827,6 +863,49 @@ class TestAtomGraph(BaseTest):
         bGraph.add_edge(2, 1, 1)  # Single bond
 
         assert aGraph.to_canonical() == bGraph.to_canonical()
+
+
+
+        molecules = [
+            "C1CC1",
+            "C1OO1",
+            "O1OO1",
+            "N1OO1",
+            "N1NO1",
+            "N1NN1",
+            "C1NO1",
+            "CCC",
+            "CCO",
+            "C1NN1",
+            "COO",
+            "C1CO1",
+            "NNN",
+            "NON",
+            "NNO",
+            "C1CN1",
+            "NOO",
+            "COC",
+            "OCO",
+            "OOO",
+            "CNC",
+            "NCN",
+            "CCN",
+            "ONO",
+            "NCO",
+            "CNN",
+            "CON",
+            "CNO"
+        ]
+
+        basis = set()
+
+        for mol in molecules:
+            graph = AtomGraph()
+            graph.from_smiles(mol)
+            canon = graph.to_canonical()
+            canon = tuple(sorted(canon))
+            basis.add(canon)
+        assert len(basis) == len(molecules), "Not all molecules are unique after canonicalization"
 
     # def test_add_edge_performance(self, benchmark):
     #     graph = GroupGraph()

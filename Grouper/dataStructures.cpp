@@ -46,10 +46,30 @@ struct hash_vector {
     }
 };
 
+struct DisjointSet {
+    std::vector<int> parent;
+
+    DisjointSet(int n) : parent(n) {
+        for (int i = 0; i < n; ++i) parent[i] = i;
+    }
+
+    int find(int x) {
+        if (parent[x] != x) parent[x] = find(parent[x]);
+        return parent[x];
+    }
+
+    void unite(int x, int y) {
+        int rootX = find(x);
+        int rootY = find(y);
+        if (rootX != rootY) parent[rootY] = rootX;
+    }
+};
+
 struct NautyEdgeData {
     int num_edges;
     int edges[MAX_EDGES][2];
     int edge_orbits[MAX_EDGES];
+    DisjointSet* uf = nullptr;
 };
 
 // Each thread gets its own pointer to avoid conflicts
@@ -560,11 +580,11 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
     if (std::find(edges.begin(), edges.end(), edge) != edges.end()) {
             throw std::invalid_argument("Edge already exists");
     }
-    for (const auto& existingEdge : edges) {
-        if (std::get<0>(existingEdge) == from && std::get<1>(existingEdge) == fromPort) {
+    for (const auto& [srcNode, srcPort, dstNode, dstPort, bO] : edges) {
+        if ((srcNode == from && srcPort == fromPort) || (dstNode == from && dstPort == fromPort)) {
             throw std::invalid_argument("Source port already in use");
         }
-        if (std::get<2>(existingEdge) == to && std::get<3>(existingEdge) == toPort) {
+        if ((dstNode == to && dstPort == toPort) || (srcNode == to && srcPort == toPort)) {
             throw std::invalid_argument("Destination port already in use");
         }
     }
@@ -609,53 +629,42 @@ void GroupGraph::clearEdges() {
     edges.clear();
 }
 
-// Union-Find Data Structure
-struct DisjointSet {
-    std::vector<int> parent;
-
-    DisjointSet(int n) : parent(n) {
-        for (int i = 0; i < n; ++i) parent[i] = i;
-    }
-
-    int find(int x) {
-        if (parent[x] != x) parent[x] = find(parent[x]);
-        return parent[x];
-    }
-
-    void unite(int x, int y) {
-        int rootX = find(x);
-        int rootY = find(y);
-        if (rootX != rootY) parent[rootY] = rootX;
-    }
-};
-
 void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int stabvertex, int n) {
 
-    if (!edge_data_ptr) return; // Ensure pointer is set
+    if (!edge_data_ptr) return;
 
     int num_edges = edge_data_ptr->num_edges;
     int (*nauty_edges)[2] = edge_data_ptr->edges;
     int* edge_orbits = edge_data_ptr->edge_orbits;
 
-    DisjointSet uf(num_edges); // Disjoint-set to track edge orbit merging
+    DisjointSet* uf = edge_data_ptr->uf;
 
-    for (int i = 0; i < num_edges; i++) {
-        int v1 = nauty_edges[i][0], v2 = nauty_edges[i][1];
-        int new_v1 = perm[v1], new_v2 = perm[v2];
+    // Build edge index map from normalized edges to their indices
+    std::map<std::pair<int, int>, int> edge_index;
+    for (int i = 0; i < num_edges; ++i) {
+        int u = std::min(nauty_edges[i][0], nauty_edges[i][1]);
+        int v = std::max(nauty_edges[i][0], nauty_edges[i][1]);
+        edge_index[{u, v}] = i;
+    }
 
-        for (int j = 0; j < num_edges; j++) {
-            if ((nauty_edges[j][0] == new_v1 && nauty_edges[j][1] == new_v2) ||
-                (nauty_edges[j][0] == new_v2 && nauty_edges[j][1] == new_v1)) {
+    // For each edge, map its endpoints under the current permutation and merge orbits
+    for (int i = 0; i < num_edges; ++i) {
+        int u = nauty_edges[i][0];
+        int v = nauty_edges[i][1];
+        int pu = perm[u];
+        int pv = perm[v];
 
-                // Merge edge orbits using Union-Find
-                uf.unite(i, j);
-            }
+        auto permuted_edge = std::make_pair(std::min(pu, pv), std::max(pu, pv));
+
+        auto it = edge_index.find(permuted_edge);
+        if (it != edge_index.end()) {
+            uf->unite(i, it->second);
         }
     }
 
-    // Assign final edge orbit values
-    for (int i = 0; i < num_edges; i++) {
-        edge_orbits[i] = uf.find(i); // Assign orbit representatives
+    // Assign orbit representatives
+    for (int i = 0; i < num_edges; ++i) {
+        edge_orbits[i] = uf->find(i);
     }
 }
 
@@ -672,6 +681,8 @@ std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
     // Allocate a local edge data struct for this thread
     NautyEdgeData edge_data;
     edge_data.num_edges = edge_list.size();
+    DisjointSet uf(edge_list.size());
+    edge_data.uf = &uf;
     if (edge_data.num_edges > MAX_EDGES) {
         throw std::runtime_error("Too many edges; increase MAX_EDGES.");
     }
@@ -736,6 +747,8 @@ std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
     // Allocate a local edge data struct for this thread
     NautyEdgeData edge_data;
     edge_data.num_edges = edge_list.size();
+    DisjointSet uf(edge_list.size());
+    edge_data.uf = &uf;
     if (edge_data.num_edges > MAX_EDGES) {
         throw std::runtime_error("Too many edges; increase MAX_EDGES.");
     }
@@ -1841,23 +1854,30 @@ std::string AtomGraph::printGraph() const {
 }
 
 std::vector<setword> AtomGraph::toNautyGraph() const {
-    // Convert AtomGraph to a nauty graph representation
-    int n = nodes.size(); // Number of nodes
-    int m = SETWORDSNEEDED(n); // Size of one row of the adjacency matrix in setwords
+    int n = nodes.size();
+    int m = SETWORDSNEEDED(n);
 
     // Allocate storage for the graph
-    std::vector<setword> g(m * n, 0); // Initialize nauty graph (adjacency matrix)
+    std::vector<setword> g(m * n, 0);
 
     // Initialize the nauty graph
     EMPTYGRAPH(g.data(), m, n);
+    
+    // Add all edges (just once per edge, regardless of bond order)
     for (const auto& [src, dst, order] : edges) {
-        // Add edges based on bond order
-        for (int i = 0; i < order; ++i) {
-            ADDONEEDGE(g.data(), src, dst, m); // Add edge from 'src' to 'dst'
-        }
+        ADDONEEDGE(g.data(), src, dst, m);
     }
-    // Return the nauty graph representation
+    
     return g;
+}
+
+int AtomGraph::getNodeIndex(int node_id) const {
+    int index = 0;
+    for (const auto& [id, node] : nodes) {
+        if (id == node_id) return index;
+        index++;
+    }
+    return -1; // Not found
 }
 
 std::vector<setword> AtomGraph::canonize() {
@@ -1865,42 +1885,142 @@ std::vector<setword> AtomGraph::canonize() {
     std::vector<setword> g = this->toNautyGraph();
 
     // Prepare vectors and workspace
-    int n = nodes.size(); // Number of nodes
-    int m = SETWORDSNEEDED(n); // Size of one row of the adjacency matrix in setwords
-    std::vector<int> lab(n), ptn(n), orbits(n); // Label, partition, and orbits
-    std::vector<setword> canong(n);
-    setword workspace[160]; // Workspace for nauty
+    int n = nodes.size();
+    int m = SETWORDSNEEDED(n);
+    std::vector<int> lab(n), ptn(n), orbits(n);
+    std::vector<setword> canong(n * m);
+    
+    // Use dynamic allocation for workspace
+    DYNALLSTAT(setword, workspace, workspace_sz);
+    DYNALLOC2(setword, workspace, workspace_sz, 4*m, n, "malloc workspace");
 
-    // Sort nodes by color and initialize `lab` and `ptn`
-    std::vector<std::string> node_colors(n);
-    for (int i = 0; i < n; ++i) node_colors[i] = nodes[i].ntype;
-
-    std::unordered_map<std::string, int> color_to_index;
+    // Create edge colors based on bond orders
+    // We can't directly color edges in nauty, but we can use the node coloring
+    // to encode the edge color information
+    
+    // First, group nodes by their atom type
+    std::vector<int> node_colors(n);
+    std::map<std::string, int> atom_type_map;
     int color_index = 0;
-    for (const auto [id, atom] : nodes) {
-        if (color_to_index.find(atom.ntype) == color_to_index.end()){
-            color_to_index[atom.ntype] = color_index;
-            color_index++;
+    
+    for (int i = 0; i < n; i++) {
+        const auto& atom = nodes.at(i);
+        if (atom_type_map.find(atom.ntype) == atom_type_map.end()) {
+            atom_type_map[atom.ntype] = color_index++;
+        }
+        node_colors[i] = atom_type_map[atom.ntype];
+    }
+    
+    // Set up initial coloring based on atom types
+    for (int i = 0; i < n; i++) {
+        lab[i] = i;  // Identity permutation initially
+        ptn[i] = 1;  // All in one partition initially
+    }
+    ptn[n-1] = 0;    // End the last partition
+    
+    // Sort nodes by color to set up the initial partition
+    std::sort(lab.begin(), lab.end(), [&node_colors](int a, int b) {
+        return node_colors[a] < node_colors[b];
+    });
+    
+    // Update the partition array to separate different atom types
+    for (int i = 0; i < n-1; i++) {
+        if (node_colors[lab[i]] != node_colors[lab[i+1]]) {
+            ptn[i] = 0;  // End the current partition
         }
     }
-    std::vector<std::pair<int, int>> color_sorted_nodes;
-    for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(color_to_index[node_colors[i]], i);
-    std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
-    for (int i = 0; i < n; ++i) lab[i] = color_sorted_nodes[i].second;
-    for (int i = 0; i < n - 1; ++i) ptn[i] = (color_sorted_nodes[i].first == color_sorted_nodes[i + 1].first) ? 1 : 0;
-    ptn[n - 1] = 0;
+    
+    // Set up Nauty options for sparse graphs
+    static DEFAULTOPTIONS_SPARSEGRAPH(options);  // Use SPARSEGRAPH options instead of GRAPH
+    options.getcanon = TRUE;
+    options.defaultptn = FALSE;
 
-    // Set up Nauty options
-    static DEFAULTOPTIONS_GRAPH(options);
-    options.getcanon = true; // Calculate the canonical labeling
-    options.defaultptn = false; // Do not use default partition
+    // These options are compatible with sparse graphs
+    options.mininvarlevel = 1;
+    options.maxinvarlevel = 100;
+    options.invararg = 3;
+    
+    statsblk stats;
 
-    statsblk stats; // Statistics block
+    // Run Nauty with edge weights consideration
+    // Create a SparseGraph representation for edge weights
+    sparsegraph sg;
+    SG_INIT(sg);
+    
+    // Convert g to sparse format and include edge weights
+    SG_ALLOC(sg, n, edges.size(), "SparseGraph");
+    sg.nv = n;
+    sg.nde = 0;
+    
+    std::vector<size_t> sg_v(n+1, 0);  // Use size_t instead of int
+    std::vector<int> sg_d(n, 0);
+    std::vector<int> sg_e;
+    std::vector<int> sg_w;  // Edge weights for bond orders
+    
+    // Count degrees first
+    for (const auto& [src, dst, order] : edges) {
+        sg_d[src]++;
+        sg_d[dst]++;
+    }
+    
+    // Set up vertex offsets
+    sg_v[0] = 0;
+    for (int i = 0; i < n; i++) {
+        sg_v[i+1] = sg_v[i] + sg_d[i];
+        sg_d[i] = 0;  // Reset for use as counter below
+    }
+    
+    // Resize edge arrays
+    sg_e.resize(sg_v[n]);
+    sg_w.resize(sg_v[n]);
+    
+    // Fill edge arrays
+    for (const auto& [src, dst, order] : edges) {
+        // Add src -> dst edge
+        int pos = sg_v[src] + sg_d[src]++;
+        sg_e[pos] = dst;
+        sg_w[pos] = order;  // Store bond order as edge weight
+        
+        // Add dst -> src edge (for undirected graph)
+        pos = sg_v[dst] + sg_d[dst]++;
+        sg_e[pos] = src;
+        sg_w[pos] = order;  // Same bond order
+    }
+    
+    // Set sparse graph properties
+    sg.v = sg_v.data();
+    sg.d = sg_d.data();
+    sg.e = sg_e.data();
+    sg.w = sg_w.data();  // Edge weights
+    
+    // Initialize the canonical graph
+    int total_edges = 2 * int(edges.size());
+    sparsegraph canon_sg;
+    SG_INIT(canon_sg);
+    SG_ALLOC(canon_sg, n, total_edges, "CanonicalGraph");
+    sg.nv = n;
+    sg.nde = total_edges;
 
-    // Run Nauty
-    nauty(g.data(), lab.data(), ptn.data(), nullptr, orbits.data(), &options, &stats, workspace, 160, m, n, canong.data());
+    printf("Nauty: %d vertices, %d edges\n", n, total_edges);
+    
+    // Run Nauty with the sparse graph representation
+    sparsenauty(&sg, lab.data(), ptn.data(), orbits.data(), &options, &stats, &canon_sg);
 
-    return canong;
+    printf("Nauty: %d vertices, %d edges\n", canon_sg.nv, canon_sg.nde);
+    
+    // Get the canonical labeling
+    std::vector<setword> canon_g(n * m);
+    EMPTYGRAPH(canon_g.data(), m, n);
+    
+    // Build canonical graph with edge weights
+    for (const auto& [src, dst, order] : edges) {
+        int src_canon = lab[src];
+        int dst_canon = lab[dst];
+        // Add edge to canonical graph
+        ADDONEEDGE(canon_g.data(), src_canon, dst_canon, m);
+    }
+    
+    return canon_g;
 }
 
 std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::nodeAut() const {
