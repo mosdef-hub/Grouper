@@ -141,12 +141,12 @@ std::vector<GroupGraph> fragment(
     std::sort(nodesVec.begin(), nodesVec.end(),
         [](const GroupGraph::Group& a, const GroupGraph::Group& b) {
             AtomGraph aGraph, bGraph;
-            if (a.isSmarts) {
+            if (a.patternType == "SMARTS") {
                 aGraph.fromSmarts(a.pattern);
             } else {
                 aGraph.fromSmiles(a.pattern);
             }
-            if (b.isSmarts) {
+            if (b.patternType == "SMARTS") {
                 bGraph.fromSmarts(b.pattern);
             } else {
                 bGraph.fromSmiles(b.pattern);
@@ -163,12 +163,12 @@ std::vector<GroupGraph> fragment(
         [](const GroupGraph::Group& a, const GroupGraph::Group& b) {
             AtomGraph aGraph, bGraph;
 
-            if (a.isSmarts) {
+            if (a.patternType == "SMARTS") {
                 aGraph.fromSmarts(a.pattern);
             } else {
                 aGraph.fromSmiles(a.pattern);
             }
-            if (b.isSmarts) {
+            if (b.patternType == "SMARTS") {
                 bGraph.fromSmarts(b.pattern);
             } else {
                 bGraph.fromSmiles(b.pattern);
@@ -270,7 +270,7 @@ std::vector<GroupGraph> fragment(
         for (size_t i = startIdx; i < candidates.size(); ++i) {
             const auto& node = candidates[i];
             AtomGraph query;
-            if (node.isSmarts) {
+            if (node.patternType == "SMARTS") {
                 query.fromSmarts(node.pattern);
             } else {
                 query.fromSmiles(node.pattern);
@@ -309,7 +309,7 @@ std::vector<GroupGraph> fragment(
                     throw std::invalid_argument("Parent node not found.");
                 }
 
-                tempGraph.addNode(parent->ntype, parent->pattern, parent->hubs, parent->isSmarts);
+                tempGraph.addNode(parent->ntype, parent->pattern, parent->hubs, parent->patternType);
 
                 for (const auto& [queryid, molid] : match) {
                     tempAtomToNodeid[molid] = currentId;

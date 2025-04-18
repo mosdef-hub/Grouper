@@ -100,11 +100,11 @@ public:
         std::string pattern;
         std::vector<NodeIDType> hubs;
         std::vector<PortType> ports;
-        bool isSmarts = false;
+        std::string patternType = "SMILES";
         bool operator==(const Group& other) const;
         bool operator!=(const Group& other) const;
         Group() : ntype(""), pattern(""), hubs(), ports() {}
-        Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs, const bool isSmarts = false);
+        Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs, const std::string patternType = "SMILES");
         // Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs)
         // : Group(ntype, pattern, hubs, false) {}
         std::vector<int> hubOrbits() const;
@@ -117,6 +117,7 @@ public:
     std::unordered_map<NodeIDType, Group> nodes; ///< Map of node IDs to their respective nodes.
     std::unordered_set<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> edges; ///< List of edges connecting nodes. (srcNodeID, srcPort, dstNodeID, dstPort, bondOrder)
     std::unordered_map<std::string, std::vector<PortType>> nodetypes; ///< Map of node types to their respective ports.
+    bool isCoarseGrained = false;
 
     // Operators
     GroupGraph();
@@ -128,7 +129,7 @@ public:
         std::string ntype,
         std::string pattern,
         std::vector<NodeIDType> hubs,
-        bool isSmarts = false
+        std::string patternType
     );
     void addNode(Group group);
     bool addEdge(

@@ -77,7 +77,6 @@ std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmart
 // Function to convert rdkit ROMol to AtomGraph
 void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGraph &aG) {
     const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
-    std::cout<<"Creating AtomGraph from RDKit ROMol..."<<std::endl;
     for (size_t i=0; i<mol->getNumAtoms(); ++i) {
         const auto& atom = mol->getAtomWithIdx(i);
         int atomicNumber = atom->getAtomicNum();
@@ -135,7 +134,7 @@ bool GroupGraph::Group::operator!=(const Group& other) const {
     return !(*this == other);
 }
 
-GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs, const bool isSmarts){
+GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs, const std::string patternType){
 
     // Error handling
     if (ntype.empty() && pattern.empty()) {
@@ -151,7 +150,7 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     }
     // Validate the Group inputs are possible
     AtomGraph atomGraph;
-    if (isSmarts) {
+    if (patternType == "SMARTS") {
         atomGraph.fromSmarts(pattern);
     }
     else {
@@ -170,15 +169,15 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     for (int hub : hubs) {
         atomFreeValency[hub] -= 1;
     }
-    for (const auto& [id, valency] : atomFreeValency) {
-        if (valency < 0) {
-            throw std::invalid_argument("Atom "+std::to_string(id)+" has a negative valency after adding the hub");
-        }
-    }
+    // for (const auto& [id, valency] : atomFreeValency) {
+    //     if (valency < 0) {
+    //         throw std::invalid_argument("Atom "+std::to_string(id)+" has a negative valency after adding the hub");
+    //     }
+    // }
     // Validate pattern is a valid SMARTS or SMILES string
-    std::unique_ptr<RDKit::ROMol> mol = createMol(pattern, isSmarts);
+    std::unique_ptr<RDKit::ROMol> mol = createMol(pattern, patternType == "SMARTS");
     if (!mol) {
-        throw std::invalid_argument("Invalid SMARTS or SMILES: " + pattern + " provided");
+        throw GrouperParseException("Invalid SMARTS or SMILES: " + pattern + " provided");
     }
     // Validate connected molecules
     std::vector<boost::shared_ptr<RDKit::ROMol>> moleculesVector = RDKit::MolOps::getMolFrags(*mol);
@@ -188,7 +187,7 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     this->ntype = ntype;
     this->pattern = pattern;
     this->hubs = hubs;
-    this->isSmarts = isSmarts;
+    this->patternType = patternType;
     std::vector<PortType> ports(hubs.size());
     std::iota(ports.begin(), ports.end(), 0);
     this->ports = ports;
@@ -197,7 +196,7 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
 std::vector<int> GroupGraph::Group::hubOrbits() const {
 
     AtomGraph atomGraph;
-    if (isSmarts) {
+    if (patternType == "SMARTS") {
         atomGraph.fromSmarts(pattern);
     }
     else {
@@ -272,7 +271,7 @@ std::vector<std::vector<int>> GroupGraph::Group::getPossibleAttachments(int degr
 
     // Filter out isomorphic attachment sets
     AtomGraph atomGraph;
-    if (isSmarts) {
+    if (patternType == "SMARTS") {
         atomGraph.fromSmarts(pattern);
     } else {
         atomGraph.fromSmiles(pattern);
@@ -448,7 +447,7 @@ void GroupGraph::addNode(
     std::string ntype = "",
     std::string pattern = "",
     std::vector<NodeIDType> hubs = {},
-    bool isSmarts
+    std::string patternType = "SMILES"
 ) {
     /*There are 2 ways you can input a node:
         0. ntype, pattern, hubs
@@ -473,7 +472,7 @@ void GroupGraph::addNode(
             }
         }
         int id = nodes.size();
-        nodes[id] = Group(ntype, pattern, hubs, isSmarts);
+        nodes[id] = Group(ntype, pattern, hubs, patternType);
         nodetypes[ntype] = hubs;
     }
     // Case 1: Group type (ntype) is provided
@@ -490,7 +489,7 @@ void GroupGraph::addNode(
                 break;
             }
         }
-        nodes[id] = Group(ntype, pattern, hubs, isSmarts);
+        nodes[id] = Group(ntype, pattern, hubs, patternType);
     }
     else {
         std::string hubs_str = "";
@@ -815,7 +814,7 @@ std::string GroupGraph::toSmiles() const {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
         std::string pattern = entry.second.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.isSmarts);
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
         nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
         for (size_t i = 0; i < node.ports.size(); ++i) {
             nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
@@ -831,7 +830,7 @@ std::string GroupGraph::toSmiles() const {
         const Group& node = entry.second;
         nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
         std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.isSmarts);
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
         for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
@@ -844,7 +843,7 @@ std::string GroupGraph::toSmiles() const {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
         std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.isSmarts);
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
         for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             RDKit::Atom newAtom = **atom;
@@ -924,7 +923,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
         std::string pattern = entry.second.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.isSmarts);
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
         nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
         for (size_t i = 0; i < node.ports.size(); ++i) {
             nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
@@ -941,7 +940,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         const Group& node = entry.second;
         nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
         std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.isSmarts);
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
         for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
@@ -954,7 +953,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
         std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.isSmarts);
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
         for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             // RDKit::Atom newAtom = **atom;
@@ -1014,8 +1013,8 @@ std::string GroupGraph::serialize() const {
         oss << "    {\n      \"id\": " << pair.first
             << ",\n      \"ntype\": \"" << escapeString(node.ntype)
             << "\",\n      \"pattern\": \"" << escapeString(node.pattern)
-            << "\",\n      \"isSmarts\": " << (node.isSmarts ? "true" : "false")
-            << ",\n      \"ports\": [";
+            << "\",\n      \"patternType\": \"" << escapeString(node.patternType)
+            << "\",\n      \"ports\": [";
         for (size_t i = 0; i < node.ports.size(); ++i) {
             if (i > 0) oss << ",";
             oss << node.ports[i];
@@ -1072,10 +1071,10 @@ void GroupGraph::deserialize(const std::string& data) {
             std::string ntype = node_data["ntype"].get<std::string>();
             std::string pattern = node_data["pattern"].get<std::string>();
             std::vector<NodeIDType> hubs = node_data["hubs"].get<std::vector<NodeIDType>>();
-            bool isSmarts = node_data["isSmarts"].get<bool>();
+            std::string patternType = node_data["patternType"].get<std::string>();
 
             // Create and insert the group
-            Group group(ntype, pattern, hubs, isSmarts);
+            Group group(ntype, pattern, hubs, patternType);
 
             // If ports were specified, override the default ports
             if (node_data.contains("ports")) {
@@ -1505,8 +1504,6 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
         return;
     };
 
-    std::cout<<"Attempting to load from custom parser..." << std::endl;
-
     // If RDKit fails...
     std::unordered_map<std::string, int> standardElementValency = {
         {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1},
@@ -1655,7 +1652,7 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
             bondOrder = 3;
         }
         else {
-            throw std::invalid_argument("Unsupported character in SMARTS: `" + std::string(1, c) + "` for SMILES `" + smarts + "`");
+            throw GrouperParseException("Unsupported character in SMARTS: `" + std::string(1, c) + "` for SMILES `" + smarts + "`");
         }
     }
 
@@ -1665,10 +1662,10 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
             std::cerr << entry.first << " ";
         }
         std::cerr << std::endl;
-        throw std::invalid_argument("Unclosed ring detected in SMILES string `" + smarts + "`");
+        throw GrouperParseException("Unclosed ring detected in SMILES string `" + smarts + "`");
     }
     if (currentDepth != 0) {
-        throw std::invalid_argument("Unmatched parentheses in SMILES string `" + smarts + "`");
+        throw GrouperParseException("Unmatched parentheses in SMILES string `" + smarts + "`");
     }
 
 }
@@ -1683,8 +1680,6 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
         createAtomGraphFromRDKit(mol, *this);
         return;
     };
-
-    std::cout<<"Attempting to load from custom parser..." << std::endl;
 
     std::unordered_map<std::string, int> standardElementValency = {
         {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}, {"c", 4}, {"n", 3}, {"o", 2}, {"s", 2}
@@ -1701,6 +1696,13 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
         if (std::isalpha(c)) {
             // Handle atom
             int valency = standardElementValency[std::string(1, c)];
+            if (!valency) {
+                throw GrouperParseException(
+                    "SMILES character `" + std::string(1, c)
+                    + "` not in standard element map. Try to add brackets around each element "
+                    "for clarity: i.e. 'Li'->'[Li]', or try setting `Grouper.Group` patternType argument to `NONATOMIC`."
+                );
+            }
             addNode(std::string(1, c), valency);
             NodeIDType currentNode = nodes.size() - 1;
 
