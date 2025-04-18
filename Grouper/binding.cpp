@@ -25,6 +25,7 @@ py::set convert_unordered_set(const std::unordered_set<GroupGraph>& cpp_set) {
 
 PYBIND11_MODULE(_Grouper, m) {
     m.doc() = "Grouper bindings for Python";
+    py::register_exception<GrouperParseException>(m, "GrouperParseException");
     py::class_<GroupGraph::Group>(m, "Group")
         .def(py::init<>())
         .def(py::init<const std::string&, const std::string&, const std::vector<int>&, bool>(),
@@ -48,11 +49,14 @@ PYBIND11_MODULE(_Grouper, m) {
         .def_readwrite("nodes", &GroupGraph::nodes)
         .def_readwrite("edges", &GroupGraph::edges)
         .def_readwrite("node_types", &GroupGraph::nodetypes)
-        .def("add_node", &GroupGraph::addNode,
-             py::arg("type") = "",
-             py::arg("pattern") = "",
-             py::arg("hubs") = std::vector<int>{},
-             py::arg("isSmarts") = false
+        .def("add_node", static_cast<void (GroupGraph::*)(std::string, std::string, std::vector<GroupGraph::NodeIDType>, bool)>(&GroupGraph::addNode),
+            py::arg("type") = "",
+            py::arg("pattern") = "",
+            py::arg("hubs") = std::vector<GroupGraph::NodeIDType>{},
+            py::arg("isSmarts") = false
+        )
+        .def("add_node", static_cast<void (GroupGraph::*)(GroupGraph::Group)>(&GroupGraph::addNode),
+            py::arg("group")
         )
         .def("add_edge", &GroupGraph::addEdge,
              py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
@@ -107,9 +111,13 @@ PYBIND11_MODULE(_Grouper, m) {
         .def(py::init<>())
         .def_readwrite("nodes", &AtomGraph::nodes)
         .def_readwrite("edges", &AtomGraph::edges)
-        .def("add_node", &AtomGraph::addNode,
-             py::arg("type"),
-             py::arg("valency") = -1)
+        .def("add_node", static_cast<void (AtomGraph::*)(const std::string&, int)>(&AtomGraph::addNode),
+            py::arg("type"),
+            py::arg("valency") = -1
+        )
+        .def("add_node", static_cast<void (AtomGraph::*)(AtomGraph::Atom)>(&AtomGraph::addNode),
+            py::arg("atom")
+        )
         .def("add_edge", &AtomGraph::addEdge,
              py::arg("src"),
              py::arg("dst"),
@@ -159,7 +167,7 @@ PYBIND11_MODULE(_Grouper, m) {
         py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
         py::arg("negative_constraints") = std::unordered_set<std::string>{}
     );
-    m.def("fragment", &fragment,
+    m.def("exhaustive_fragment", &fragment,
         py::arg("smiles"),
         py::arg("node_defs")
     );
