@@ -97,7 +97,6 @@ std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmart
 // Function to convert rdkit ROMol to AtomGraph
 void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGraph &aG) {
     const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
-    std::cout<<"Creating AtomGraph from RDKit ROMol..."<<std::endl;
     for (size_t i=0; i<mol->getNumAtoms(); ++i) {
         const auto& atom = mol->getAtomWithIdx(i);
         int atomicNumber = atom->getAtomicNum();

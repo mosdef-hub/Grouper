@@ -618,8 +618,8 @@ class TestFragmentationOptions(BaseTest):
         solution.add_node("amine", "N", [0, 0])
         solution.add_node("alkene", "C", [0, 0, 0, 0])
         solution.add_edge((0, 2), (1, 0))
-        solution.add_edge((1, 0), (2, 0))
-        solution.add_edge((2, 0), (3, 0))
+        solution.add_edge((1, 1), (2, 0))
+        solution.add_edge((2, 1), (3, 0))
         assert question == solution, question
 
         # Test 3.4 returnHandler "exhaustive"
