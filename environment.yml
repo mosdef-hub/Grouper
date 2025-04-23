@@ -24,5 +24,6 @@ dependencies:
   - pytest-benchmark
   - pytest
   - nlohmann_json
+  - python-igraph
   - pip:
     - grakel
