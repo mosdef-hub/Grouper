@@ -136,20 +136,18 @@ PYBIND11_MODULE(_Grouper, m) {
     m.def("exhaustive_generate", [](int n_nodes,
                                     const std::unordered_set<GroupGraph::Group>& node_defs,
                                     int num_procs,
+                                    const std::vector<std::string>& rules,
                                     const std::string& vcolg_output_file,
-                                    const std::unordered_map<std::string, int>& positive_constraints,
-                                    const std::unordered_set<std::string>& negative_constraints,
                                     const std::string& config_path) {
-        std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, num_procs, vcolg_output_file, positive_constraints, negative_constraints, config_path);
+        std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, num_procs, rules, vcolg_output_file, config_path);
         return convert_unordered_set(result);
     },
         py::arg("n_nodes"),
         py::arg("node_defs"),
         py::arg("num_procs") = -1,
+        py::arg("rules") = std::vector<std::string>{},
         py::arg("vcolg_output_file") = "",
-        py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
-        py::arg("negative_constraints") = std::unordered_set<std::string>{},
-        py::arg("config_path") = ""
+        py::arg("database_config_path") = ""
     );
     m.def("random_generate", [](int n_nodes,
                                 const std::unordered_set<GroupGraph::Group>& node_defs,

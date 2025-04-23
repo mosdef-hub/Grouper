@@ -148,9 +148,8 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     int n_nodes, 
     std::unordered_set<GroupGraph::Group> node_defs, 
     int num_procs = -1,
+    const std::vector<std::string>& rules = {},
     std::string vcolg_output_file = "",
-    std::unordered_map<std::string, int> positiveConstraints = {},
-    std::unordered_set<std::string> negativeConstraints = {},
     std::string config_path = ""
 ) {
 
@@ -164,15 +163,8 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     if (num_procs <= -1){
         num_procs = omp_get_max_threads();
     }
-    if (!positiveConstraints.empty()){
-        for (const auto& constraint : positiveConstraints) {
-            if (constraint.second < 0) {
-                throw std::invalid_argument("Positive constraint value must be greater than or equal to 0...");
-            }
-        }
-    }
 
-
+    // Call nauty
     if (vcolg_output_file.empty()) {
         // Call nauty
         std::string geng_command = "geng " + std::to_string(n_nodes) + " -c > geng_out.txt";
@@ -180,7 +172,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         system(geng_command.c_str());
         system(vcolg_command.c_str());
     }
-
     vcolg_output_file = vcolg_output_file.empty() ? "vcolg_out.txt" : vcolg_output_file;
 
     // Read the input file
