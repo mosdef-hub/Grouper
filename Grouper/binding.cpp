@@ -25,7 +25,9 @@ py::set convert_unordered_set(const std::unordered_set<GroupGraph>& cpp_set) {
 
 PYBIND11_MODULE(_Grouper, m) {
     m.doc() = "Grouper bindings for Python";
+    // exceptions
     py::register_exception<GrouperParseException>(m, "GrouperParseException");
+    py::register_exception<GrouperNotYetImplementedException>(m, "GrouperNotYetImplementedException");
     py::class_<GroupGraph::Group>(m, "Group")
         .def(py::init<>())
         .def(py::init<const std::string&, const std::string&, const std::vector<int>&, std::string>(),
@@ -119,9 +121,10 @@ PYBIND11_MODULE(_Grouper, m) {
             py::arg("atom")
         )
         .def("add_edge", &AtomGraph::addEdge,
-             py::arg("src"),
-             py::arg("dst"),
-             py::arg("order") = 1)
+            py::arg("src"),
+            py::arg("dst"),
+            py::arg("order") = 1,
+            py::arg("validate") = true)
         .def("from_smiles", &AtomGraph::fromSmiles)
         .def("from_smarts", &AtomGraph::fromSmarts)
         .def("substructure_search", &AtomGraph::substructureSearch)

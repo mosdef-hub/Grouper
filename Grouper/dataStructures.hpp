@@ -76,7 +76,7 @@ public:
 
     void addNode(const std::string& ntype = "", int valency = -1);
     void addNode(Atom atom);
-    void addEdge(NodeIDType src, NodeIDType dst, unsigned int order = 1);
+    void addEdge(NodeIDType src, NodeIDType dst, unsigned int order = 1, bool validate=true);
     int getFreeValency(NodeIDType nid) const;
     std::string printGraph() const;
     std::vector<std::vector<NodeIDType>> nodeAut() const;
@@ -85,6 +85,7 @@ public:
     std::vector<setword> canonize();
     void fromSmiles(const std::string& smiles);
     void fromSmarts(const std::string& smarts);
+    void fromNonAtomic(const std::string& smarts);
     std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;
 private:
 };
@@ -288,5 +289,17 @@ public:
         return message.c_str();
     }
 };
+class GrouperNotYetImplementedException : public std::exception {
+    private:
+    std::string message;
+
+public:
+    GrouperNotYetImplementedException(const std::string& msg) : message(msg) {}
+    const char* what() const noexcept override {
+        return message.c_str();
+    }
+};
+
+void validateAtomisticAtomGraph (const AtomGraph atomGraph, const std::vector<int>& hubs, const std::string pattern, const std::string patternType);
 
 #endif // DATASTRUCTURES_H

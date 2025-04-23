@@ -34,24 +34,42 @@ class TestGroup(BaseTest):
 
     def test_brackets(self):
         gG = GroupGraph()
-        g = Group("cl", "[Cl]C=C[Br]", [0], "SMARTS")
+        g = Group("cl", "[Cl]C=C[Br]", [1, 2], "SMARTS")
         gG.add_node(g.type, g.pattern, g.hubs, g.pattern_type)
         assert (gG.to_smiles() == "[Cl]C=C[Br]") or (gG.to_smiles() == "ClC=CBr")
 
     def test_charged_species(self):
         # Existing tests
-        Group("CH2NO2", "C[N+](=O)[O]", [0], "SMARTS")
-        Group("cl", "[Cl-]C=C[Br]", [0], "SMARTS")
-        Group("cl", "[Cl+]C=C[Br]", [0], "SMARTS")
+        Group("CH2NO2", "C[N+](=O)[O-]", [0], "SMARTS")
+        msg = r"Adding edge from 0 to 1 would exceed the valency for the source node"
+        with pytest.raises(ValueError, match=re.escape(msg)):
+            Group("cl", "[Cl-]C=C[Br]", [0], "SMARTS")
+        Group("cl", "[Cl-]C=C[Br]", [0], "NONATOMIC")
+        Group("cl", "[Cl+]C=C[Br]", [0], "NONATOMIC")
         Group("nat", "[Na+]", [0], "SMARTS")
 
         # New tests for aromatic compounds and different salts
         Group("benz", "c1ccccc1[N+](=O)[O-]", [0], "SMILES")  # Aromatic nitrobenzene
-        Group("pyrid", "c1ccncc1[Cl-]", [0], "SMARTS")  # Aromatic pyridinium chloride
-        Group("ammonium", "[NH4+][Cl-]", [0], "SMARTS")  # Ammonium chloride
-        Group("sodium_acetate", "[Na+][O-]C=O", [0], "SMARTS")  # Sodium acetate
+        msg = (
+            r"Adding edge from 5 to 6 would exceed the valency for the destination node"
+        )
+        with pytest.raises(ValueError, match=re.escape(msg)):
+            Group("pyrid", "c1ccncc1[Cl-]", [0], "SMARTS")
         Group(
-            "potassium_permanganate", "[K+][MnO4-]", [0], "SMARTS"
+            "pyrid", "c1ccncc1[Cl-]", [0], "NONATOMIC"
+        )  # Aromatic pyridinium chloride
+        msg = (
+            r"Adding edge from 0 to 1 would exceed the valency for the destination node"
+        )
+        with pytest.raises(ValueError, match=re.escape(msg)):
+            Group("ammonium", "[NH4+][Cl-]", [0], "SMARTS")  # Ammonium chloride
+        msg = r"Invalid SMARTS: [NH4+].[Cl-] with detached molecules."
+        with pytest.raises(GrouperParseException, match=re.escape(msg)):
+            Group("ammonium", "[NH4+].[Cl-]", [0], "SMARTS")
+        Group("ammonium", "[NH4+][Cl-]", [0], "NONATOMIC")
+        Group("sodium_acetate", "[Na+][O-]C=O", [0], "NONATOMIC")  # Sodium acetate
+        Group(
+            "potassium_permanganate", "[K+][MnO4-]", [0], "NONATOMIC"
         )  # Potassium permanganate
 
     def test_group_initialization(self):
@@ -572,11 +590,11 @@ class TestAtomGraph(BaseTest):
             } in agBonds
 
     def test_disconnected_graph(self):
-        msg = re.escape("Invalid pattern [C].[C] with a detached molecules.")
+        msg = re.escape(r"Invalid SMARTS: [C].[C] with detached molecules.")
         with pytest.raises(GrouperParseException, match=msg):
             Group("a", "[C].[C]", [0, 1], "SMARTS")
         gG = GroupGraph()
-        msg = re.escape("Invalid pattern OCC[N].[N]CCO with a detached molecules.")
+        msg = re.escape(r"Invalid SMARTS: OCC[N].[N]CCO with detached molecules.")
         with pytest.raises(GrouperParseException, match=msg):
             gG.add_node("a", "OCC[N].[N]CCO", [0], "SMARTS")
 
@@ -842,6 +860,13 @@ class TestAtomGraph(BaseTest):
     #     # Benchmark the add_edge method
     #     benchmark(benchmark_add_edge)
 
+
+def TestComplexPatternedGroups(BaseTest):
+    def test_error_messages(self):
+        msg = r"Adding edge from 0 to 1 would exceed the valency for the source node"
+        with pytest.raises(ValueError, match=re.escpape(msg)):
+            Group("cl", "[Cl]C=C[Br]", [1, 2], "SMARTS")
+
     def test_smiles_brackets(self):
         assert Group("type1", "[C]", [0])
         assert Group("type1", "[C][C]", [0])
@@ -851,10 +876,9 @@ class TestAtomGraph(BaseTest):
         assert gG.to_smiles() == "[Li+]C(Cl)Br"
 
     def test_non_elemental_graphs(self):
-        # need a key for "isAtomic" to handle atomistic checking and to SMARTS
         graph = GroupGraph()
-        graph.add_node("type1", "[Cl-]C", [1, 1], "SMARTS")  # negative charge
-        graph.add_node("type2", "[Li+2]C", [1], "SMARTS")  # positive charge
+        graph.add_node("type1", "[Cl-]C", [1, 1], "NONATOMIC")  # negative charge
+        graph.add_node("type2", "[Li+2]C", [1], "NONATOMIC")  # positive charge
         graph.add_edge((0, 0), (1, 0))
         assert graph.to_smiles() == "[Li+2]CC[Cl-]"
 

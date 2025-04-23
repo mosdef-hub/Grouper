@@ -75,35 +75,33 @@ std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmart
 }
 
 // Function to convert rdkit ROMol to AtomGraph
-void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGraph &aG) {
+void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGraph &aG, bool validate=true) {
     const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
     for (size_t i=0; i<mol->getNumAtoms(); ++i) {
         const auto& atom = mol->getAtomWithIdx(i);
         int atomicNumber = atom->getAtomicNum();
-        // Calculate explicit valence
-        // int valence = atom->calcExplicitValence();                             // This appears to be broken in RDKit, always returns 2 for [N+] in C[N+]=C
+        // Calculate explicit charge
+        int charge = atom->getFormalCharge();
+        int valence = pt->getDefaultValence(atomicNumber);;
         // Iterate over the bonds and sum the bond orders
-        int valence = 0;
-        for (size_t i=0; i<mol->getNumBonds(); i++) {
-            const auto& bond = mol->getBondWithIdx(i);
-            double border = bond->getBondTypeAsDouble();
-            int borderInt = (int)border;
-            if (bond->getBeginAtomIdx() == atom->getIdx()) {
-                valence += borderInt;
-            }
-            else if (bond->getEndAtomIdx() == atom->getIdx()) {
-                valence += borderInt;
-            }
-        }
-        int defaultValence = pt->getDefaultValence(atomicNumber);
-        valence = std::max(valence, defaultValence);
-        aG.addNode(atom->getSymbol(), valence);
+        // for (size_t i=0; i<mol->getNumBonds(); i++) {
+        //     const auto& bond = mol->getBondWithIdx(i);
+        //     double border = bond->getBondTypeAsDouble();
+        //     int borderInt = (int)border;
+        //     if (bond->getBeginAtomIdx() == atom->getIdx()) {
+        //         valence -= borderInt;
+        //     }
+        //     else if (bond->getEndAtomIdx() == atom->getIdx()) {
+        //         valence -= borderInt;
+        //     }
+        // }
+        aG.addNode(atom->getSymbol(), valence+charge);
     }
     for (size_t i=0; i<mol->getNumBonds(); i++) {
         const auto& bond = mol->getBondWithIdx(i);
         double border = bond->getBondTypeAsDouble();
         int borderInt = (int)border;
-        aG.addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt);
+        aG.addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt, validate=validate);
     }
 }
 
@@ -152,38 +150,21 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     AtomGraph atomGraph;
     if (patternType == "SMARTS") {
         atomGraph.fromSmarts(pattern);
+        validateAtomisticAtomGraph(atomGraph, hubs, pattern, patternType);
     }
-    else {
+    else if (patternType == "SMILES") {
         atomGraph.fromSmiles(pattern);
+        validateAtomisticAtomGraph(atomGraph, hubs, pattern, patternType);
     }
-    for (int hub : hubs) {
-        if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
-            throw std::invalid_argument("Hub ID "+ std::to_string(hub) +" is greater than the number of atoms in the group");
+    else { // No validation for CG=Coarse Grained validation.
+        atomGraph.fromNonAtomic(pattern); // Won't require validation, but parse as SMARTS
+        for (int hub : hubs) { // Check that hubs can still be matched
+            if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
+                throw std::invalid_argument("Hub ID "+ std::to_string(hub) +" is greater than the number of atoms in the group");
+            }
         }
     }
-    // Valency Checks
-    std::unordered_map<int, int> atomFreeValency;
-    for (const auto& [id, node] : atomGraph.nodes) {
-        atomFreeValency[id] = node.valency;
-    }
-    for (int hub : hubs) {
-        atomFreeValency[hub] -= 1;
-    }
-    // for (const auto& [id, valency] : atomFreeValency) {
-    //     if (valency < 0) {
-    //         throw std::invalid_argument("Atom "+std::to_string(id)+" has a negative valency after adding the hub");
-    //     }
-    // }
-    // Validate pattern is a valid SMARTS or SMILES string
-    std::unique_ptr<RDKit::ROMol> mol = createMol(pattern, patternType == "SMARTS");
-    if (!mol) {
-        throw GrouperParseException("Invalid SMARTS or SMILES: " + pattern + " provided");
-    }
-    // Validate connected molecules
-    std::vector<boost::shared_ptr<RDKit::ROMol>> moleculesVector = RDKit::MolOps::getMolFrags(*mol);
-    if (moleculesVector.size()>1) {
-        throw GrouperParseException("Invalid pattern " + pattern + " with a detached molecules.");
-    }
+
     this->ntype = ntype;
     this->pattern = pattern;
     this->hubs = hubs;
@@ -191,6 +172,39 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     std::vector<PortType> ports(hubs.size());
     std::iota(ports.begin(), ports.end(), 0);
     this->ports = ports;
+}
+
+void validateAtomisticAtomGraph (const AtomGraph atomGraph, const std::vector<int>& hubs, const std::string pattern, const std::string patternType) {
+    // Validate pattern is a valid SMARTS string
+    std::unique_ptr<RDKit::ROMol> mol = createMol(pattern, patternType == "SMARTS");
+    if (!mol) {
+        throw GrouperParseException("Invalid "+ patternType +": " + pattern + " provided");
+    }
+    // Validate connected molecules
+    std::vector<boost::shared_ptr<RDKit::ROMol>> moleculesVector = RDKit::MolOps::getMolFrags(*mol);
+    if (moleculesVector.size()>1) {
+        throw GrouperParseException("Invalid "+ patternType +": " + pattern + " with detached molecules.");
+    }
+    // Valency Checks
+    std::unordered_map<int, int> atomFreeValency;
+    for (const auto& [id, node] : atomGraph.nodes) {
+        atomFreeValency[id] = node.valency;
+        if (atomFreeValency[id] < 0) {
+            throw GrouperParseException("Atom "+std::to_string(id)+" has a negative valency after adding the hub for pattern "+ pattern);
+        }
+    }
+    // Validate hubs
+    for (int hub : hubs) {
+        if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
+            throw std::invalid_argument("Hub ID "+ std::to_string(hub) +" is greater than the number of atoms in the group");
+        }
+    }
+    for (int hub : hubs) {
+        atomFreeValency[hub] -= 1;
+        if (atomFreeValency[hub] < 0) {
+            throw GrouperParseException("Atom "+std::to_string(hub)+" has a negative valency after adding the hub for pattern "+ pattern);
+        }
+    }
 }
 
 std::vector<int> GroupGraph::Group::hubOrbits() const {
@@ -814,7 +828,7 @@ std::string GroupGraph::toSmiles() const {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
         std::string pattern = entry.second.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
         for (size_t i = 0; i < node.ports.size(); ++i) {
             nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
@@ -830,7 +844,7 @@ std::string GroupGraph::toSmiles() const {
         const Group& node = entry.second;
         nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
         std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
@@ -843,7 +857,7 @@ std::string GroupGraph::toSmiles() const {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
         std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             RDKit::Atom newAtom = **atom;
@@ -923,7 +937,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
         std::string pattern = entry.second.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
         for (size_t i = 0; i < node.ports.size(); ++i) {
             nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
@@ -940,7 +954,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         const Group& node = entry.second;
         nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
         std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
@@ -953,7 +967,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
         std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType == "SMARTS");
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             // RDKit::Atom newAtom = **atom;
@@ -1305,7 +1319,7 @@ void AtomGraph::addNode(Atom atom) {
     nodes[id] = atom;
 }
 
-void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
+void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order, bool validate) {
     if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end())
     {
         if (nodes.find(src) == nodes.end()) {
@@ -1315,13 +1329,13 @@ void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
             throw std::invalid_argument("Atom " + std::to_string(dst) + " does not exist");
         }
     }
-    if (getFreeValency(src) <= 0 && getFreeValency(dst) <= 0) {
+    if (getFreeValency(src) <= 0 && getFreeValency(dst) <= 0 && validate) {
         throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for both nodes");
     }
-    if (getFreeValency(src) <= 0) {
+    if ((getFreeValency(src) <= 0) && validate) {
         throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for the source node");
     }
-    if (getFreeValency(dst) <= 0) {
+    if ((getFreeValency(dst) <= 0)  && validate) {
         throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for the destination node");
     }
     if (edges.find(std::make_tuple(src, dst, order)) != edges.end() || edges.find(std::make_tuple(dst, src, order)) != edges.end()) {
@@ -1800,24 +1814,30 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
 
 }
 
+void AtomGraph::fromNonAtomic(const std::string& smarts) {
+    nodes.clear();
+    edges.clear();
+
+    // Attempt to load via rdkit
+    const auto& mol = createMol(smarts, true);
+    if (mol) {
+        createAtomGraphFromRDKit(mol, *this, false);
+        return;
+    }
+    else {
+        throw GrouperNotYetImplementedException("NONATOMIC SMARTS must still be parsable by RDKit.");
+    }
+}
+
+
 int AtomGraph::getFreeValency(NodeIDType nodeID) const {
     if (nodes.find(nodeID) == nodes.end()) {
         throw std::invalid_argument("Cannot get free valency for non-existent node " + std::to_string(nodeID));
     }
     const Atom& node = nodes.at(nodeID);
-    // if (edges.find(nodeID) == edges.end()) {
-    //     return node.valency;
-    // }
-    // else{
-    //     int occupied_electrons = 0;
-    //     for (const auto& edge : edges.at(nodeID)) {
-    //         occupied_electrons += std::get<1>(edge);
-    //     }
-    //     return node.valency - occupied_electrons;
-    // }
     int totalOccupiedValency = 0;
     for (const auto& [src, dst, order] : edges) {
-        if(src == nodeID) {
+        if (src == nodeID) {
             totalOccupiedValency += order;
         }
     }
