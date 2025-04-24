@@ -643,6 +643,7 @@ void process_nauty_output(
     // Compute port representatives for each node
     std::unordered_map<int, std::vector<std::vector<int>>> node_port_representatives;
     std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair> possible_edge_colors;
+    std::unordered_map<std::pair<int, int>,std::vector<std::pair<int, int>>,hash_pair> color_to_port_pair;
     GroupGraph::Group tmp_g;
     for (const auto& [node, degree] : node_degree) {
         tmp_g.ntype = int_to_node_type.at(colors[node]);
@@ -651,6 +652,7 @@ void process_nauty_output(
         node_port_representatives[node] = tmp_g.getPossibleAttachments(degree);
     }
 
+    // lambda function to flatten the port representatives
     auto flatten_ports = [](const std::vector<std::vector<int>>& reps) {
         std::unordered_set<int> ports;
         for (const auto& group : reps) {
@@ -658,7 +660,7 @@ void process_nauty_output(
         }
         return std::vector<int>(ports.begin(), ports.end());
     };
-    
+    // Compute possible edge colors
     for (const auto& [src, dst] : edge_list) {
         const auto& src_reps = node_port_representatives.at(src);
         const auto& dst_reps = node_port_representatives.at(dst);
@@ -667,15 +669,17 @@ void process_nauty_output(
         std::vector<int> dst_ports = flatten_ports(dst_reps);
     
         std::vector<int> e_colors;
+        std::vector<std::pair<int, int>> port_pairs;
         int color_index = 0;
     
         for (int i : src_ports) {
             for (int j : dst_ports) {
                 e_colors.push_back(color_index++);
+                port_pairs.push_back({i, j});
             }
         }
-    
         possible_edge_colors[{src, dst}] = e_colors;
+        color_to_port_pair[{src, dst}] = port_pairs;
     }
 
     printf("Possible edge colors:\n");
@@ -687,7 +691,16 @@ void process_nauty_output(
         printf("\n");
     }
     printf("\n");
-    
+
+    printf("Possible edge color pairs:\n");
+    for (const auto& [edge, color_pairs] : color_to_port_pair) {
+        printf("Edge (%d, %d): ", edge.first, edge.second);
+        for (const auto& pair : color_pairs) {
+            printf("(%d, %d) ", pair.first, pair.second);
+        }
+        printf("\n");
+    }
+    printf("\n");
 
     
 
@@ -762,8 +775,9 @@ void process_nauty_output(
         
             int color = coloring[edge_index++];
             // Use the canonical order for color conversion.
-            std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(colors[s])),
-                                                            node_types.at(int_to_node_type.at(colors[t])));
+            // std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(colors[s])),
+            //                                                 node_types.at(int_to_node_type.at(colors[t])));
+            std::pair<int,int> colorPort = color_to_port_pair.at(edge)[color];
             int sPort = colorPort.first;
             int tPort = colorPort.second;
             bool added = false;
