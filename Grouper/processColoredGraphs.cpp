@@ -630,21 +630,66 @@ void process_nauty_output(
         );
     }
 
-    // Generate all possible colorings for the edges
-    // TODO: this isn't correct since edge colors need to be different for each node-node pair (red(2),blue(2))=(0,1,2,3) is not the same as (blue(2), blue(2)) = (4,5,6,7)
-    std::vector<std::vector<int>> all_colorings;
-    std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair> possible_edge_colors;
-    std::vector<int> current_coloring(possible_edge_colors.size(), 0);
+
+    // Get degree of each node
+    std::unordered_map<int, int> node_degree;
     for (const auto& edge : edge_list) {
         int src = edge.first;
         int dst = edge.second;
-        int n_src_ports = node_types.at(int_to_node_type.at(colors[src])).size();
-        int n_dst_ports = node_types.at(int_to_node_type.at(colors[dst])).size();
-        int n_colors = n_src_ports * n_dst_ports;
-        std::vector<int> e_colors(n_colors);
-        std::iota(e_colors.begin(), e_colors.end(), 0);
+        node_degree[src]++;
+        node_degree[dst]++;
+    }
+
+    // Compute port representatives for each node
+    std::unordered_map<int, std::vector<std::vector<int>>> node_port_representatives;
+    std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair> possible_edge_colors;
+    GroupGraph::Group tmp_g;
+    for (const auto& [node, degree] : node_degree) {
+        tmp_g.ntype = int_to_node_type.at(colors[node]);
+        tmp_g.hubs = node_type_to_hub.at(int_to_node_type.at(colors[node]));
+        tmp_g.pattern = int_to_pattern.at(colors[node]);
+        node_port_representatives[node] = tmp_g.getPossibleAttachments(degree);
+    }
+
+    auto flatten_ports = [](const std::vector<std::vector<int>>& reps) {
+        std::unordered_set<int> ports;
+        for (const auto& group : reps) {
+            ports.insert(group.begin(), group.end());
+        }
+        return std::vector<int>(ports.begin(), ports.end());
+    };
+    
+    for (const auto& [src, dst] : edge_list) {
+        const auto& src_reps = node_port_representatives.at(src);
+        const auto& dst_reps = node_port_representatives.at(dst);
+    
+        std::vector<int> src_ports = flatten_ports(src_reps);
+        std::vector<int> dst_ports = flatten_ports(dst_reps);
+    
+        std::vector<int> e_colors;
+        int color_index = 0;
+    
+        for (int i : src_ports) {
+            for (int j : dst_ports) {
+                e_colors.push_back(color_index++);
+            }
+        }
+    
         possible_edge_colors[{src, dst}] = e_colors;
     }
+
+    printf("Possible edge colors:\n");
+    for (const auto& [edge, colors] : possible_edge_colors) {
+        printf("Edge (%d, %d): ", edge.first, edge.second);
+        for (const auto& color : colors) {
+            printf("%d ", color);
+        }
+        printf("\n");
+    }
+    printf("\n");
+    
+
+    
 
     // Calculate node orbits using nauty then compute edge orbits
     // auto [nodeOrbits, edgeOrbits] = gG.computeOrbits(
@@ -657,17 +702,6 @@ void process_nauty_output(
         edge_list, colors, 
         g, lab, ptn, orbits, options, stats // Pass nauty structures
     );
-
-    // printf("Edge group size: %d\n", edgeGroup.perms.size());
-    // printf("Edge group generators:\n");
-    // for (const auto& perm : edgeGroup.perms) {
-    //     printf("{ ");
-    //     for (const auto& p : perm) {
-    //         printf("%d ", p);
-    //     }
-    //     printf("}\n");
-    // }
-    // printf("\n");
 
 
     // Change the edge orbits to a vector of sets for generating colorings
