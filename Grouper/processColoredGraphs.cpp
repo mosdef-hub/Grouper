@@ -44,14 +44,6 @@ struct hash_vector {
         return seed;
     }
 };
-
-
-std::pair<int, int> color_to_ports(int color, const std::vector<int>& src_ports, const std::vector<int>& dst_ports) {
-    int src_port = src_ports[color / dst_ports.size()];
-    int dst_port = dst_ports[color % dst_ports.size()];
-    return {src_port, dst_port};
-}
-
 std::tuple< int, std::vector<int>, std::vector<std::pair<int, int>> > parse_nauty_graph_line(const std::string& line, const std::unordered_set<GroupGraph::Group>& node_defs) {
     // Split the line into node_description and edge_description
     size_t split_pos = line.find("  ");
@@ -206,26 +198,7 @@ std::vector<std::vector<int>> generateOrbitCombinations(
             current_combination.pop_back();
         }
     };
-
-    printf("Edge colors: ");
-    for (const auto& color : edge_colors) {
-        printf("%d ", color);
-    }
-    printf("\n");
-    printf("Number of edges: %d\n", n_edges);
-
     generate_combinations(edge_colors, n_edges, {}, 0);
-
-    printf("All combinations:\n");
-    for (const auto& combination : all_combinations) {
-        printf("{ ");
-        for (const auto& color : combination) {
-            printf("%d ", color);
-        }
-        printf("}\n");
-    }
-    printf("\n");
-
     return all_combinations;
 }
 
@@ -558,7 +531,6 @@ void process_nauty_output(
     const std::unordered_map<std::string, int> positiveConstraints,
     const std::unordered_set<std::string> negativeConstraints,
     graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats // Pass nauty structures
-    // int* num_edges, int edges[][2], int edge_orbits[] // Thread-local edge storage for edge aut
 ) {
     // initializeLogger();
     // logger.log("This is a debug message", Logger::LogLevel::DEBUG);
@@ -576,7 +548,6 @@ void process_nauty_output(
     // std::unordered_set<std::vector<setword>, hash_vector> canon_set;
     std::unordered_set<std::string> canon_set;
 
-
     // Create necessary maps
     for (const auto& node : node_defs) {
         node_types[node.ntype] = node.ports;
@@ -593,7 +564,6 @@ void process_nauty_output(
         int_to_pattern[i] = type_to_pattern[node_type];
         i++;
     }
-    
     // Create a histogram of node types for positive constraints
     if (positiveConstraints.size() > 0) {
         std::unordered_map<std::string, int> node_hist;
@@ -614,12 +584,10 @@ void process_nauty_output(
             }
         }
     }
-
     // Check if any node has too many bonds
     if (!check_max_bond_not_exceeded(edge_list, colors, node_types, int_to_node_type)) {
         return;
     }
-
     // Add nodes to the graph to create node colored graph
     GroupGraph gG;
     for (int i = 0; i < n_vertices; ++i) {
@@ -629,8 +597,6 @@ void process_nauty_output(
             node_type_to_hub.at(int_to_node_type.at(colors[i]))
         );
     }
-
-
     // Get degree of each node
     std::unordered_map<int, int> node_degree;
     for (const auto& edge : edge_list) {
@@ -639,7 +605,6 @@ void process_nauty_output(
         node_degree[src]++;
         node_degree[dst]++;
     }
-
     // Compute port representatives for each node
     std::unordered_map<int, std::vector<std::vector<int>>> node_port_representatives;
     std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair> possible_edge_colors;
@@ -681,28 +646,6 @@ void process_nauty_output(
         possible_edge_colors[{src, dst}] = e_colors;
         color_to_port_pair[{src, dst}] = port_pairs;
     }
-
-    printf("Possible edge colors:\n");
-    for (const auto& [edge, colors] : possible_edge_colors) {
-        printf("Edge (%d, %d): ", edge.first, edge.second);
-        for (const auto& color : colors) {
-            printf("%d ", color);
-        }
-        printf("\n");
-    }
-    printf("\n");
-
-    printf("Possible edge color pairs:\n");
-    for (const auto& [edge, color_pairs] : color_to_port_pair) {
-        printf("Edge (%d, %d): ", edge.first, edge.second);
-        for (const auto& pair : color_pairs) {
-            printf("(%d, %d) ", pair.first, pair.second);
-        }
-        printf("\n");
-    }
-    printf("\n");
-
-    
 
     // Calculate node orbits using nauty then compute edge orbits
     // auto [nodeOrbits, edgeOrbits] = gG.computeOrbits(
@@ -750,17 +693,6 @@ void process_nauty_output(
     
 
     std::vector<std::vector<int>> unique_colorings = generateNonAutomorphicEdgeColorings_Full(edge_list, possible_edge_colors, edgeGroup);
-
-    // printf("Number of unique colorings: %d\n", unique_colorings.size());
-    // printf("Unique colorings:\n");
-    // for (const auto& coloring : unique_colorings) {
-    //     printf("{ ");
-    //     for (const auto& color : coloring) {
-    //         printf("%d ", color);
-    //     }
-    //     printf("}\n");
-    // }
-    // printf("\n");
 
     // Iterate over unique colorings
     for (const auto& coloring: unique_colorings){
