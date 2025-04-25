@@ -29,7 +29,7 @@ class TestLibraries(BaseTest):
 
     def test_node_trace(self):
         library = Libraries["saftgm"]()
-        node = Group("-CH3", "[CH3]", [0], True)
+        node = Group("-CH3", "[CH3]", [0], "SMARTS")
         nt = library.query_nodes({"node": node})[0]
 
         assert nt.node == node
@@ -42,7 +42,7 @@ class TestLibraries(BaseTest):
 
     def test_add_node(self):
         library = BasisSet()
-        library.add_node(Group("-CH3", "[CH3]", [0], True), "", "[CX4H3]", None)
+        library.add_node(Group("-CH3", "[CH3]", [0], "SMARTS"), "", "[CX4H3]", None)
         assert library.n_nodes == 1
 
     def test_query_node(self):

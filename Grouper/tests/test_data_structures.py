@@ -24,50 +24,60 @@ class TestAtom(BaseTest):
 
 
 class TestGroup(BaseTest):
-    def test_group_equality(self):
-        g1 = Group("C", "[C]", [0], True)
-        g2 = Group("C", "[C]", [0], True)
-        g3 = Group("C2", "[C]", [0], True)
-
-        assert g1 == g2
-        assert g1 != g3
-
     def test_group_hash(self):
-        g1 = Group("C", "[C]", [0], True)
-        g2 = Group("C", "[C]", [0], True)
-        g3 = Group("C2", "[C]", [0], True)
+        g1 = Group("C", "[C]", [0], "SMARTS")
+        g2 = Group("C", "[C]", [0], "SMARTS")
+        g3 = Group("C2", "[C]", [0], "SMARTS")
 
         assert hash(g1) == hash(g2)
         assert hash(g1) != hash(g3)
 
     def test_brackets(self):
         gG = GroupGraph()
-        g = Group("cl", "[Cl]C=C[Br]", [0], True)
-        gG.add_node(g.type, g.pattern, g.hubs, True)
+        g = Group("cl", "[Cl]C=C[Br]", [1, 2], "SMARTS")
+        gG.add_node(g.type, g.pattern, g.hubs, g.pattern_type)
         assert (gG.to_smiles() == "[Cl]C=C[Br]") or (gG.to_smiles() == "ClC=CBr")
 
     def test_charged_species(self):
         # Existing tests
-        Group("CH2NO2", "C[N+](=O)[O]", [0], True)
-        Group("cl", "[Cl-]C=C[Br]", [0], True)
-        Group("cl", "[Cl+]C=C[Br]", [0], True)
-        Group("nat", "[Na+]", [0], True)
+        Group("CH2NO2", "C[N+](=O)[O-]", [0], "SMARTS")
+        msg = r"Adding edge from 0 to 1 would exceed the valency for the source node"
+        with pytest.raises(ValueError, match=re.escape(msg)):
+            Group("cl", "[Cl-]C=C[Br]", [0], "SMARTS")
+        Group("cl", "[Cl-]C=C[Br]", [0], "NONATOMIC")
+        Group("cl", "[Cl+]C=C[Br]", [0], "NONATOMIC")
+        Group("nat", "[Na+]", [0], "SMARTS")
 
         # New tests for aromatic compounds and different salts
-        Group("benz", "c1ccccc1[N+](=O)[O-]", [0], False)  # Aromatic nitrobenzene
-        Group("pyrid", "c1ccncc1[Cl-]", [0], True)  # Aromatic pyridinium chloride
-        Group("ammonium", "[NH4+][Cl-]", [0], True)  # Ammonium chloride
-        Group("sodium_acetate", "[Na+][O-]C=O", [0], True)  # Sodium acetate
+        Group("benz", "c1ccccc1[N+](=O)[O-]", [0], "SMILES")  # Aromatic nitrobenzene
+        msg = (
+            r"Adding edge from 5 to 6 would exceed the valency for the destination node"
+        )
+        with pytest.raises(ValueError, match=re.escape(msg)):
+            Group("pyrid", "c1ccncc1[Cl-]", [0], "SMARTS")
         Group(
-            "potassium_permanganate", "[K+][MnO4-]", [0], True
+            "pyrid", "c1ccncc1[Cl-]", [0], "NONATOMIC"
+        )  # Aromatic pyridinium chloride
+        msg = (
+            r"Adding edge from 0 to 1 would exceed the valency for the destination node"
+        )
+        with pytest.raises(ValueError, match=re.escape(msg)):
+            Group("ammonium", "[NH4+][Cl-]", [0], "SMARTS")  # Ammonium chloride
+        msg = r"Invalid SMARTS: [NH4+].[Cl-] with detached molecules."
+        with pytest.raises(GrouperParseException, match=re.escape(msg)):
+            Group("ammonium", "[NH4+].[Cl-]", [0], "SMARTS")
+        Group("ammonium", "[NH4+][Cl-]", [0], "NONATOMIC")
+        Group("sodium_acetate", "[Na+][O-]C=O", [0], "NONATOMIC")  # Sodium acetate
+        Group(
+            "potassium_permanganate", "[K+][MnO4-]", [0], "NONATOMIC"
         )  # Potassium permanganate
 
     def test_group_initialization(self):
-        group = Group("C", "[C]", [0], True)
+        group = Group("C", "[C]", [0], "SMARTS")
         assert group.type == "C"
         assert group.pattern == "[C]"
         assert group.hubs == [0]
-        assert group.is_smarts is True
+        assert group.pattern_type == "SMARTS"
 
     def test_group_to_string(self):
         group = Group("carbon", "C", [0, 0, 0, 0])
@@ -83,28 +93,28 @@ class TestGroupGraph(BaseTest):
         return {frozenset(match) for match in matches}
 
     def test_group_equality(self):
-        g1 = Group("C", "[C]", [0], True)
-        g2 = Group("C", "[C]", [0], True)
-        g3 = Group("C2", "[C]", [0], True)
+        g1 = Group("C", "[C]", [0], "SMARTS")
+        g2 = Group("C", "[C]", [0], "SMARTS")
+        g3 = Group("C2", "[C]", [0], "SMARTS")
 
         assert g1 == g2
         assert g1 != g3
 
         gg = GroupGraph()
-        gg.add_node("O", "[O]", [0], True)
-        gg.add_node("O", "[O]", [0], True)
-        gg.add_node("O", "[O]", [0], True)
-        gg.add_node("O", "[O]", [0], True)
+        gg.add_node("O", "[O]", [0], "SMARTS")
+        gg.add_node("O", "[O]", [0], "SMARTS")
+        gg.add_node("O", "[O]", [0], "SMARTS")
+        gg.add_node("O", "[O]", [0], "SMARTS")
 
         assert all(
             [n1 == n2 for n1, n2 in zip(gg.nodes.values(), list(gg.nodes.values())[1:])]
         )
 
         gg = GroupGraph()
-        gg.add_node("O", "[O]", [0], True)
-        gg.add_node("C", "[O]", [0], True)
-        gg.add_node("N", "[O]", [0], True)
-        gg.add_node("S", "[O]", [0], True)
+        gg.add_node("O", "[O]", [0], "SMARTS")
+        gg.add_node("C", "[O]", [0], "SMARTS")
+        gg.add_node("N", "[O]", [0], "SMARTS")
+        gg.add_node("S", "[O]", [0], "SMARTS")
 
         assert not any([n1 == n2 for n1, n2 in zip(gg.nodes, list(gg.nodes)[1:])])
 
@@ -121,7 +131,7 @@ class TestGroupGraph(BaseTest):
         with pytest.raises(ValueError):  # Invalid hubs
             graph.add_node("type1", "C", [0, 1, 2])
 
-        with pytest.raises(ValueError):  # Invalid smarts
+        with pytest.raises(GrouperParseException):  # Invalid smarts
             graph.add_node("type1", "asldkfghj", [0])
 
         with pytest.raises(ValueError):  # No type
@@ -137,28 +147,39 @@ class TestGroupGraph(BaseTest):
         assert set(n.pattern for n in graph.nodes.values()) == {"C"}
         assert set(tuple(n.ports) for n in graph.nodes.values()) == {(0, 1)}
         assert set(tuple(n.hubs) for n in graph.nodes.values()) == {(0, 0)}
-        
+
         graph.add_node("type1")
 
         # Adding a node with different type and pattern
         graph.add_node("type2", "C", [0])
-        
+
         assert len(graph.nodes) == 3
         assert set(n.type for n in graph.nodes.values()) == {"type1", "type1", "type2"}
         assert set(n.pattern for n in graph.nodes.values()) == {"C"}
         assert set(tuple(n.ports) for n in graph.nodes.values()) == {(0,), (0, 1)}
         assert set(tuple(n.hubs) for n in graph.nodes.values()) == {(0,), (0, 0)}
 
-        group = Group("alkene", "C=C", [0,0,1,1])
+        group = Group("alkene", "C=C", [0, 0, 1, 1])
         graph.add_node(group)
-        
+
         assert len(graph.nodes) == 4
-        assert set(n.type for n in graph.nodes.values()) == {"type1", "type1", "type2", "alkene"}
+        assert set(n.type for n in graph.nodes.values()) == {
+            "type1",
+            "type1",
+            "type2",
+            "alkene",
+        }
         assert set(n.pattern for n in graph.nodes.values()) == {"C", "C=C"}
-        assert set(tuple(n.ports) for n in graph.nodes.values()) == {(0,), (0, 1), (0, 1, 2, 3)}
-        assert set(tuple(n.hubs) for n in graph.nodes.values()) == {(0,), (0, 0), (0, 0, 1, 1)}
-
-
+        assert set(tuple(n.ports) for n in graph.nodes.values()) == {
+            (0,),
+            (0, 1),
+            (0, 1, 2, 3),
+        }
+        assert set(tuple(n.hubs) for n in graph.nodes.values()) == {
+            (0,),
+            (0, 0),
+            (0, 0, 1, 1),
+        }
 
     def test_add_edge(self):
         graph = GroupGraph()
@@ -303,8 +324,8 @@ class TestGroupGraph(BaseTest):
 
     def test_n_free_ports(self):
         graph = GroupGraph()
-        graph.add_node("node1", "[C]", [0, 0], True)
-        graph.add_node("node2", "[C]", [0, 0, 0], True)
+        graph.add_node("node1", "[C]", [0, 0], "SMARTS")
+        graph.add_node("node2", "[C]", [0, 0, 0], "SMARTS")
         assert graph.n_free_ports(0) == 2
 
         # Connect a edge and recheck
@@ -437,7 +458,7 @@ class TestGroupGraph(BaseTest):
     #     graph12.add_edge((1, 0), (0, 0))
 
     def test_hub_orbits(self):
-        g = Group("C", "[C]", [0], True)
+        g = Group("C", "[C]", [0], "SMARTS")
         assert g.compute_hub_orbits() == [0]
 
         n_hexane = Group("C6", "CCCCCC", [0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5])
@@ -605,13 +626,13 @@ class TestAtomGraph(BaseTest):
             } in agBonds
 
     def test_disconnected_graph(self):
-        msg = re.escape("Invalid pattern [C].[C] with a detached molecules.")
+        msg = re.escape(r"Invalid SMARTS: [C].[C] with detached molecules.")
         with pytest.raises(GrouperParseException, match=msg):
-            Group("a", "[C].[C]", [0, 1], True)
+            Group("a", "[C].[C]", [0, 1], "SMARTS")
         gG = GroupGraph()
-        msg = re.escape("Invalid pattern OCC[N].[N]CCO with a detached molecules.")
+        msg = re.escape(r"Invalid SMARTS: OCC[N].[N]CCO with detached molecules.")
         with pytest.raises(GrouperParseException, match=msg):
-            gG.add_node("a", "OCC[N].[N]CCO", [0], True)
+            gG.add_node("a", "OCC[N].[N]CCO", [0], "SMARTS")
 
     def test_substructure_search(self):
         graph = AtomGraph()
@@ -918,6 +939,13 @@ class TestAtomGraph(BaseTest):
     #     # Benchmark the add_edge method
     #     benchmark(benchmark_add_edge)
 
+
+def TestComplexPatternedGroups(BaseTest):
+    def test_error_messages(self):
+        msg = r"Adding edge from 0 to 1 would exceed the valency for the source node"
+        with pytest.raises(ValueError, match=re.escpape(msg)):
+            Group("cl", "[Cl]C=C[Br]", [1, 2], "SMARTS")
+
     def test_smiles_brackets(self):
         assert Group("type1", "[C]", [0])
         assert Group("type1", "[C][C]", [0])
@@ -925,3 +953,67 @@ class TestAtomGraph(BaseTest):
         gG = GroupGraph()
         gG.add_node("type1", "C([Cl])([Br])[Li+]", [0])
         assert gG.to_smiles() == "[Li+]C(Cl)Br"
+
+    def test_non_elemental_graphs(self):
+        graph = GroupGraph()
+        graph.add_node("type1", "[Cl-]C", [1, 1], "NONATOMIC")  # negative charge
+        graph.add_node("type2", "[Li+2]C", [1], "NONATOMIC")  # positive charge
+        graph.add_edge((0, 0), (1, 0))
+        assert graph.to_smiles() == "[Li+2]CC[Cl-]"
+
+        # Add too many ports
+        matchMsg = """
+        This may be a non-atomistic representation. Check your Graph using
+        Graph.visualize(), to see where it fails to represent a single molecule
+        using classical valencies.
+        """
+        with pytest.raises(GrouperParseException, match=re.escape(matchMsg)):
+            graph.add_node("type3", "C", [0, 0, 0, 0, 0])
+        graph.add_node("type3", "C", [0, 0, 0, 0, 0], "NONATOMIC")  # too many ports
+        graph.add_edge((2, 0), (3, 0))
+        graph.add_edge((0, 1), (2, 4))
+        matchMsg = """
+        This is non-atomistic representation. Check your Graph using
+        Graph.visualize(), to see where it fails to represent a single molecule
+        using classical valencies.
+        """
+        with pytest.raises(GrouperParseException, match=matchMsg):
+            graph.to_smiles()
+
+    def test_coarse_grained(self):
+        graph = GroupGraph()
+        # Try non elemental groups
+        with pytest.raises(
+            GrouperParseException,
+            match=re.escape("Invalid SMARTS or SMILES: [LP] provided"),
+        ):
+            graph.add_node("type1", "[LP]", [0, 0], "SMARTS")
+        with pytest.raises(
+            GrouperParseException,
+            match=re.escape("Invalid SMARTS or SMILES: [LP] provided"),
+        ):
+            graph.add_node("type1", "[LP]", [0, 0])
+        msg = "SMILES character `L` not in standard element map. Try to add brackets around each element for clarity: i.e. 'Li'->'[Li]', or try setting `Grouper.Group` patternType argument to `NONATOMIC`"
+        with pytest.raises(
+            GrouperParseException,
+            match=re.escape(msg),
+        ):
+            graph.add_node("type1", "LP", [0, 0])
+
+        graph.is_coarse_grained = True
+        graph.add_node("type1", "[LP]", [0], "NONATOMIC")  # skip AtomGraph stuff
+        graph.add_node("type1", "C", [0, 0, 0, 0, 0], "NONATOMIC")
+        graph.add_edge((0, 0), (1, 0), 2)
+        # Methods that only work on atomistic graphs
+        with pytest.raises(Exception):
+            graph.to_smiles()
+        with pytest.raises(Exception):
+            graph.to_atom_graph()
+
+        # Methods that work on both
+        assert graph.to_vector()
+        obj = graph.to_json()
+        assert obj
+        new_graph = GroupGraph()
+        assert new_graph.from_json()
+        assert graph.to_canonical()

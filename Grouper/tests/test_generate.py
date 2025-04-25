@@ -1,6 +1,5 @@
-import logging
-import os
 import json
+import logging
 import pathlib
 
 import pytest
@@ -71,7 +70,10 @@ class TestGeneration(BaseTest):
         ]
 
         # Convert node_defs to the expected format
-        node_defs = set(Group(n["type"], n["smarts"], n["hubs"], is_smarts=False) for n in node_defs)
+        node_defs = set(
+            Group(n["type"], n["smarts"], n["hubs"], pattern_type="SMILES")
+            for n in node_defs
+        )
         input_file_path = ""
         positive_constraints = {}
         negative_constraints = set()
@@ -96,7 +98,10 @@ class TestGeneration(BaseTest):
             {"type": "extra1", "smarts": "O", "hubs": [0, 0]},
         ]
         # Convert node_defs to the expected format
-        node_defs = set(Group(n["type"], n["smarts"], n["hubs"], is_smarts=False) for n in node_defs)
+        node_defs = set(
+            Group(n["type"], n["smarts"], n["hubs"], pattern_type="SMILES")
+            for n in node_defs
+        )
 
         logging.info("Created node_defs")
 
@@ -106,12 +111,12 @@ class TestGeneration(BaseTest):
         logging.info("Starting random generation")
         print("Starting random generation")
         random_generate(
-            2, # n_nodes
-            node_defs, # node_defs
-            5, # n_structures
+            2,  # n_nodes
+            node_defs,  # node_defs
+            5,  # n_structures
             -1,  # num_procs
-            positive_constraints, # positive
-            negative_constraints, # negative
+            positive_constraints,  # positive
+            negative_constraints,  # negative
         )
         print("Random generation complete")
         logging.info("Random generation complete")

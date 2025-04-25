@@ -159,8 +159,8 @@ class Joback(BasisSet):
                 None,
             ),
             GroupExtension(Group("-F", "F", [0]), "", "[F;X1]", None),
-            GroupExtension(Group("-Cl", "[Cl]", [0], True), "", "[Cl;X1]", None),
-            GroupExtension(Group("-Br", "[Br]", [0], True), "", "[Br;X1]", None),
+            GroupExtension(Group("-Cl", "[Cl]", [0], "SMARTS"), "", "[Cl;X1]", None),
+            GroupExtension(Group("-Br", "[Br]", [0], "SMARTS"), "", "[Br;X1]", None),
             GroupExtension(Group("-I", "I", [0]), "", "[I;X1]", None),
             GroupExtension(
                 Group("-OH (alcohol)", "O", [0]),
@@ -231,7 +231,7 @@ class Joback(BasisSet):
             GroupExtension(Group("=NH", "N", [0]), "", "[#7X2H1]", None),
             GroupExtension(Group("-CN", "CN", [0]), "", "[#6X2]#[#7X1H0]", None),
             GroupExtension(
-                Group("-NO2", "[N+]([O-])[O]", [0], True),
+                Group("-NO2", "[N+]([O-])[O]", [0], "SMARTS"),
                 "",
                 "[$([#7X3,#7X3+][!#8])](=[O])~[O-]",
                 None,
@@ -339,81 +339,81 @@ class Unifac(BasisSet):
                 Group("COOH", "C(=O)O", [0]), "", "[CX3](=[OX1])[O;H1]", None
             ),
             GroupExtension(
-                Group("CH2CL", "C([Cl])", [0], True),
+                Group("CH2CL", "C([Cl])", [0], "SMARTS"),
                 "",
                 "[CX4;H2;!$(C(Cl)(Cl))](Cl)",
                 None,
             ),
             GroupExtension(
-                Group("CHCL", "C([Cl])", [0, 0], True),
+                Group("CHCL", "C([Cl])", [0, 0], "SMARTS"),
                 "",
                 "[CX4;H1;!$(C(Cl)(Cl))](Cl)",
                 None,
             ),
             GroupExtension(
-                Group("CCL", "C([Cl])", [0, 0, 0], True), "", "[CX4;H0](Cl)", None
+                Group("CCL", "C([Cl])", [0, 0, 0], "SMARTS"), "", "[CX4;H0](Cl)", None
             ),
             GroupExtension(
-                Group("CH2CL", "C([Cl])", [0], True),
+                Group("CH2CL", "C([Cl])", [0], "SMARTS"),
                 "",
                 "[CX4;H2;!$(C(Cl)(Cl))](Cl)",
                 None,
             ),
             GroupExtension(
-                Group("CHCL", "C([Cl])", [0, 0], True),
+                Group("CHCL", "C([Cl])", [0, 0], "SMARTS"),
                 "",
                 "[CX4;H1;!$(C(Cl)(Cl))](Cl)",
                 None,
             ),
             GroupExtension(
-                Group("CCL", "C([Cl])", [0, 0, 0], True), "", "[CX4;H0](Cl)", None
+                Group("CCL", "C([Cl])", [0, 0, 0], "SMARTS"), "", "[CX4;H0](Cl)", None
             ),
             GroupExtension(
-                Group("CHCL2", "C([Cl])([Cl])", [0], True),
+                Group("CHCL2", "C([Cl])([Cl])", [0], "SMARTS"),
                 "",
                 "[CX4;H1;!$(C(Cl)(Cl)(Cl))](Cl)(Cl)",
                 None,
             ),
             GroupExtension(
-                Group("CCL2", "C([Cl])([Cl])", [0, 0], True),
+                Group("CCL2", "C([Cl])([Cl])", [0, 0], "SMARTS"),
                 "",
                 "[CX4;H0;!$(C(Cl)(Cl)(Cl))](Cl)(Cl)",
                 None,
             ),
             GroupExtension(
-                Group("CCL3", "C([Cl])([Cl])([Cl])", [0], True),
+                Group("CCL3", "C([Cl])([Cl])([Cl])", [0], "SMARTS"),
                 "",
                 "[CX4;H0;!$([CX4;H0](Cl)(Cl)(Cl)(Cl))](Cl)(Cl)(Cl)",
                 None,
             ),
             GroupExtension(
-                Group("ACCL", "C(=O)([Cl])", [0], True), "", "[c][Cl]", None
+                Group("ACCL", "C(=O)([Cl])", [0], "SMARTS"), "", "[c][Cl]", None
             ),
             GroupExtension(
-                Group("CH2NO2", "C[N+](=O)[O-]", [0], True),
+                Group("CH2NO2", "C[N+](=O)[O-]", [0], "SMARTS"),
                 "",
                 "[CX4;H2][NX3](=[OX1])([OX1])",
                 None,
             ),
             GroupExtension(
-                Group("CHNO2", "C[N+](=O)[O-]", [0, 0], True),
+                Group("CHNO2", "C[N+](=O)[O-]", [0, 0], "SMARTS"),
                 "",
                 "[CX4;H1][NX3](=[OX1])([OX1])",
                 None,
             ),
             GroupExtension(
-                Group("ACNO2", "C(=O)[N+](=O)[O-]", [0], True),
+                Group("ACNO2", "C(=O)[N+](=O)[O-]", [0], "SMARTS"),
                 "",
                 "[cX3][NX3](=[OX1])([OX1])",
                 None,
             ),
             GroupExtension(Group("CH2SH", "CS", [0]), "", "[SX2H][CX4;H2]", None),
             GroupExtension(Group("I", "I", [0]), "", "[I]", None),
-            GroupExtension(Group("BR", "[Br]", [0], True), "", "[Br]", None),
+            GroupExtension(Group("BR", "[Br]", [0], "SMARTS"), "", "[Br]", None),
             GroupExtension(Group("CH=-C", "C#C", [0]), "", "[CX2;H1]#[CX2;H0]", None),
             GroupExtension(Group("C=-C", "C#C", [0, 1]), "", "[CX2;H0]#[CX2;H0]", None),
             GroupExtension(
-                Group("CL-(C=C)", "[Cl][C]=[C]", [1, 2, 2], True),
+                Group("CL-(C=C)", "[Cl][C]=[C]", [1, 2, 2], "SMARTS"),
                 "",
                 "[$([Cl;H0]([C]=[C]))]",
                 None,
@@ -475,7 +475,7 @@ class SaftGammaMie(BasisSet):
         self.doi = "https://doi.org/10.1080/00268978800101601"
         self.ref = "https://github.com/ClapeyronThermo/GCIdentifier.jl/tree/main/src/database/SAFTgammaMie.jl"
         self.node_traces = [
-            GroupExtension(Group("-CH3", "[CH3]", [0], True), "", "[CX4H3]", None),
+            GroupExtension(Group("-CH3", "[CH3]", [0], "SMARTS"), "", "[CX4H3]", None),
         ]
         print(
             "This library is not fully implemented yet... please raise a GitHub issue if you wish to use this."

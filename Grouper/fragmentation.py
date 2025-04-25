@@ -6,8 +6,7 @@ from typing import List, Literal, Union
 
 from rdkit import Chem
 
-from Grouper import Group, GroupGraph
-from Grouper import exhaustive_fragment
+from Grouper import Group, GroupGraph, exhaustive_fragment
 
 
 def fragment(
@@ -396,7 +395,10 @@ def _group_graph_from_match(matchState, nodesList, incompleteGraphHandler):
     for group in groupsTuple:  # group is an index from the original nodes
         group_node = nodesList[group]
         groupG.add_node(
-            group_node.type, group_node.pattern, group_node.hubs, group_node.is_smarts
+            group_node.type,
+            group_node.pattern,
+            group_node.hubs,
+            group_node.pattern_type,
         )
     # Add edges
     edgesTuple = matchState.group_bonds
@@ -631,33 +633,41 @@ def _generate_queries_from_nodedefs(nodeDefs, nodeDefsSorter, matchHubs):
         newNodeDefs = []
         for i, pattern in enumerate(nodeDefs):
             query = Chem.MolFromSmarts(pattern)
-            is_smarts = True
+            pattern_type = "SMARTS"
             if not query:  # failed at parsing smarts, try smiles
                 query = Chem.MolFromSmiles(pattern)
-                is_smarts = False
+                pattern_type = "SMILES"
             hubs = _get_hubs_from_string(pattern)
             try:
-                newNodeDefs.append(Group(f"type {i}", pattern, hubs, is_smarts))
+                newNodeDefs.append(Group(f"type {i}", pattern, hubs, pattern_type))
             except ValueError:  # TODO: add better handling of loading patterns to group
-                newNodeDefs.append(Group(f"type {i}", pattern, hubs, is_smarts))
+                newNodeDefs.append(Group(f"type {i}", pattern, hubs, pattern_type))
             queries.append(query)
         nodeDefs = newNodeDefs
     elif matchHubs:
         for group in nodeDefs:
-            if group.is_smarts:
+            if group.pattern_type.upper() == "SMARTS":
                 queries.append(
                     Chem.MolFromSmarts(_smarts_with_ports(group.pattern, group.hubs))
                 )
-            else:
+            elif group.pattern_type.upper() == "SMILES":
                 queries.append(  # only apply hubs if a SMARTS string was given
                     Chem.MolFromSmiles(group.pattern)
                 )
+            else:
+                raise ValueError(
+                    f"Group {group} is not a SMILES or SMARTS pattern. Please set `group.pattern_type` to one of these options to use for fragmentation."
+                )
     else:  # by defaults just use the smarts given
         for group in nodeDefs:
-            if group.is_smarts:
+            if group.pattern_type.upper() == "SMARTS":
                 queries.append(Chem.MolFromSmarts(group.pattern))
-            else:
+            elif group.pattern_type.upper() == "SMILES":
                 queries.append(Chem.MolFromSmiles(group.pattern))
+            else:
+                raise ValueError(
+                    f"Group {group} is not a SMILES or SMARTS pattern. Please set `group.pattern_type` to one of these options to use for fragmentation."
+                )
     # sort queries
     if nodeDefsSorter == "size":
         queries, nodeDefs = (

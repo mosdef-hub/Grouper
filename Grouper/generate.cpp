@@ -99,7 +99,7 @@ std::tuple< int, std::vector<int>, std::vector<std::pair<int, int>> > parse_naut
         edge_list.emplace_back(std::stoi(edge_description[i]), std::stoi(edge_description[i + 1]));
     }
 
-    
+
 
     int n_vertices = std::stoi(node_description[0]);
     // int n_edges = std::stoi(node_description[1]);
@@ -117,8 +117,8 @@ std::tuple< int, std::vector<int>, std::vector<std::pair<int, int>> > parse_naut
 
 bool check_max_bond_not_exceeded_tmp(
     const std::vector<std::pair<int,int>>& edge_list,
-    const std::vector<int>& colors, 
-    const std::unordered_map<std::string, std::vector<int>>& node_types, 
+    const std::vector<int>& colors,
+    const std::unordered_map<std::string, std::vector<int>>& node_types,
     const std::unordered_map<int, std::string>& int_to_node_type) {
 
     std::vector<int> node_bond_count;
@@ -145,8 +145,8 @@ bool check_max_bond_not_exceeded_tmp(
 
 
 std::unordered_set<GroupGraph> exhaustiveGenerate(
-    int n_nodes, 
-    std::unordered_set<GroupGraph::Group> node_defs, 
+    int n_nodes,
+    std::unordered_set<GroupGraph::Group> node_defs,
     int num_procs = -1,
     std::string vcolg_output_file = "",
     std::unordered_map<std::string, int> positiveConstraints = {},
@@ -218,7 +218,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     int n_finished = 0;
 
     std::cout<< "Using "<<num_procs << " processors" << std::endl;
-    
+
     #pragma omp parallel
     {
         // Thread-local nauty structures using std::vector
@@ -235,11 +235,11 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         #pragma omp for schedule(dynamic) nowait
         for (int i = 0; i < total_lines; ++i) {
             process_nauty_output(
-                lines[i], 
+                lines[i],
                 node_defs,
                 &local_basis,
-                positiveConstraints, 
-                negativeConstraints, 
+                positiveConstraints,
+                negativeConstraints,
                 g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
             );
 
@@ -299,11 +299,11 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 }
 
                 // Sanity check: Check if the table exists and create it if it doesn't
-                std::string create_table_query = 
+                std::string create_table_query =
                     "CREATE TABLE IF NOT EXISTS " + table_name + " ("
                     "smiles TEXT PRIMARY KEY, "
-                    "graph_data TEXT, "   
-                    "n_nodes INT"         
+                    "graph_data TEXT, "
+                    "n_nodes INT"
                     ");";
 
                 executeQuery(conn, create_table_query);
@@ -360,7 +360,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
             PQfinish(conn);
             std::cout << "Connection closed." << std::endl;
     }
-    
+
     std::cout<< "Number of unique graphs: " << global_basis.size() << std::endl;
 
     return global_basis;
@@ -369,8 +369,8 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
 
 // std::unordered_set<GroupGraph> randomGenerate(
-//     int n_nodes, 
-//     const std::unordered_set<GroupGraph::Group>& node_defs, 
+//     int n_nodes,
+//     const std::unordered_set<GroupGraph::Group>& node_defs,
 //     int num_graphs = 100,
 //     int num_procs = -1,
 //     const std::unordered_map<std::string, int>& positiveConstraints = {},
@@ -465,7 +465,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
 // This is the randomGenerate that utilizes the nauty library
 std::unordered_set<GroupGraph> randomGenerate(
-    int n_nodes, 
+    int n_nodes,
     const std::unordered_set<GroupGraph::Group>& node_defs,
     int num_graphs = 100,
     int num_procs = -1,
@@ -490,17 +490,17 @@ std::unordered_set<GroupGraph> randomGenerate(
     if (num_procs <= -1) {
         num_procs = omp_get_max_threads();
     }
-    
+
     std::string geng_command = "geng " + std::to_string(n_nodes) + " -ctf > geng_out.txt";
     std::string vcolg_command = "vcolg geng_out.txt -T -m" + std::to_string(node_defs.size()) + " > vcolg_out.txt";
     system(geng_command.c_str());
     system(vcolg_command.c_str());
-    
+
     std::ifstream input_file("vcolg_out.txt");
     if (!input_file.is_open()) {
         throw std::runtime_error("Error opening input file...");
     }
-    
+
     std::vector<std::string> lines;
     std::string line;
     while (std::getline(input_file, line)) {
@@ -512,9 +512,9 @@ std::unordered_set<GroupGraph> randomGenerate(
     if (lines.empty()) {
         throw std::runtime_error("No valid graphs found...");
     }
-    
+
     std::vector<std::pair<std::vector<int>, std::vector<std::pair<int, int>>>> possible_node_colored_graphs;
-    
+
     std::unordered_set<GroupGraph> global_basis;
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -544,7 +544,7 @@ std::unordered_set<GroupGraph> randomGenerate(
                 color_to_group[i] = g;
                 break;  // Exit the loop once a match is found
             }
-        }        
+        }
 
         i++;
     }
@@ -556,7 +556,7 @@ std::unordered_set<GroupGraph> randomGenerate(
         possible_node_colored_graphs.push_back(std::make_pair(colors, edge_list));
     }
     std::uniform_int_distribution<> dist_graph(0, possible_node_colored_graphs.size() - 1);
-    
+
 
     // Find maximum degree of any node in the node colored graphs
     std::unordered_map<int, int> max_degree; // color -> max_degree
@@ -600,7 +600,7 @@ std::unordered_set<GroupGraph> randomGenerate(
             auto [colors, edge_list] = possible_node_colored_graphs[dist_graph(gen)];
             for (int color : colors) {
                 GroupGraph::Group group = color_to_group[color];
-                candidate_graph.addNode(group.ntype, group.pattern, group.hubs, group.isSmarts);
+                candidate_graph.addNode(group.ntype, group.pattern, group.hubs, group.patternType);
             }
             std::unordered_map<int, int> node_degrees;
             for (const auto& [src, dst] : edge_list) {
@@ -645,5 +645,3 @@ std::unordered_set<GroupGraph> randomGenerate(
 
     return global_basis;
 }
-
-

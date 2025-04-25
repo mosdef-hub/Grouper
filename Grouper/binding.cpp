@@ -25,16 +25,18 @@ py::set convert_unordered_set(const std::unordered_set<GroupGraph>& cpp_set) {
 
 PYBIND11_MODULE(_Grouper, m) {
     m.doc() = "Grouper bindings for Python";
+    // exceptions
     py::register_exception<GrouperParseException>(m, "GrouperParseException");
+    py::register_exception<GrouperNotYetImplementedException>(m, "GrouperNotYetImplementedException");
     py::class_<GroupGraph::Group>(m, "Group")
         .def(py::init<>())
-        .def(py::init<const std::string&, const std::string&, const std::vector<int>&, bool>(),
-            py::arg("ntype"), py::arg("pattern"), py::arg("hubs"), py::arg("is_smarts") = false)
+        .def(py::init<const std::string&, const std::string&, const std::vector<int>&, std::string>(),
+            py::arg("ntype"), py::arg("pattern"), py::arg("hubs"), py::arg("pattern_type") = "SMILES")
         .def_readwrite("type", &GroupGraph::Group::ntype)
         .def_readwrite("pattern", &GroupGraph::Group::pattern)
         .def_readwrite("ports", &GroupGraph::Group::ports)
         .def_readwrite("hubs", &GroupGraph::Group::hubs)
-        .def_readwrite("is_smarts", &GroupGraph::Group::isSmarts)
+        .def_readwrite("pattern_type", &GroupGraph::Group::patternType)
         .def("compute_hub_orbits", &GroupGraph::Group::hubOrbits)
         .def("possible_attachments", &GroupGraph::Group::getPossibleAttachments)
         .def("__eq__", &GroupGraph::Group::operator==)
@@ -49,20 +51,21 @@ PYBIND11_MODULE(_Grouper, m) {
         .def_readwrite("nodes", &GroupGraph::nodes)
         .def_readwrite("edges", &GroupGraph::edges)
         .def_readwrite("node_types", &GroupGraph::nodetypes)
-        .def("add_node", static_cast<void (GroupGraph::*)(std::string, std::string, std::vector<GroupGraph::NodeIDType>, bool)>(&GroupGraph::addNode),
+        .def_readwrite("is_coarse_grained", &GroupGraph::isCoarseGrained)
+        .def("add_node", static_cast<void (GroupGraph::*)(std::string, std::string, std::vector<GroupGraph::NodeIDType>, std::string)>(&GroupGraph::addNode),
             py::arg("type") = "",
             py::arg("pattern") = "",
             py::arg("hubs") = std::vector<GroupGraph::NodeIDType>{},
-            py::arg("isSmarts") = false
+            py::arg("pattern_type") = "SMILES"
         )
         .def("add_node", static_cast<void (GroupGraph::*)(GroupGraph::Group)>(&GroupGraph::addNode),
             py::arg("group")
         )
         .def("add_edge", &GroupGraph::addEdge,
-             py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
-             py::arg("dst") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
-             py::arg("order") = 1,
-             py::arg("verbose") = false
+            py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
+            py::arg("dst") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
+            py::arg("order") = 1,
+            py::arg("verbose") = false
         )
         .def("n_free_ports", &GroupGraph::numFreePorts)
         .def("clear_edges", &GroupGraph::clearEdges)
@@ -119,9 +122,10 @@ PYBIND11_MODULE(_Grouper, m) {
             py::arg("atom")
         )
         .def("add_edge", &AtomGraph::addEdge,
-             py::arg("src"),
-             py::arg("dst"),
-             py::arg("order") = 1)
+            py::arg("src"),
+            py::arg("dst"),
+            py::arg("order") = 1,
+            py::arg("validate") = true)
         .def("from_smiles", &AtomGraph::fromSmiles)
         .def("from_smarts", &AtomGraph::fromSmarts)
         .def("substructure_search", &AtomGraph::substructureSearch)
