@@ -1,8 +1,10 @@
+import json
 import logging
+import pathlib
 
 import pytest
 
-from Grouper import Group, exhaustive_generate
+from Grouper import Group, exhaustive_generate, random_generate
 from Grouper.tests.base_test import BaseTest
 
 
@@ -27,11 +29,10 @@ class TestGeneration(BaseTest):
         self, benchmark, n_nodes, num_procs, node_defs
     ):
         # Load nauty path from config file
-        import json
-        import pathlib
         print(pathlib.Path(__file__).parent.parent.parent / "config.json")
-        with open(pathlib.Path(__file__).parent.parent.parent / "config.json", "r") as config_file:
-
+        with open(
+            pathlib.Path(__file__).parent.parent.parent / "config.json", "r"
+        ) as config_file:
             config = json.load(config_file)
         nauty_path = config.get("nauty_path")
         if not nauty_path:
@@ -59,46 +60,63 @@ class TestGeneration(BaseTest):
             verbose,
         )
         logging.info("Benchmark complete")
-        
+
     def test_simple_exhaustive_generation(self):
         node_defs = [
-            {"type": "t2", "smarts": "[N]", "hubs": [0, 0, 0]},
-            {"type": "Methyl", "smarts": "[CX3]", "hubs": [0, 0, 0]},
-            {"type": "ester", "smarts": "[CX3](=[OX1])([OX2])", "hubs": [0, 2]},
-            {"type": "extra1", "smarts": "[O]", "hubs": [0, 0]},
+            {"type": "t2", "smarts": "N", "hubs": [0, 0, 0]},
+            {"type": "Methyl", "smarts": "C", "hubs": [0, 0, 0]},
+            {"type": "ester", "smarts": "C(=O)O", "hubs": [0, 2]},
+            {"type": "extra1", "smarts": "O", "hubs": [0, 0]},
         ]
-        # Load nauty path from config file
-        import json
-        import pathlib
-        print(pathlib.Path(__file__).parent.parent.parent / "config.json")
-        with open(pathlib.Path(__file__).parent.parent.parent / "config.json", "r") as config_file:
-            config = json.load(config_file)
-        nauty_path = config.get("nauty_path")
-        if not nauty_path:
-            raise RuntimeError("Nauty path is not defined in the configuration file.")
-        
+
         # Convert node_defs to the expected format
-        node_defs = set(Group(n["type"], n["smarts"], n["hubs"]) for n in node_defs)
-
-        logging.info("Created node_defs")
-
-        verbose = False
+        node_defs = set(
+            Group(n["type"], n["smarts"], n["hubs"], pattern_type="SMILES")
+            for n in node_defs
+        )
         input_file_path = ""
         positive_constraints = {}
         negative_constraints = set()
 
         logging.info("Starting simple generation")
-        print("Starting simple generation")
         exhaustive_generate(
             2,
             node_defs,
-            nauty_path,
+            1,  # num_procs
             input_file_path,
-            1, # num_procs
             positive_constraints,
             negative_constraints,
             "",
-            verbose,
         )
-        print("Simple generation complete")
         logging.info("Simple generation complete")
+
+    def test_random_generation(self):
+        node_defs = [
+            {"type": "t2", "smarts": "N", "hubs": [0, 0, 0]},
+            {"type": "Methyl", "smarts": "C", "hubs": [0, 0, 0]},
+            {"type": "ester", "smarts": "C(=O)(O)", "hubs": [0, 2]},
+            {"type": "extra1", "smarts": "O", "hubs": [0, 0]},
+        ]
+        # Convert node_defs to the expected format
+        node_defs = set(
+            Group(n["type"], n["smarts"], n["hubs"], pattern_type="SMILES")
+            for n in node_defs
+        )
+
+        logging.info("Created node_defs")
+
+        positive_constraints = {}
+        negative_constraints = set()
+
+        logging.info("Starting random generation")
+        print("Starting random generation")
+        random_generate(
+            2,  # n_nodes
+            node_defs,  # node_defs
+            5,  # n_structures
+            -1,  # num_procs
+            positive_constraints,  # positive
+            negative_constraints,  # negative
+        )
+        print("Random generation complete")
+        logging.info("Random generation complete")

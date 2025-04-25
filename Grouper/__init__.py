@@ -1,9 +1,12 @@
 # ruff: noqa: F401
 from Grouper._Grouper import (
+    Atom,
     AtomGraph,
-    GroupGraph,
     Group,
+    GroupGraph,
     exhaustive_generate,
-    fragment,
-    process_nauty_output,
+    exhaustive_fragment,
+    random_generate,
 )
+
+from .fragmentation import fragment

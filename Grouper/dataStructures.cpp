@@ -10,7 +10,6 @@
 #include <nlohmann/json.hpp>
 
 #include "dataStructures.hpp"
-#include "autUtils.hpp"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -21,11 +20,13 @@
 #include <GraphMol/AtomIterators.h>
 #include <GraphMol/BondIterators.h>
 #include <GraphMol/PeriodicTable.h>
+#include <GraphMol/MolOps.h>
 #include <RDGeneral/types.h>
 
 #include <nauty/nauty.h>
 #include <nauty/naututil.h>
 
+#define MAX_EDGES 100
 
 // Define structures as thread-local using thread_local
 thread_local std::vector<setword> g;         // For the nauty graph
@@ -34,6 +35,45 @@ thread_local std::vector<int> ptn;          // For the partition array
 thread_local std::vector<int> orbits;       // For the orbits array
 thread_local DEFAULTOPTIONS_GRAPH(options); // Default nauty options
 thread_local statsblk stats;                // Nauty stats structure
+
+struct hash_vector {
+    std::size_t operator()(const std::vector<setword>& v) const {
+        std::size_t seed = 0;
+        for (int i : v) {
+            boost::hash_combine(seed, i);
+        }
+        return seed;
+    }
+};
+
+struct DisjointSet {
+    std::vector<int> parent;
+
+    DisjointSet(int n) : parent(n) {
+        for (int i = 0; i < n; ++i) parent[i] = i;
+    }
+
+    int find(int x) {
+        if (parent[x] != x) parent[x] = find(parent[x]);
+        return parent[x];
+    }
+
+    void unite(int x, int y) {
+        int rootX = find(x);
+        int rootY = find(y);
+        if (rootX != rootY) parent[rootY] = rootX;
+    }
+};
+
+struct NautyEdgeData {
+    int num_edges;
+    int edges[MAX_EDGES][2];
+    int edge_orbits[MAX_EDGES];
+    DisjointSet* uf = nullptr;
+};
+
+// Each thread gets its own pointer to avoid conflicts
+thread_local NautyEdgeData* edge_data_ptr = nullptr;
 
 // Function to initialize the thread-local nauty structures
 void initializeNautyStructures(int n) {
@@ -48,6 +88,43 @@ void initializeNautyStructures(int n) {
     // Clear the graph
     std::fill(g.begin(), g.end(), 0);
 }
+
+// Function to create a rdkit mol whether smarts or smiles
+std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmarts) {
+    return std::unique_ptr<RDKit::ROMol>(isSmarts ? RDKit::SmartsToMol(pattern) : RDKit::SmilesToMol(pattern));
+}
+
+// Function to convert rdkit ROMol to AtomGraph
+void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGraph &aG, bool validate=true) {
+    const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
+    for (size_t i=0; i<mol->getNumAtoms(); ++i) {
+        const auto& atom = mol->getAtomWithIdx(i);
+        int atomicNumber = atom->getAtomicNum();
+        // Calculate explicit charge
+        int charge = atom->getFormalCharge();
+        int valence = pt->getDefaultValence(atomicNumber);;
+        // Iterate over the bonds and sum the bond orders
+        // for (size_t i=0; i<mol->getNumBonds(); i++) {
+        //     const auto& bond = mol->getBondWithIdx(i);
+        //     double border = bond->getBondTypeAsDouble();
+        //     int borderInt = (int)border;
+        //     if (bond->getBeginAtomIdx() == atom->getIdx()) {
+        //         valence -= borderInt;
+        //     }
+        //     else if (bond->getEndAtomIdx() == atom->getIdx()) {
+        //         valence -= borderInt;
+        //     }
+        // }
+        aG.addNode(atom->getSymbol(), valence+charge);
+    }
+    for (size_t i=0; i<mol->getNumBonds(); i++) {
+        const auto& bond = mol->getBondWithIdx(i);
+        double border = bond->getBondTypeAsDouble();
+        int borderInt = (int)border;
+        aG.addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt, validate=validate);
+    }
+}
+
 
 // Core methods
 GroupGraph::GroupGraph()
@@ -66,9 +143,8 @@ GroupGraph& GroupGraph::operator=(const GroupGraph& other) {
 }
 
 bool GroupGraph::Group::operator==(const Group& other) const {
-    return id == other.id &&
-           ntype == other.ntype &&
-           smarts == other.smarts &&
+    return ntype == other.ntype &&
+           pattern == other.pattern &&
            hubs == other.hubs;
 }
 
@@ -76,13 +152,220 @@ bool GroupGraph::Group::operator!=(const Group& other) const {
     return !(*this == other);
 }
 
+GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs, const std::string patternType){
+
+    // Error handling
+    if (ntype.empty() && pattern.empty()) {
+        throw std::invalid_argument("Either SMARTS or type must be provided");
+    }
+    if (hubs.empty()) {
+        throw std::invalid_argument("Hubs must be provided");
+    }
+    for (int hub : hubs) {
+        if (hub < 0) {
+            throw std::invalid_argument("Hub ID must be greater than or equal to 0");
+        }
+    }
+    // Validate the Group inputs are possible
+    AtomGraph atomGraph;
+    if (patternType == "SMARTS") {
+        atomGraph.fromSmarts(pattern);
+        validateAtomisticAtomGraph(atomGraph, hubs, pattern, patternType);
+    }
+    else if (patternType == "SMILES") {
+        atomGraph.fromSmiles(pattern);
+        validateAtomisticAtomGraph(atomGraph, hubs, pattern, patternType);
+    }
+    else { // No validation for CG=Coarse Grained validation.
+        atomGraph.fromNonAtomic(pattern); // Won't require validation, but parse as SMARTS
+        for (int hub : hubs) { // Check that hubs can still be matched
+            if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
+                throw std::invalid_argument("Hub ID "+ std::to_string(hub) +" is greater than the number of atoms in the group");
+            }
+        }
+    }
+
+    this->ntype = ntype;
+    this->pattern = pattern;
+    this->hubs = hubs;
+    this->patternType = patternType;
+    std::vector<PortType> ports(hubs.size());
+    std::iota(ports.begin(), ports.end(), 0);
+    this->ports = ports;
+}
+
+void validateAtomisticAtomGraph (const AtomGraph atomGraph, const std::vector<int>& hubs, const std::string pattern, const std::string patternType) {
+    // Validate pattern is a valid SMARTS string
+    std::unique_ptr<RDKit::ROMol> mol = createMol(pattern, patternType == "SMARTS");
+    if (!mol) {
+        throw GrouperParseException("Invalid "+ patternType +": " + pattern + " provided");
+    }
+    // Validate connected molecules
+    std::vector<boost::shared_ptr<RDKit::ROMol>> moleculesVector = RDKit::MolOps::getMolFrags(*mol);
+    if (moleculesVector.size()>1) {
+        throw GrouperParseException("Invalid "+ patternType +": " + pattern + " with detached molecules.");
+    }
+    // Valency Checks
+    std::unordered_map<int, int> atomFreeValency;
+    for (const auto& [id, node] : atomGraph.nodes) {
+        atomFreeValency[id] = node.valency;
+        if (atomFreeValency[id] < 0) {
+            throw GrouperParseException("Atom "+std::to_string(id)+" has a negative valency after adding the hub for pattern "+ pattern);
+        }
+    }
+    // Validate hubs
+    for (int hub : hubs) {
+        if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
+            throw std::invalid_argument("Hub ID "+ std::to_string(hub) +" is greater than the number of atoms in the group");
+        }
+    }
+    for (int hub : hubs) {
+        atomFreeValency[hub] -= 1;
+        if (atomFreeValency[hub] < 0) {
+            throw GrouperParseException("Atom "+std::to_string(hub)+" has a negative valency after adding the hub for pattern "+ pattern);
+        }
+    }
+}
+
 std::vector<int> GroupGraph::Group::hubOrbits() const {
-    return hubs; // TODO: Implement hub orbits
+
+    AtomGraph atomGraph;
+    if (patternType == "SMARTS") {
+        atomGraph.fromSmarts(pattern);
+    }
+    else {
+        atomGraph.fromSmiles(pattern);
+    }
+    int n = atomGraph.nodes.size();
+    if (n == 0) return {}; // Edge case: no atoms
+
+    // Step 1: Convert group to a nauty-compatible atomic graph
+    int m = SETWORDSNEEDED(n);
+    std::vector<setword> adj(n * m, 0);
+
+    // Map atoms to nauty node indices
+    std::unordered_map<int, int> atom_to_nauty;
+    int index = 0;
+    for (const auto& [id, node] : atomGraph.nodes) {
+        atom_to_nauty[id] = index++;
+    }
+
+    // Add edges for atomic connectivity
+    for (const auto& [src, dst, order] : atomGraph.edges) {
+        int from = atom_to_nauty[src];
+        int to = atom_to_nauty[dst];
+        ADDONEEDGE(adj.data(), from, to, m);
+    }
+
+    // Step 2: Compute atom orbits using nauty
+    std::vector<int> lab(n), ptn(n), orbits(n);
+    std::vector<setword> canong(n);
+    DEFAULTOPTIONS_GRAPH(options);
+    statsblk stats;
+    options.getcanon = TRUE;
+
+    densenauty(adj.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats, m, n, canong.data());
+
+    // Step 3: Map orbits back to hubs
+    std::vector<int> hub_orbits;
+    for (int hub : hubs) {
+        if (atom_to_nauty.find(hub) != atom_to_nauty.end()) {
+            hub_orbits.push_back(orbits[atom_to_nauty[hub]]);
+        }
+    }
+
+    return hub_orbits;
+}
+
+std::vector<std::vector<int>> GroupGraph::Group::getPossibleAttachments(int degree) const {
+    std::vector<std::vector<int>> possible_attachments;
+
+    if (degree > hubs.size()) {
+        return possible_attachments; // Not enough ports for the given degree
+    }
+
+    // Generate all possible attachment sets using combinations
+    std::vector<int> indices(hubs.size());
+    std::iota(indices.begin(), indices.end(), 0); // Fill with 0, 1, ..., hubs.size()-1
+
+    std::vector<int> combination;
+    std::function<void(int, int)> generate_combinations = [&](int start, int count) {
+        if (count == 0) {
+            possible_attachments.push_back(combination);
+            return;
+        }
+        for (size_t i = start; i <= indices.size() - count; ++i) {
+            combination.push_back(indices[i]);
+            generate_combinations(i + 1, count - 1);
+            combination.pop_back();
+        }
+    };
+
+    generate_combinations(0, degree); // Generate all subsets of size `degree`
+
+    // Filter out isomorphic attachment sets
+    AtomGraph atomGraph;
+    if (patternType == "SMARTS") {
+        atomGraph.fromSmarts(pattern);
+    } else {
+        atomGraph.fromSmiles(pattern);
+    }
+
+    // Store unique canonical forms
+    std::unordered_set<std::vector<setword>, hash_vector> unique_canon_attachments;
+    std::vector<std::vector<int>> non_isomorphic_attachments;
+
+    for (const auto& attachment : possible_attachments) {
+        AtomGraph modifiedGraph = atomGraph;
+
+        // Add dummy attachment atoms to these positions
+        for (int port_idx : attachment) {
+            modifiedGraph.addNode("I"); // Add dummy attachment atom
+            modifiedGraph.addEdge(hubs[port_idx], modifiedGraph.nodes.size() - 1); // Connect to the hub
+        }
+
+        // Compute the canonical form using Nauty
+        std::vector<setword> nauty_graph = modifiedGraph.toNautyGraph();
+        std::vector<int> lab(modifiedGraph.nodes.size()), ptn(modifiedGraph.nodes.size()), orbits(modifiedGraph.nodes.size());
+        std::vector<setword> canong(modifiedGraph.nodes.size());
+
+        // Sort nodes by color and initialize `lab` and `ptn`
+        int n = modifiedGraph.nodes.size();
+        std::vector<std::string> node_colors(modifiedGraph.nodes.size());
+        for (int i = 0; i < modifiedGraph.nodes.size(); ++i) node_colors[i] = modifiedGraph.nodes[i].ntype;
+
+        std::unordered_map<std::string, int> color_to_index;
+        int color_index = 0;
+        for (const auto [id, atom] : modifiedGraph.nodes) {
+            if (color_to_index.find(atom.ntype) == color_to_index.end()){
+                color_to_index[atom.ntype] = color_index;
+                color_index++;
+            }
+        }
+        std::vector<std::pair<int, int>> color_sorted_nodes;
+        for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(color_to_index[node_colors[i]], i);
+        std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
+        for (int i = 0; i < n; ++i) lab[i] = color_sorted_nodes[i].second;
+        for (int i = 0; i < n - 1; ++i) ptn[i] = (color_sorted_nodes[i].first == color_sorted_nodes[i + 1].first) ? 1 : 0;
+        ptn[n - 1] = 0;
+
+        DEFAULTOPTIONS_GRAPH(options);
+        statsblk stats;
+        options.getcanon = TRUE;
+        options.defaultptn = FALSE;
+        densenauty(nauty_graph.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats, SETWORDSNEEDED(modifiedGraph.nodes.size()), modifiedGraph.nodes.size(), canong.data());
+
+        // Keep only unique (non-isomorphic) attachment sets
+        if (unique_canon_attachments.insert(canong).second) {
+            non_isomorphic_attachments.push_back(attachment);
+        }
+    }
+    return non_isomorphic_attachments;
 }
 
 std::string GroupGraph::Group::toString() const {
     std::ostringstream output;
-    output << "Group " << id << " (" << ntype << ") (" << smarts << ") ";
+    output << "Group " <<" (" << ntype << ") (" << pattern << ") ";
     output << ": \n    Ports ";
     for (PortType port : ports) {
         output << port << " ";
@@ -196,73 +479,86 @@ inline bool operator<(const std::tuple<GroupGraph::NodeIDType, GroupGraph::PortT
 // Operating methods
 void GroupGraph::addNode(
     std::string ntype = "",
-    std::string smarts = "",
-    std::vector<NodeIDType> hubs = {}
+    std::string pattern = "",
+    std::vector<NodeIDType> hubs = {},
+    std::string patternType = "SMILES"
 ) {
-    /*There are 5 ways you can input a node:
-        1. ntype, smiles, hubs
-        2. ntype, hubs
-        3. smiles, hubs
-        4. ntype if it already exists
-        5. smarts if it already exists
+    /*There are 2 ways you can input a node:
+        0. ntype, pattern, hubs
+        1. ntype if it already exists
     */
 
     // Error handling
-    if (ntype.empty() && smarts.empty()) {
-        throw std::invalid_argument("Either SMARTS or type must be provided");
+    if (ntype.empty()) {
+        throw std::invalid_argument("Group type must be provided");
     }
-    for (NodeIDType hub : hubs) {
+    // Case 0: Group type, pattern, and hubs are provided
+    if (!ntype.empty() && !pattern.empty() && !hubs.empty()) {
+        // Error handling
+        for (int hub : hubs) {
+            if (hub < 0) {
+                throw std::invalid_argument("Hub ID must be greater than or equal to 0");
+            }
+        }
+        for (const auto& entry : nodes) {
+            if (entry.second.ntype == ntype && entry.second.pattern != pattern && entry.second.hubs != hubs) {
+                throw std::invalid_argument("Group type already exists with different SMARTS/SMILES or hubs");
+            }
+        }
+        int id = nodes.size();
+        nodes[id] = Group(ntype, pattern, hubs, patternType);
+        nodetypes[ntype] = hubs;
+    }
+    // Case 1: Group type (ntype) is provided
+    else if (!ntype.empty() && pattern.empty() && hubs.empty()) {
+        if (nodetypes.find(ntype) == nodetypes.end()) {
+            throw std::invalid_argument("Group type does not exist yet, please provide SMARTS and hubs");
+        }
+        int id = nodes.size();
+        std::vector<int> hubs = nodetypes[ntype];
+        for (const auto& [i, node] : nodes) {
+            if (node.ntype == ntype) {
+                hubs = node.hubs;
+                pattern = node.pattern;
+                break;
+            }
+        }
+        nodes[id] = Group(ntype, pattern, hubs, patternType);
+    }
+    else {
+        std::string hubs_str = "";
+        for (int hub : hubs) {
+            hubs_str += std::to_string(hub) + " ";
+        }
+        throw std::invalid_argument("Invalid input for add_node ntype: " + ntype + " SMARTS/SMILES: " + pattern + " hubs: " + hubs_str);
+    }
+}
+
+void GroupGraph::addNode(Group group) {
+    // Error handling
+    if (group.ntype.empty()) {
+        throw std::invalid_argument("Group type must be provided");
+    }
+    if (group.pattern.empty()) {
+        throw std::invalid_argument("Group pattern must be provided");
+    }
+    if (group.hubs.empty()) {
+        throw std::invalid_argument("Group hubs must be provided");
+    }
+    for (int hub : group.hubs) {
         if (hub < 0) {
             throw std::invalid_argument("Hub ID must be greater than or equal to 0");
         }
     }
-
-    // Check if the node type already exists
-    if (ntype.empty()) {
-        ntype = smarts;
+    for (const auto& entry : nodes) {
+        if (entry.second.ntype == group.ntype && entry.second.pattern != group.pattern && entry.second.hubs != group.hubs) {
+            throw std::invalid_argument("Group type already exists with different SMARTS/SMILES or hubs");
+        }
     }
-
-    // Initialize id and ports
     int id = nodes.size();
-    std::vector<PortType> ports(hubs.size());
-
-    // Case 0: Group type and hubs are provided
-    if (!ntype.empty() && nodetypes.find(ntype) != nodetypes.end() && hubs.empty()) {
-        hubs = nodetypes[ntype]; // Reuse existing hubs
-    }
-
-    // Case 1: Group type (ntype) is provided
-    if (!ntype.empty()) {
-        // If the ntype (or smarts used as ntype) already exists
-        if (nodetypes.find(ntype) != nodetypes.end()) {
-            // Check if hub sizes match the existing node type
-            if (hubs.empty()) {
-                ports = nodetypes[ntype]; // Use the existing ports
-            }
-            if (nodetypes[ntype].size() != hubs.size()) {
-                throw std::invalid_argument("Group type already exists with a different number of hubs");
-            }
-        } else { // New node type
-            std::iota(ports.begin(), ports.end(), 0); // Initialize ports for hubs
-            nodetypes[ntype] = ports; // Save the new node type
-        }
-    }
-
-    // Case 2: smarts is provided (and used as ntype if ntype was empty)
-    if (ntype.empty() && !smarts.empty() && nodetypes.find(smarts) != nodetypes.end()) {
-        // Check if hub sizes match the existing smarts node
-        if (nodetypes[smarts].size() != hubs.size()) {
-            throw std::invalid_argument("smarts already exists with a different number of hubs");
-        }
-    } else if (!smarts.empty() && nodetypes.find(smarts) == nodetypes.end()) {
-        std::iota(ports.begin(), ports.end(), 0);
-        nodetypes[smarts] = ports; // Save the new smarts as a node type
-    }
-
-    // Create the new node and add it to the nodes map
-    nodes[id] = Group(ntype, smarts, hubs);
+    nodes[id] = group;
+    nodetypes[group.ntype] = group.hubs;
 }
-
 
 bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, unsigned int bondOrder, bool verbose) {
     NodeIDType from = std::get<0>(fromNodePort);
@@ -297,11 +593,11 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
     if (std::find(edges.begin(), edges.end(), edge) != edges.end()) {
             throw std::invalid_argument("Edge already exists");
     }
-    for (const auto& existingEdge : edges) {
-        if (std::get<0>(existingEdge) == from && std::get<1>(existingEdge) == fromPort) {
+    for (const auto& [srcNode, srcPort, dstNode, dstPort, bO] : edges) {
+        if ((srcNode == from && srcPort == fromPort) || (dstNode == from && dstPort == fromPort)) {
             throw std::invalid_argument("Source port already in use");
         }
-        if (std::get<2>(existingEdge) == to && std::get<3>(existingEdge) == toPort) {
+        if ((dstNode == to && dstPort == toPort) || (srcNode == to && srcPort == toPort)) {
             throw std::invalid_argument("Destination port already in use");
         }
     }
@@ -346,31 +642,170 @@ void GroupGraph::clearEdges() {
     edges.clear();
 }
 
-int* GroupGraph::computeEdgeOrbits(
-    const std::vector<std::pair<int, int>> edge_list,
-    graph* g, int* lab, int* ptn, int* orbits,
-    optionblk* options,
-    statsblk* stats
-) const {
-    std::vector<std::vector<int>> edge_list_edge_graph = toEdgeGraph(edge_list);
-    int n = edge_list.size();
-    int m = SETWORDSNEEDED(n);
+void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int stabvertex, int n) {
 
-    EMPTYGRAPH(g, m, n);
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            if (edge_list_edge_graph[i][j] == 1) {
-                ADDONEEDGE(g, i, j, m);
-            }
+    if (!edge_data_ptr) return;
+
+    int num_edges = edge_data_ptr->num_edges;
+    int (*nauty_edges)[2] = edge_data_ptr->edges;
+    int* edge_orbits = edge_data_ptr->edge_orbits;
+
+    DisjointSet* uf = edge_data_ptr->uf;
+
+    // Build edge index map from normalized edges to their indices
+    std::map<std::pair<int, int>, int> edge_index;
+    for (int i = 0; i < num_edges; ++i) {
+        int u = std::min(nauty_edges[i][0], nauty_edges[i][1]);
+        int v = std::max(nauty_edges[i][0], nauty_edges[i][1]);
+        edge_index[{u, v}] = i;
+    }
+
+    // For each edge, map its endpoints under the current permutation and merge orbits
+    for (int i = 0; i < num_edges; ++i) {
+        int u = nauty_edges[i][0];
+        int v = nauty_edges[i][1];
+        int pu = perm[u];
+        int pv = perm[v];
+
+        auto permuted_edge = std::make_pair(std::min(pu, pv), std::max(pu, pv));
+
+        auto it = edge_index.find(permuted_edge);
+        if (it != edge_index.end()) {
+            uf->unite(i, it->second);
         }
     }
 
-    densenauty(g, lab, ptn, orbits, options, stats, m, n, NULL);
+    // Assign orbit representatives
+    for (int i = 0; i < num_edges; ++i) {
+        edge_orbits[i] = uf->find(i);
+    }
+}
 
-    int* result = new int[n];
-    std::copy(orbits, orbits + n, result);
+std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<int>& node_colors,
+    graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats
+    // int* num_edges, int nauty_edges[][2], int edge_orbits[]
+) const {
+    int n = nodes.size();
+    int m = SETWORDSNEEDED(n);
+    setword workspace[160]; // Nauty workspace
 
-    return result;
+    // Allocate a local edge data struct for this thread
+    NautyEdgeData edge_data;
+    edge_data.num_edges = edge_list.size();
+    DisjointSet uf(edge_list.size());
+    edge_data.uf = &uf;
+    if (edge_data.num_edges > MAX_EDGES) {
+        throw std::runtime_error("Too many edges; increase MAX_EDGES.");
+    }
+
+    for (size_t i = 0; i < edge_list.size(); i++) {
+        edge_data.edges[i][0] = edge_list[i].first;
+        edge_data.edges[i][1] = edge_list[i].second;
+        edge_data.edge_orbits[i] = i;  // Initially, each edge is its own orbit
+    }
+
+    // Set the thread-local pointer for update_edge_orbits
+    edge_data_ptr = &edge_data;
+
+    // Initialize graph structure
+    EMPTYGRAPH(g, m, n);
+    for (const auto& edge : edge_list) ADDONEEDGE(g, edge.first, edge.second, m);
+
+    // Sort nodes by color and initialize `lab` and `ptn`
+    std::vector<std::pair<int, int>> color_sorted_nodes;
+    for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(node_colors[i], i);
+    std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
+
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted_nodes[i].second;
+    for (int i = 0; i < n - 1; ++i) ptn[i] = (color_sorted_nodes[i].first == color_sorted_nodes[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
+
+    // Configure Nauty options
+    options->getcanon = FALSE;
+    options->defaultptn = FALSE;
+    options->userautomproc = update_edge_orbits;
+
+    // Run Nauty
+    densenauty(g, lab, ptn, orbits, options, stats, m, n, workspace);
+
+    // Convert node orbit array to vector
+    std::vector<int> node_orbits(n), edge_orbits_vec(edge_data.num_edges);
+    for (int i = 0; i < n; ++i) node_orbits[i] = orbits[i];
+    for (int i = 0; i < edge_data.num_edges; ++i) edge_orbits_vec[i] = edge_data.edge_orbits[i];
+
+
+    // Clear thread-local pointer
+    edge_data_ptr = nullptr;
+
+    return {node_orbits, edge_orbits_vec};
+}
+
+std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::vector<int>& node_colors
+) const {
+    int n = nodes.size();
+    int m = SETWORDSNEEDED(n);
+    setword workspace[160]; // Nauty workspace
+    graph g[m * n];         // For the nauty graph
+    int lab[n];             // For the label array
+    int ptn[n];             // For the partition array
+    int orbits[n];          // For the orbits array
+    DEFAULTOPTIONS_GRAPH(options); // Default nauty options
+    statsblk stats;                // Nauty stats structure
+
+
+    // Allocate a local edge data struct for this thread
+    NautyEdgeData edge_data;
+    edge_data.num_edges = edge_list.size();
+    DisjointSet uf(edge_list.size());
+    edge_data.uf = &uf;
+    if (edge_data.num_edges > MAX_EDGES) {
+        throw std::runtime_error("Too many edges; increase MAX_EDGES.");
+    }
+
+    for (size_t i = 0; i < edge_list.size(); i++) {
+        edge_data.edges[i][0] = edge_list[i].first;
+        edge_data.edges[i][1] = edge_list[i].second;
+        edge_data.edge_orbits[i] = i;  // Initially, each edge is its own orbit
+    }
+
+    // Set the thread-local pointer for update_edge_orbits
+    edge_data_ptr = &edge_data;
+
+    // Initialize graph structure
+    EMPTYGRAPH(g, m, n);
+    for (const auto& edge : edge_list) ADDONEEDGE(g, edge.first, edge.second, m);
+
+    // Sort nodes by color and initialize `lab` and `ptn`
+    std::vector<std::pair<int, int>> color_sorted_nodes;
+    for (int i = 0; i < n; ++i) color_sorted_nodes.emplace_back(node_colors[i], i);
+    std::sort(color_sorted_nodes.begin(), color_sorted_nodes.end());
+
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted_nodes[i].second;
+    for (int i = 0; i < n - 1; ++i) ptn[i] = (color_sorted_nodes[i].first == color_sorted_nodes[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
+
+    // Configure Nauty options
+    options.getcanon = FALSE;
+    options.defaultptn = FALSE;
+    options.userautomproc = update_edge_orbits;
+
+    // Run Nauty
+    densenauty(g, lab, ptn, orbits, &options, &stats, m, n, workspace);
+
+    // Convert node orbit array to vector
+    std::vector<int> node_orbits(n), edge_orbits_vec(edge_data.num_edges);
+    for (int i = 0; i < n; ++i) node_orbits[i] = orbits[i];
+    for (int i = 0; i < edge_data.num_edges; ++i) edge_orbits_vec[i] = edge_data.edge_orbits[i];
+
+
+    // Clear thread-local pointer
+    edge_data_ptr = nullptr;
+
+    return {node_orbits, edge_orbits_vec};
 }
 
 // Conversion methods
@@ -378,7 +813,7 @@ std::string GroupGraph::printGraph() const {
     std::ostringstream output;
     output << "Nodes:\n";
     for (const auto& entry : nodes) {
-        output << "    Group " << entry.first << " (" << entry.second.ntype << ") (" << entry.second.smarts << ") ";
+        output << "    Group " << entry.first << " (" << entry.second.ntype << ") (" << entry.second.pattern << ") ";
         output<< ": \n        Ports ";
         for (PortType port : entry.second.ports) {
             output << port << " ";
@@ -405,8 +840,8 @@ std::string GroupGraph::toSmiles() const {
     for (const auto& entry : nodes) {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
-        std::string smarts = entry.second.smarts;
-        std::unique_ptr<RDKit::RWMol> subGraph(RDKit::SmartsToMol(smarts));
+        std::string pattern = entry.second.pattern;
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
         for (size_t i = 0; i < node.ports.size(); ++i) {
             nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
@@ -421,8 +856,8 @@ std::string GroupGraph::toSmiles() const {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
         nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        std::string smarts = node.smarts;
-        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmartsToMol(smarts));
+        std::string pattern = node.pattern;
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
@@ -434,8 +869,8 @@ std::string GroupGraph::toSmiles() const {
     for (const auto& entry : nodes) {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
-        std::string smarts = node.smarts;
-        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmartsToMol(smarts));
+        std::string pattern = node.pattern;
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             RDKit::Atom newAtom = **atom;
@@ -514,8 +949,8 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
     for (const auto& entry : nodes) {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
-        std::string smarts = entry.second.smarts;
-        std::unique_ptr<RDKit::RWMol> subGraph(RDKit::SmartsToMol(smarts));
+        std::string pattern = entry.second.pattern;
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
         for (size_t i = 0; i < node.ports.size(); ++i) {
             nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
@@ -531,8 +966,8 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
         nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        std::string smarts = node.smarts;
-        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmartsToMol(smarts));
+        std::string pattern = node.pattern;
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
@@ -544,14 +979,14 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
     for (const auto& entry : nodes) {
         NodeIDType nodeID = entry.first;
         const Group& node = entry.second;
-        std::string smarts = node.smarts;
-        std::unique_ptr<RDKit::ROMol> subGraph(RDKit::SmartsToMol(smarts));
+        std::string pattern = node.pattern;
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
         for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
             atomId++;
             // RDKit::Atom newAtom = **atom;
             // molecularGraph->addAtom(&newAtom, true);
             int atomicNumber = (*atom)->getAtomicNum();
-            int maxValence = pt->getDefaultValence(atomicNumber);
+            int maxValence = pt->getDefaultValence(atomicNumber) + (*atom)->getFormalCharge();
             atomGraph->addNode((*atom)->getSymbol(), maxValence);
 
         }
@@ -583,12 +1018,29 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
 
 std::string GroupGraph::serialize() const {
     std::ostringstream oss;
+
+    auto escapeString = [](const std::string& input) -> std::string {
+        std::ostringstream oss;
+        for (char c : input) {
+            switch (c) {
+                case '\n': oss << "\\n"; break;
+                case '\t': oss << "\\t"; break;
+                case '\r': oss << "\\r"; break;
+                case '\\': oss << "\\\\"; break;
+                case '\"': oss << "\\\""; break;
+                default: oss << c; break;
+            }
+        }
+        return oss.str();
+    };
+
     oss << "{\n  \"nodes\": [\n";
     for (const auto& pair : nodes) {
         const Group& node = pair.second;
         oss << "    {\n      \"id\": " << pair.first
-            << ",\n      \"ntype\": \"" << node.ntype
-            << "\",\n      \"smarts\": \"" << node.smarts
+            << ",\n      \"ntype\": \"" << escapeString(node.ntype)
+            << "\",\n      \"pattern\": \"" << escapeString(node.pattern)
+            << "\",\n      \"patternType\": \"" << escapeString(node.patternType)
             << "\",\n      \"ports\": [";
         for (size_t i = 0; i < node.ports.size(); ++i) {
             if (i > 0) oss << ",";
@@ -630,7 +1082,7 @@ void GroupGraph::deserialize(const std::string& data) {
         edges.clear();
         nodetypes.clear();
 
-        
+
         json j = json::parse(data);
 
         // Pre-allocate space
@@ -641,21 +1093,21 @@ void GroupGraph::deserialize(const std::string& data) {
         for (const auto& node_data : nodes_array) {
             // Extract all data first
             NodeIDType id = node_data["id"].get<NodeIDType>();
-            
+
             // Construct the group directly with its constructor
             std::string ntype = node_data["ntype"].get<std::string>();
-            std::string smarts = node_data["smarts"].get<std::string>();
+            std::string pattern = node_data["pattern"].get<std::string>();
             std::vector<NodeIDType> hubs = node_data["hubs"].get<std::vector<NodeIDType>>();
-            
+            std::string patternType = node_data["patternType"].get<std::string>();
+
             // Create and insert the group
-            Group group(ntype, smarts, hubs);
-            group.id = id;  // Set ID after construction
-            
+            Group group(ntype, pattern, hubs, patternType);
+
             // If ports were specified, override the default ports
             if (node_data.contains("ports")) {
                 group.ports = node_data["ports"].get<std::vector<PortType>>();
             }
-            
+
             // Use emplace with piecewise construction
             nodes.emplace(std::piecewise_construct,
                          std::forward_as_tuple(id),
@@ -665,7 +1117,7 @@ void GroupGraph::deserialize(const std::string& data) {
         // Process edges
         const auto& edges_array = j["edges"];
         edges.reserve(edges_array.size());
-        
+
         for (const auto& edge_data : edges_array) {
             edges.insert(
                 std::make_tuple(
@@ -687,38 +1139,74 @@ void GroupGraph::deserialize(const std::string& data) {
     }
 }
 
-std::string GroupGraph::canonize() const {
-        // TODO: Implement canonicalization algorithm, this doesn't work because the it doesn't account for automorphisms
+void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
+    std::unordered_map<NodeIDType, int> group_to_nauty;
+    std::unordered_map<std::pair<NodeIDType, PortType>, int> port_to_nauty;
+    std::unordered_map<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>, int> edge_to_nauty;
 
-        // Step 1: Sort nodes based on their attributes (e.g., id, ntype, smarts)
-        std::vector<Group> sortedNodes;
-        for (const auto& pair : nodes) {
-            sortedNodes.push_back(pair.second);
-        }
-        std::sort(sortedNodes.begin(), sortedNodes.end(), [](const Group& a, const Group& b) {
-            return std::tie(a.ntype, a.smarts, a.id) < std::tie(b.ntype, b.smarts, b.id);
-        });
+    int nodeIndex = 0;
 
-        // Step 2: Sort edges by connected nodes and ports
-        std::vector<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> sortedEdges;
-        for (const auto& edge : edges) {
-            sortedEdges.push_back(edge);
-        }
-        std::sort(sortedEdges.begin(), sortedEdges.end());
+    // Map GroupGraph nodes to nauty nodes
+    for (const auto& [nodeID, group] : nodes) group_to_nauty[nodeID] = nodeIndex++;
 
-        // Step 3: Convert sorted nodes and edges to a canonical smarts or other format
-        std::stringstream ss;
-        for (const auto& node : sortedNodes) {
-            ss << node.ntype << ":" << node.smarts << ";";
+    // Map port nodes
+    for (const auto& [nodeID, group] : nodes) {
+        for (PortType port : group.ports) {
+            port_to_nauty[{nodeID, port}] = nodeIndex++;
         }
-        for (const auto& edge : sortedEdges) {
-            ss << std::get<0>(edge) << "-" << std::get<1>(edge) << "-"
-               << std::get<2>(edge) << "-" << std::get<3>(edge) << ":" << std::get<4>(edge) << ";";
-        }
-
-        // Step 4: Return the canonical representation
-        return ss.str();
     }
+
+    // Map edge nodes
+    for (const auto& edge : edges) edge_to_nauty[edge] = nodeIndex++;
+
+    *n = nodeIndex;  // Total number of nauty nodes
+    *m = SETWORDSNEEDED(*n); // Compute `m` correctly
+
+    // Allocate memory for adj matrix
+    *adj = new graph[*n * (*m)]();
+
+    std::fill(*adj, *adj + (*n * (*m)), 0); // Initialize adjacency matrix to 0
+
+    // Build adjacency list
+    for (const auto& [nodeID, group] : nodes) {
+        int g_node = group_to_nauty[nodeID];
+        for (PortType port : group.ports) {
+            int p_node = port_to_nauty[{nodeID, port}];
+            ADDONEEDGE(*adj, g_node, p_node, *m);
+        }
+    }
+
+    for (const auto& edge : edges) {
+        auto [src, srcPort, dst, dstPort, order] = edge;
+        int e_node = edge_to_nauty[edge];
+        int p1 = port_to_nauty[{src, srcPort}];
+        int p2 = port_to_nauty[{dst, dstPort}];
+
+        ADDONEEDGE(*adj, p1, e_node, *m);
+        ADDONEEDGE(*adj, e_node, p2, *m);
+    }
+}
+
+std::vector<setword> GroupGraph::canonize() const {
+    int n, m;
+    graph* adj = nullptr; // Initialize pointer
+
+    toNautyGraph(&n, &m, &adj); // Now `adj` is allocated in toNautyGraph
+
+    std::vector<int> lab(n), ptn(n), orbits(n);
+    std::vector<setword> canong(n);
+
+    DEFAULTOPTIONS_GRAPH(options);
+    statsblk stats;
+    options.getcanon = TRUE;
+
+    densenauty(adj, lab.data(), ptn.data(), orbits.data(), &options, &stats, m, n, canong.data());
+
+    delete[] adj; // Free allocated memory
+
+    return canong;
+}
+
 
 //#############################################################################################################
 //#############################################################################################################
@@ -730,6 +1218,44 @@ AtomGraph::AtomGraph()
 AtomGraph::AtomGraph(const AtomGraph& other)
     : nodes(other.nodes), edges(other.edges) {}
 
+AtomGraph::Atom::Atom(const std::string& ntype){
+    static std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+    };
+    this->ntype = ntype;
+    if (standardElementValency.count(ntype)) {
+        this->valency = standardElementValency[ntype];
+    } else { // Error message if passing bad Atom Name
+        std::stringstream err_msg;
+        err_msg << "Element type '" << ntype << "' does not have a default valency. Valid element types are: ";
+        for (const auto& pair : standardElementValency) {
+            err_msg << pair.first << " ";
+        }
+        throw std::invalid_argument(err_msg.str());
+    }
+}
+
+AtomGraph::Atom::Atom(const std::string& ntype, int valency){
+    static std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+    };
+    this->ntype = ntype;
+    if (valency == -1){
+        if (standardElementValency.count(ntype)) {
+            this->valency = standardElementValency[ntype];
+        } else { // Error message if passing bad Atom Name
+            std::stringstream err_msg;
+            err_msg << "Element type '" << ntype << "' does not have a default valency. Valid element types are: ";
+            for (const auto& pair : standardElementValency) {
+                err_msg << pair.first << " ";
+            }
+            throw std::invalid_argument(err_msg.str());
+        }
+    } else {
+        this->valency = valency;
+    }
+}
+
 AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
     if (this != &other) {
         nodes = other.nodes;
@@ -740,7 +1266,7 @@ AtomGraph& AtomGraph::operator=(const AtomGraph& other) {
 
 std::string AtomGraph::Atom::toString() const {
     std::ostringstream output;
-    output << "Atom " << id << " (" << ntype << ") Valency: " << valency;
+    output << "Atom " << " (" << ntype << ") Valency: " << valency;
     return output.str();
 }
 
@@ -795,14 +1321,20 @@ bool AtomGraph::operator==(const AtomGraph& other) const {
     return true;
 }
 
-void AtomGraph::addNode(const std::string& type, const unsigned int valency) {
+void AtomGraph::addNode(const std::string& type, const int valency) {
     int id = nodes.size();
-    nodes[id] = Atom(id, type, valency);
+    nodes[id] = Atom(type, valency);
 
 }
 
-void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
-    if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end()) {
+void AtomGraph::addNode(Atom atom) {
+    int id = nodes.size();
+    nodes[id] = atom;
+}
+
+void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order, bool validate) {
+    if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end())
+    {
         if (nodes.find(src) == nodes.end()) {
             throw std::invalid_argument("Atom " + std::to_string(src) + " does not exist");
         }
@@ -810,13 +1342,13 @@ void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
             throw std::invalid_argument("Atom " + std::to_string(dst) + " does not exist");
         }
     }
-    if (getFreeValency(src) <= 0 && getFreeValency(dst) <= 0) {
+    if (getFreeValency(src) <= 0 && getFreeValency(dst) <= 0 && validate) {
         throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for both nodes");
     }
-    if (getFreeValency(src) <= 0) {
+    if ((getFreeValency(src) <= 0) && validate) {
         throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for the source node");
     }
-    if (getFreeValency(dst) <= 0) {
+    if ((getFreeValency(dst) <= 0)  && validate) {
         throw std::invalid_argument("Adding edge from " + std::to_string(src) + " to " + std::to_string(dst) + " would exceed the valency for the destination node");
     }
     if (edges.find(std::make_tuple(src, dst, order)) != edges.end() || edges.find(std::make_tuple(dst, src, order)) != edges.end()) {
@@ -825,7 +1357,6 @@ void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order) {
     if (order > 4 || order < 1) {
         throw std::invalid_argument("Bond order of " + std::to_string(order) + " is invalid");
     }
-
     edges.insert(std::make_tuple(src, dst, order));
     edges.insert(std::make_tuple(dst, src, order));
 }
@@ -834,6 +1365,11 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     /*
         Returns a list of all subgraph isomorphisms between the query graph and this graph
         format is a list of lists of pairs of node ids where (query_node_id, this_node_id) is a match
+
+        @param query AtomGraph to look at isomorphism mapping
+        @param hubs vector<ints> which indicate where the available hubs are
+
+        @return vector of vectors of pairs of two NodeIds to map in query
     */
     std::vector<std::vector<std::pair<NodeIDType,NodeIDType>>> matches; // To store all matches
     std::unordered_map<NodeIDType, int> queryNeededFreeValency; // To store the number of hubs for each query node
@@ -845,98 +1381,44 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     for (const auto& h : hubs) {
         queryNeededFreeValency[h]++;
     }
-    // Add a count for the bonds that are in the mol graph
-    // for (const auto& [nodeid, dstSet] : query.edges) {
-    //     int totalBondCount = 0;
-    //     for (const auto& [dst, order] : dstSet) {
-    //         totalBondCount += order;
-    //     }
-    //     queryNeededFreeValency[nodeid] += totalBondCount;
-    // }
-    // std::cout<<"Query Hub Counts: "<<std::endl;
-    // for (const auto& [id, count] : queryNeededFreeValency) {
-    //     std::cout << id << ": " << count << std::endl;
-    // }
-    // std::cout << std::endl;
-
-    // std::cout<<"Query Graph: "<<std::endl;
-    // std::cout<<query.printGraph()<<std::endl;
-    // std::cout<<"This Graph: "<<std::endl;
-    // std::cout<<this->printGraph()<<std::endl;
-
-    // std::cout<<"Query Hub Counts: "<<std::endl;
-    // for (const auto& [id, count] : queryNeededFreeValency) {
-    //     std::cout << id << ": " << count << std::endl;
-    // }
-    // std::cout << std::endl;
 
     // Step 1: Pre-filter nodes in the graph based on query node attributes
     std::unordered_map<NodeIDType, std::vector<NodeIDType>> candidateNodes; // Maps query nodes to possible candidates in the main graph
     for (const auto& queryNodePair : query.nodes) {
         const auto& queryNode = queryNodePair.second;
-        for (const auto& graphNodePair : nodes) {
+        const auto& queryID = queryNodePair.first;
+        for (const auto &graphNodePair : nodes)
+        {
             const auto& graphNode = graphNodePair.second;
+            const auto& graphID = graphNodePair.first;
 
             // Match based on node type and valency
             if (queryNode.ntype == graphNode.ntype && queryNode.valency <= graphNode.valency) {
-                candidateNodes[queryNode.id].push_back(graphNode.id);
+                candidateNodes[queryID].push_back(graphID);
             }
         }
     }
 
-    // std::cout << "Candidate Nodes: " << std::endl;
-    // for (const auto& [queryNode, candidates] : candidateNodes) {
-    //     std::cout << queryNode << ": ";
-    //     for (const auto& candidate : candidates) {
-    //         std::cout << candidate << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
-    // std::cout << std::endl;
-
     // Step 2: Backtracking function to explore mappings
     std::function<void(std::unordered_map<NodeIDType, NodeIDType>&, std::unordered_set<NodeIDType>&)> backtrack =
         [&](std::unordered_map<NodeIDType, NodeIDType>& currentMapping, std::unordered_set<NodeIDType>& usedNodes) {
-            // Debug: Print the current mapping
-            // std::cout << "Current Mapping: ";
-            // for (const auto& mapping : currentMapping) {
-            //     std::cout << "(" << mapping.first << " -> " << mapping.second << ") ";
-            // }
-            // std::cout << std::endl;
             // If all query nodes are mapped, validate hubs
             if (currentMapping.size() == query.nodes.size()) {
                 // Check if the hubs specified match the query node hubs
                 for (const auto& [id, count] : queryNeededFreeValency) {
                     NodeIDType graphNodeid = currentMapping[id];
-                    // printf("Query Group: %d", id);
-                    // printf("Graph Group: %d", graphNodeid);
-                    // printf("this->getFreeValency(graphNodeid): %d", this->getFreeValency(graphNodeid));
-                    // printf("count: %d", count);
-                    // printf("\n");
+
                     if(this->getFreeValency(graphNodeid) != count) { // Check if number of bonds for query node matches the number of hubs
                         return;
                     }
                 }
-                // printf("Hubs Matched");
-                // Check if the bonds are the same
-                // for (const auto& [queryNodeid, dstSet] : query.edges) {
-                //     for (const auto& [dst, order] : dstSet) {
-                //         NodeIDType graphNodeid = currentMapping[queryNodeid];
-                //         auto it = edges.find(graphNodeid);
-                //         if (it == edges.end() || it->second.find(std::make_pair(currentMapping[dst], order)) == it->second.end()) {
-                //             return;
-                //         }
-                //     }
-                // }
                 for(const auto& [src, dst, order] : query.edges) {
                     NodeIDType graphNodeid = currentMapping[src];
                     auto it = edges.find(std::make_tuple(graphNodeid, currentMapping[dst], order));
                     if (it == edges.end()) { // Node has to be in the graph
                         return;
-                    }                    
+                    }
                 }
-                // printf("Bonds Matched\n");
-
 
                 // Add the valid match
                 std::vector<std::pair<NodeIDType, NodeIDType>> match;
@@ -1026,14 +1508,210 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
     return matches;
 }
 
+/**
+ * Processing method for creating atom graphs from SMARTS strings.
+ *
+ *  Currently supported symbols
+ *  `(,),[,],;,C,N,O,H,S,F,Br,Cl,I,-,=,#`
+ *
+ * TODO: Plenty more symbols to support.
+ * `R,!,X,ints,*,@`
+ *
+ * @tparam pattern a string that will be processed into AtomGraph
+ * @return void
+ */
+void AtomGraph::fromSmarts(const std::string& smarts) {
+    nodes.clear();
+    edges.clear();
+
+    // Attempt to load via rdkit
+    const auto& mol = createMol(smarts, true);
+    if (mol) {
+        createAtomGraphFromRDKit(mol, *this);
+        return;
+    };
+
+    // If RDKit fails...
+    std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1},
+        {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1},
+    };
+
+    std::vector<NodeIDType> centralNodeVec;
+    std::unordered_map<int, NodeIDType> ringClosures;
+
+    int prevDepth = 0;
+    int currentDepth = 0;
+    NodeIDType currentNode = 0;
+    int bondOrder = 1;
+
+    for (size_t i = 0; i < smarts.length(); ++i) {
+        char c = smarts[i];
+
+        if (c == '[') {
+            // Bracketed atom, extract until ']'
+            size_t end = smarts.find(']', i);
+            if (end == std::string::npos) {
+                throw std::invalid_argument("Unclosed bracket in SMARTS string: `" + smarts + "`");
+            }
+
+            std::string bracketContent = smarts.substr(i + 1, end - i - 1);
+            i = end; // advance index
+
+            // Extract atomic symbol and optional charge
+            std::string symbol;
+            int charge = 0;
+
+            // Simple regex-free parser
+            size_t j = 0;
+            if (j + 1 < bracketContent.size() && islower(bracketContent[j + 1])) {
+                symbol = bracketContent.substr(j, 2);
+                j += 2;
+            } else {
+                symbol = bracketContent.substr(j, 1);
+                j += 1;
+            }
+
+            // Look for '+' or '-'
+            while (j < bracketContent.size()) {
+                if (bracketContent[j] == '+') {
+                    charge++;
+                    j++;
+                    while (j < bracketContent.size() && std::isdigit(bracketContent[j])) {
+                        charge += bracketContent[j] - '0';
+                        j++;
+                    }
+                } else if (bracketContent[j] == '-') {
+                    charge--;
+                    j++;
+                    while (j < bracketContent.size() && std::isdigit(bracketContent[j])) {
+                        charge -= bracketContent[j] - '0';
+                        j++;
+                    }
+                } else {
+                    j++;
+                }
+            }
+
+            // Use standard valence if known, adjusted by charge
+            int maxValence = 4;
+            if (standardElementValency.count(symbol)) {
+                maxValence = standardElementValency[symbol] + charge;
+            }
+
+            addNode(symbol, maxValence);
+            currentNode = nodes.size() - 1;
+
+            if (centralNodeVec.size() <= currentDepth) {
+                centralNodeVec.resize(currentDepth + 1, currentNode);
+            }
+
+            if (centralNodeVec.empty()) {
+                centralNodeVec.push_back(currentNode);
+            } else if (currentDepth <= prevDepth) {
+                addEdge(centralNodeVec[currentDepth], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            } else {
+                addEdge(centralNodeVec[currentDepth - 1], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            }
+
+            bondOrder = 1;
+            prevDepth = currentDepth;
+        }
+        else if (std::isalpha(c)) {
+            // Non-bracket atom, try 2-letter or 1-letter element
+            std::string symbol;
+            if (i + 1 < smarts.length() && islower(smarts[i + 1])) {
+                symbol = smarts.substr(i, 2);
+                i++;
+            } else {
+                symbol = std::string(1, c);
+            }
+
+            if (!standardElementValency.count(symbol)) {
+                throw std::invalid_argument("Unknown atom type: " + symbol);
+            }
+
+            addNode(symbol, standardElementValency[symbol]);
+            currentNode = nodes.size() - 1;
+
+            if (centralNodeVec.size() <= currentDepth) {
+                centralNodeVec.resize(currentDepth + 1, currentNode);
+            }
+
+            if (centralNodeVec.empty()) {
+                centralNodeVec.push_back(currentNode);
+            } else if (currentDepth <= prevDepth) {
+                addEdge(centralNodeVec[currentDepth], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            } else {
+                addEdge(centralNodeVec[currentDepth - 1], currentNode, bondOrder);
+                centralNodeVec[currentDepth] = currentNode;
+            }
+
+            bondOrder = 1;
+            prevDepth = currentDepth;
+        }
+        else if (c == '(') {
+            currentDepth++;
+        }
+        else if (c == ')') {
+            currentDepth--;
+        }
+        else if (std::isdigit(c)) {
+            int ringIndex = c - '0';
+            if (ringClosures.find(ringIndex) != ringClosures.end()) {
+                addEdge(currentNode, ringClosures[ringIndex], bondOrder);
+                bondOrder = 1;
+                ringClosures.erase(ringIndex);
+            } else {
+                ringClosures[ringIndex] = currentNode;
+            }
+        }
+        else if (c == '-') {
+            bondOrder = 1;
+        }
+        else if (c == '=') {
+            bondOrder = 2;
+        }
+        else if (c == '#') {
+            bondOrder = 3;
+        }
+        else {
+            throw GrouperParseException("Unsupported character in SMARTS: `" + std::string(1, c) + "` for SMILES `" + smarts + "`");
+        }
+    }
+
+    if (!ringClosures.empty()) {
+        std::cerr << "Unclosed rings detected: ";
+        for (const auto& entry : ringClosures) {
+            std::cerr << entry.first << " ";
+        }
+        std::cerr << std::endl;
+        throw GrouperParseException("Unclosed ring detected in SMILES string `" + smarts + "`");
+    }
+    if (currentDepth != 0) {
+        throw GrouperParseException("Unmatched parentheses in SMILES string `" + smarts + "`");
+    }
+
+}
+
 void AtomGraph::fromSmiles(const std::string& smiles) {
     nodes.clear();
     edges.clear();
 
-    std::unordered_map<std::string, int> standardElementValency = {
-        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+    // Attempt to load via rdkit
+    const auto& mol = createMol(smiles, false);
+    if (mol) {
+        createAtomGraphFromRDKit(mol, *this);
+        return;
     };
-    
+
+    std::unordered_map<std::string, int> standardElementValency = {
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}, {"c", 4}, {"n", 3}, {"o", 2}, {"s", 2}
+    };
+
     std::stack<NodeIDType> nodeStack; // Stack to handle branching
     std::unordered_map<int, NodeIDType> ringClosures; // Map for ring closure indices
     NodeIDType lastNode = -1;
@@ -1045,6 +1723,13 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
         if (std::isalpha(c)) {
             // Handle atom
             int valency = standardElementValency[std::string(1, c)];
+            if (!valency) {
+                throw GrouperParseException(
+                    "SMILES character `" + std::string(1, c)
+                    + "` not in standard element map. Try to add brackets around each element "
+                    "for clarity: i.e. 'Li'->'[Li]', or try setting `Grouper.Group` patternType argument to `NONATOMIC`."
+                );
+            }
             addNode(std::string(1, c), valency);
             NodeIDType currentNode = nodes.size() - 1;
 
@@ -1078,12 +1763,51 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
                 ringClosures[ringIndex] = lastNode;
             }
             bondOrder = 1; // Reset bond order to single after use
+        } else if (c == '-') {
+            // Set bond order to single, this may be useless
+            bondOrder = 1;
         } else if (c == '=') {
             // Set bond order to double
             bondOrder = 2;
+        } else if (c == '#') {
+            // Set bond order to triple
+            bondOrder = 3;
+        } else if (c == '[') {
+            // store characters within brackets for next element
+            std::string next_elem = "";
+            for (size_t j = i+1; j < smiles.size(); ++j) {// iter through next i elements
+                char bracketChar = smiles[j] ;
+                if (bracketChar == ']') {
+                    i = j; //reset to end of parsed brackets
+                    break;
+                }
+                else if (std::isalpha(bracketChar)){
+                    next_elem += bracketChar;
+                }
+            if (next_elem.length() < 1) {
+                throw GrouperParseException(
+                    "Failed to Parse SMILES of: " + smiles +
+                    " at element of " + smiles.substr(i, j)
+                );
+            }
+            }
+            int valency = standardElementValency[next_elem];
+            addNode(next_elem, valency);
+            NodeIDType currentNode = nodes.size() - 1;
+            // If there's a previous node, add an edge with the current bond order
+            if (lastNode != -1) {
+                addEdge(lastNode, currentNode, bondOrder);
+            }
+            lastNode = currentNode;
+            bondOrder = 1; // Reset bond order to single after use
         } else {
             // Handle unsupported characters (e.g., invalid SMILES)
-            throw std::invalid_argument("Unsupported character in SMILES: " + std::string(1, c));
+            throw std::invalid_argument(
+                "Unsupported character in SMILES: `"
+                + std::string(1, c)
+                + "` for SMILES "
+                + std::string(smiles)
+            );
         }
     }
 
@@ -1094,9 +1818,28 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
             std::cerr << entry.first << " ";
         }
         std::cerr << std::endl;
-        throw std::runtime_error("Unclosed ring detected in SMILES string.");
+        throw std::invalid_argument(
+                "Unclosed ring detected in SMILES string `"
+                + std::string(smiles)
+                + "`"
+            );
     }
 
+}
+
+void AtomGraph::fromNonAtomic(const std::string& smarts) {
+    nodes.clear();
+    edges.clear();
+
+    // Attempt to load via rdkit
+    const auto& mol = createMol(smarts, true);
+    if (mol) {
+        createAtomGraphFromRDKit(mol, *this, false);
+        return;
+    }
+    else {
+        throw GrouperNotYetImplementedException("NONATOMIC SMARTS must still be parsable by RDKit.");
+    }
 }
 
 
@@ -1105,19 +1848,9 @@ int AtomGraph::getFreeValency(NodeIDType nodeID) const {
         throw std::invalid_argument("Cannot get free valency for non-existent node " + std::to_string(nodeID));
     }
     const Atom& node = nodes.at(nodeID);
-    // if (edges.find(nodeID) == edges.end()) {
-    //     return node.valency;
-    // }
-    // else{
-    //     int occupied_electrons = 0;
-    //     for (const auto& edge : edges.at(nodeID)) {
-    //         occupied_electrons += std::get<1>(edge);
-    //     }
-    //     return node.valency - occupied_electrons;
-    // }
     int totalOccupiedValency = 0;
     for (const auto& [src, dst, order] : edges) {
-        if(src == nodeID) {
+        if (src == nodeID) {
             totalOccupiedValency += order;
         }
     }
@@ -1131,11 +1864,6 @@ std::string AtomGraph::printGraph() const {
         output << "    Atom " << entry.first << " (" << entry.second.ntype << ")" << " Valency: " << entry.second.valency << "\n";
     }
     output << "Edges (without duplication):\n";
-    // for (const auto& edge : edges) {
-    //     for (const auto& [dst, order] : edge.second) {
-    //         output << "    Edge: " << edge.first << " -> " << dst <<" Order: (" <<order<<")"<<"\n";
-    //     }
-    // }
     std::unordered_set<std::tuple<NodeIDType, NodeIDType, unsigned int>> uniqueEdges;
     for (const auto& [src, dst, order] : edges) {
         if (uniqueEdges.find(std::make_tuple(src, dst, order)) == uniqueEdges.end()) {
@@ -1148,30 +1876,174 @@ std::string AtomGraph::printGraph() const {
 }
 
 std::vector<setword> AtomGraph::toNautyGraph() const {
-    // Convert AtomGraph to a nauty graph representation
-    int n = nodes.size(); // Number of nodes
-    int m = SETWORDSNEEDED(n); // Size of one row of the adjacency matrix in setwords
+    int n = nodes.size();
+    int m = SETWORDSNEEDED(n);
 
     // Allocate storage for the graph
-    std::vector<setword> g(m * n, 0); // Initialize nauty graph (adjacency matrix)
+    std::vector<setword> g(m * n, 0);
 
     // Initialize the nauty graph
     EMPTYGRAPH(g.data(), m, n);
-
-    // Add edges to the graph
-    // for (const auto& [id, dst_order] : edges) {
-    //     for (const auto& [dest, order] : dst_order) {
-    //         ADDONEEDGE(g.data(), id, dest, m); // Add edge from 'id' to 'dest'
-    //     }
-    // }
+    
+    // Add all edges (just once per edge, regardless of bond order)
     for (const auto& [src, dst, order] : edges) {
-        ADDONEEDGE(g.data(), src, dst, m); // Add edge from 'id' to 'dest'
+        ADDONEEDGE(g.data(), src, dst, m);
     }
-
-    // Return the nauty graph representation
+    
     return g;
 }
 
+int AtomGraph::getNodeIndex(int node_id) const {
+    int index = 0;
+    for (const auto& [id, node] : nodes) {
+        if (id == node_id) return index;
+        index++;
+    }
+    return -1; // Not found
+}
+
+std::vector<setword> AtomGraph::canonize() {
+    // Convert AtomGraph to a Nauty graph representation
+    std::vector<setword> g = this->toNautyGraph();
+
+    // Prepare vectors and workspace
+    int n = nodes.size();
+    int m = SETWORDSNEEDED(n);
+    std::vector<int> lab(n), ptn(n), orbits(n);
+    std::vector<setword> canong(n * m);
+    
+    // Use dynamic allocation for workspace
+    DYNALLSTAT(setword, workspace, workspace_sz);
+    DYNALLOC2(setword, workspace, workspace_sz, 4*m, n, "malloc workspace");
+
+    // Create edge colors based on bond orders
+    // We can't directly color edges in nauty, but we can use the node coloring
+    // to encode the edge color information
+    
+    // First, group nodes by their atom type
+    std::vector<int> node_colors(n);
+    std::map<std::string, int> atom_type_map;
+    int color_index = 0;
+    
+    for (int i = 0; i < n; i++) {
+        const auto& atom = nodes.at(i);
+        if (atom_type_map.find(atom.ntype) == atom_type_map.end()) {
+            atom_type_map[atom.ntype] = color_index++;
+        }
+        node_colors[i] = atom_type_map[atom.ntype];
+    }
+    
+    // Set up initial coloring based on atom types
+    for (int i = 0; i < n; i++) {
+        lab[i] = i;  // Identity permutation initially
+        ptn[i] = 1;  // All in one partition initially
+    }
+    ptn[n-1] = 0;    // End the last partition
+    
+    // Sort nodes by color to set up the initial partition
+    std::sort(lab.begin(), lab.end(), [&node_colors](int a, int b) {
+        return node_colors[a] < node_colors[b];
+    });
+    
+    // Update the partition array to separate different atom types
+    for (int i = 0; i < n-1; i++) {
+        if (node_colors[lab[i]] != node_colors[lab[i+1]]) {
+            ptn[i] = 0;  // End the current partition
+        }
+    }
+    
+    // Set up Nauty options for sparse graphs
+    static DEFAULTOPTIONS_SPARSEGRAPH(options);  // Use SPARSEGRAPH options instead of GRAPH
+    options.getcanon = TRUE;
+    options.defaultptn = FALSE;
+
+    // These options are compatible with sparse graphs
+    options.mininvarlevel = 1;
+    options.maxinvarlevel = 100;
+    options.invararg = 3;
+    
+    statsblk stats;
+
+    // Run Nauty with edge weights consideration
+    // Create a SparseGraph representation for edge weights
+    sparsegraph sg;
+    SG_INIT(sg);
+    
+    // Convert g to sparse format and include edge weights
+    SG_ALLOC(sg, n, edges.size(), "SparseGraph");
+    sg.nv = n;
+    sg.nde = 0;
+    
+    std::vector<size_t> sg_v(n+1, 0);  // Use size_t instead of int
+    std::vector<int> sg_d(n, 0);
+    std::vector<int> sg_e;
+    std::vector<int> sg_w;  // Edge weights for bond orders
+    
+    // Count degrees first
+    for (const auto& [src, dst, order] : edges) {
+        sg_d[src]++;
+        sg_d[dst]++;
+    }
+    
+    // Set up vertex offsets
+    sg_v[0] = 0;
+    for (int i = 0; i < n; i++) {
+        sg_v[i+1] = sg_v[i] + sg_d[i];
+        sg_d[i] = 0;  // Reset for use as counter below
+    }
+    
+    // Resize edge arrays
+    sg_e.resize(sg_v[n]);
+    sg_w.resize(sg_v[n]);
+    
+    // Fill edge arrays
+    for (const auto& [src, dst, order] : edges) {
+        // Add src -> dst edge
+        int pos = sg_v[src] + sg_d[src]++;
+        sg_e[pos] = dst;
+        sg_w[pos] = order;  // Store bond order as edge weight
+        
+        // Add dst -> src edge (for undirected graph)
+        pos = sg_v[dst] + sg_d[dst]++;
+        sg_e[pos] = src;
+        sg_w[pos] = order;  // Same bond order
+    }
+    
+    // Set sparse graph properties
+    sg.v = sg_v.data();
+    sg.d = sg_d.data();
+    sg.e = sg_e.data();
+    sg.w = sg_w.data();  // Edge weights
+    
+    // Initialize the canonical graph
+    int total_edges = 2 * int(edges.size());
+    sparsegraph canon_sg;
+    SG_INIT(canon_sg);
+    SG_ALLOC(canon_sg, n, total_edges, "CanonicalGraph");
+    sg.nv = n;
+    sg.nde = total_edges;
+
+    printf("Nauty: %d vertices, %d edges\n", n, total_edges);
+    
+    // Run Nauty with the sparse graph representation
+    sparsenauty(&sg, lab.data(), ptn.data(), orbits.data(), &options, &stats, &canon_sg);
+
+    printf("Nauty: %d vertices, %d edges\n", canon_sg.nv, canon_sg.nde);
+    
+    // Get the canonical labeling
+    std::vector<setword> canon_g(n * m);
+    EMPTYGRAPH(canon_g.data(), m, n);
+    
+    // Build canonical graph with edge weights
+    for (const auto& [src, dst, order] : edges) {
+        int src_canon = lab[src];
+        int dst_canon = lab[dst];
+        // Add edge to canonical graph
+        ADDONEEDGE(canon_g.data(), src_canon, dst_canon, m);
+    }
+    
+    return canon_g;
+}
 
 std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::nodeAut() const {
     int n = nodes.size(); // Number of nodes

@@ -1,4 +1,4 @@
-from Grouper import Group, exhaustive_generate, GroupGraph
+from Grouper import Group, random_generate, GroupGraph
 from Grouper.visualization import visualize
 from Grouper.utils import convert_to_nx
 import time
@@ -16,13 +16,9 @@ if __name__ == "__main__":
 
     node_defs = set()
     node_defs.add(Group('carbon', 'C', [0,0,0,0]))
-    # node_defs.add(Group(0, 'methine', 'C', [0,1,2], [0,0,0]))
-    # node_defs.add(Group(0, 'methylene', 'C', [0,1], [0,0]))
-    # node_defs.add(Group(0, 'methyl', 'C', [0], [0]))
-    # node_defs.add(Group(0, 'hydroxymethyl', 'CO', [0], [0]))
-    # node_defs.add(Group(0, 'primary_amine', 'CN', [0,1,2], [0,0,0]))
-    # node_defs.add(Group(0, 'secondary_amine', 'CNC', [0,1], [0,0]))
-    node_defs.add(Group('tertiary_amine', 'N', [0,0,0]))
+    node_defs.add(Group('hydroxymethyl', 'CO', [0,0,0]))
+    node_defs.add(Group('secondary_amine', 'CNC', [0,0,0,1,2,2,2]))
+    node_defs.add(Group('amine', 'N', [0,0,0]))
     node_defs.add(Group('hydroxyl', 'O',  [0]))
 
     # positive_constraints = {"hydroxyl" : 1, "tertiary_amine" : 1}
@@ -34,27 +30,22 @@ if __name__ == "__main__":
     # parse arguments
     parser = argparse.ArgumentParser(description='Exhaustively generate set of molecular graphs')
     parser.add_argument('--n', type=int, default=3, help='Number of nodes in the graph')
-    parser.add_argument('--n_cpus', type=int, default=8, help='Number of cpus to use for multiprocessing')
-    parser.add_argument('--config_path', type=str, default="", help='Path to config file')
+    parser.add_argument('--n_graphs', type=int, default=100, help='Number of graphs to generate')
+    parser.add_argument('--n_cpus', type=int, default=1, help='Number of cpus to use for multiprocessing')
     args = parser.parse_args()
 
     parent = str(pathlib.Path(__file__).parent.absolute())
 
-    print(f"Generating all possible molecular graphs with {args.n} nodes\n")
-    print(f"Multiprocessing with {args.n_cpus} cpus\n")
-    if len(args.config_path) > 0:
-        print(f"Saving to database with config at {args.config_path}\n")
-
     # call nauty
     start = time.time()
-    result = exhaustive_generate(
+    result = random_generate(
         args.n, 
         node_defs, 
-        input_file_path="",
+        args.n_graphs,
         num_procs=args.n_cpus,
+        nauty_path="/raid6/homes/kierannp/projects/nauty2_8_9",
         positive_constraints=positive_constraints,
         negative_constraints=negative_constraints,
-        config_path=args.config_path,
     )
     end = time.time()
     print(f"Time taken for generation: {end - start}")
@@ -67,7 +58,7 @@ if __name__ == "__main__":
     for i, graph in enumerate(result):
         mol = Chem.MolFromSmiles(graph.to_smiles())
         mols.append(mol)
-    Chem.Draw.MolsToGridImage(mols, molsPerRow=5, subImgSize=(200,200)).save(f"{parent}/molecules_{args.n}.png")
+    Chem.Draw.MolsToGridImage(mols, molsPerRow=5, subImgSize=(200,200)).save(f"{parent}/random_molecules_{args.n}.png")
 
     # Function to convert matplotlib figure to PIL Image
     def fig_to_img(fig):
@@ -93,9 +84,9 @@ if __name__ == "__main__":
         composite.paste(figure, (x, y))
 
     # Show or save the composite image
-    composite.save(f'graphs_{args.n}.png')
+    composite.save(f'random_graphs_{args.n}.png')
 
 
     # # Save to pickle
-    with open(f"{parent}/graphs_{args.n}.pkl", 'wb') as f:
+    with open(f"{parent}/random_graphs_{args.n}.pkl", 'wb') as f:
         pickle.dump(result, f)

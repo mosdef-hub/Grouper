@@ -69,10 +69,6 @@ The fundamental data structure behind this package is based on a port graph, loo
 <!-- GETTING STARTED -->
 ## Getting Started
 
-### Prerequisites
-
-*  Download and install [`nauty`](https://pallini.di.uniroma1.it/) according to their installation instructions in `Grouper/packages`
-
 ### Installation
 
 1. Clone the repo
@@ -101,39 +97,48 @@ python setup.py install
 ```python
 from Grouper import GroupGraph
 
-group_graph = GroupGraph()
+gG = GroupGraph()
 
 # Adding nodes
-group_graph.add_node(type = 'nitrogen', smiles = 'N', ports = [0,1,2], hubs = [0,0,0])
-group_graph.add_node('nitrogen') # Once the type of the node has been specified we can use it again
-group_graph.add_node(type = '', smiles = 'N', ports = [0,1,2], hubs = [0,0,0]) # Alternatively we can just use the smiles
+gG.add_node(type = 'nitrogen', pattern = 'N', hubs = [0,0,0], is_smarts=False) # default of is_smarts is False
+gG.add_node('nitrogen') # Once the type of the node has been specified we can use it again
+gG.add_node(type = '', pattern = '[N]', hubs = [0,0,0], is_smarts=True) # Alternatively we can just use smarts
 
 # Adding edges
-group_graph.add_edge(src = (0,0), dst = (1,0)) # In the format ((nodeID, srcPort), (nodeID, dstPort))
-group_graph.add_edge(src = (1,1), dst = (2,0))
-group_graph.add_edge(src = (2,1), dst = (0,1))
+gG.add_edge(src = (0,0), dst = (1,0), order=1) # In the format ((nodeID, srcPort), (nodeID, dstPort), bondOrder)
+gG.add_edge(src = (1,1), dst = (2,0))
+gG.add_edge(src = (2,1), dst = (0,1))
 
-print(group_graph)
 """
 Will make 
       N
      / \
     N - N
 """
-
 ```
+
+### Group graph to SMILES
+```python
+smiles = gG.to_smiles()
+```
+### GroupGraph to AtomGraph
+```python
+atomG = gG.to_atomic_graph()
+```
+
+
 
 ### Exhaustive chemical space generation
 ```python
 import Grouper
-from Grouper import Node, GroupGraph, exhaustive_generate
+from Grouper import Group, exhaustive_generate
 
 node_defs = set()
 # Define out node types that we will use to built our chemistries
-node_defs.add(Node(0, 'nitrogen', 'N', [0,1,2], [0,0,0]))
-node_defs.add(Node(1, 'carbon', 'C', [0,1,2,3], [0,0,0,0]))
-node_defs.add(Node(2, 'oxygen', 'O', [0,1], [0,0]))
-node_defs.add(Node(3, 'benzene', 'c1ccccc1', [0,1,2,3,4,5], [0,1,2,3,4,5]))
+node_defs.add(Group('nitrogen', 'N', [0,0,0]))
+node_defs.add(Group('carbon', 'C', [0,0,0,0]))
+node_defs.add(Group('oxygen', 'O', [0,0]))
+node_defs.add(Group('benzene', 'c1ccccc1', [0,1,2,3,4,5]))
 
 # Call method to enumerate possibilities
 exhausted_space = exhaustive_generate(
@@ -141,99 +146,33 @@ exhausted_space = exhaustive_generate(
     node_defs = node_defs, 
     input_file_path = '',
     nauty_path = '/path/to/nauty_X_X_X',
-    num_procs = 4, 
-    verbose = False
+    num_procs = -1, # -1 utilizes all availible CPUs
 )
 ```
 
-### Group graph to molecular graph
-```python
-node_type_to_smiles = {
-    'N': 'N',
-    'CO': 'C=O',
-    'CC': 'C=C',
-    'C': 'C',
-}
-node_port_to_atom_index = { # atom index is the atom that the port originates from
-    'N': {'N1': 0}, 
-    'CO': {'C1': 0, 'C2': 0},
-    'CC': {'C11': 0, 'C12': 0, 'C21': 1, 'C22': 1},
-    'C': {'C1': 0, 'C2': 0, 'C3': 0, 'C4': 0},
-}
-
-mol_G = g.to_molecular_graph(
-  node_type_to_smiles, 
-  node_port_to_atom_index
-)
-```
-
-### Group graph to SMILES
-```python
-from Grouper import GroupGraph
-
-group_graph = GroupGraph()
-
-group_graph.add_node(type = 'nitrogen', smiles = 'N', ports = [0,1,2], hubs = [0,0,0])
-group_graph.add_node('nitrogen') 
-group_graph.add_node(type = '', smiles = 'N', ports = [0,1,2], hubs = [0,0,0])
-group_graph.add_edge(src = (0,0), dst = (1,0))
-group_graph.add_edge(src = (1,1), dst = (2,0))
-group_graph.add_edge(src = (2,1), dst = (0,1))
-
-smiles = group_graph.to_smiles()
-```
-
-
-### Group graph from `mBuild.Compound`
-```python
-import mbuild as mb
-from group_selfies import Group
-from Grouper import GroupGraph
-
-mol = mb.load('CCCCCCCC', smiles=True) # octane molecule
-groups = [Group('c3', 'C([H])([H])([H])(*1)'), Group('c2', 'C([H])([H])(*1)(*1)')]
-groupG = GroupGraph()
-groupG = groupG.from_mbuild(mol, groups)
-```
 ### Conversion to `torch_geometric.Data`
 ```python
 import Grouper
+from Grouper.utils import convert_to_nx
 
-node_types = {
-    'CH2': ['C1', 'C2'], #methylene
-    'CONH': ['C', 'N'], #amide
-}
+def node_descriptor_generator(node_smiles):
+    mol = rdkit.Chem.MolFromSmiles(node_smiles)
+    desc = Descriptors.CalcMolDescriptors(mol)
+    desc = {k: desc[k] for k in desc.keys() if (not isnan(desc[k]) or desc[k] is not None)}
+    desc = [v for k,v in desc.items()] # flatten descriptors into single vector
+    desc = torch.tensor(desc, dtype=torch.float64)
+    return desc
 
-groupG = Grouper.GroupGraph(node_types)
-groupG.add_node('node1', 'CH2')
-groupG.add_node('node2', 'CONH')
-groupG.add_edge('node1', 'C1', 'node2', 'C')
+nxG = convert_to_nx(gG)
+max_ports = max(len(n.hubs) for n in node_defs)
 
-group_featurizer = lambda node: torch.tensor([1, 0]) # dummy group featurizer
-
-data = groupG.to_PyG_Data(group_featurizer, max_n_attachments=2)
-
-data
-# Data(x=[2,2], edge_index=[2,1], edge_attr=[1,4])
+data = nxG.to_PyG_Data(node_descriptor_generator, max_ports)
+data.y = torch.tensor([rdkit.Chem.Descriptors.MolLogP(rdkit.Chem.MolFromSmiles(d))]) # here we utilize rdkit to estimate logP, but obviously can be generated another way 
 ```
 
 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-<!-- ROADMAP -->
-## Roadmap
-[X] Generate possible graphs with attachments points as limiter for number of connections 
-
-[X] Process output of generation into python data structure
-
-[X] Substiute nodes based on max attachments for graphs
-
-[ ] Rdkit demo
-
-[ ] group graph visualizaiton
-
-[ ] Verify structures with synthesizability checks
 
 <!-- CONTRIBUTING -->
 ## Contributing
@@ -253,7 +192,6 @@ Don't forget to give the project a star! Thanks again!
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
-
 <!-- LICENSE -->
 ## License
 
@@ -267,6 +205,8 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 ## Contact
 
 Kieran Nehil-Puleo - nehilkieran@gmail.com
+
+Cal Craven
 
 Project Link: [https://github.com/kierannp/Grouper](https://github.com/kierannp/Grouper)
 

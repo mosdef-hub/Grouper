@@ -1,15 +1,14 @@
 name: Run Tests
-
 on:
   push:
     branches:
-      - main
+      - "main"
   pull_request:
-    types:
-      - opened
-      - edited
     branches:
-      - main
+      - "main"
+  schedule:
+    - cron:  "0 0 * * *"
+
 
 jobs:
   test:

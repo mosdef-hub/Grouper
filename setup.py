@@ -23,7 +23,6 @@ molgrouper_module = Extension(
         'Grouper/processColoredGraphs.cpp',
         'Grouper/generate.cpp',
         'Grouper/fragmentation.cpp',
-        'Grouper/autUtils.cpp',
     ],
     include_dirs=[
         os.path.join(condabase, 'include'),

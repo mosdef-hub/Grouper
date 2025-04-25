@@ -2,10 +2,10 @@ import networkx as nx
 import pytest
 
 from Grouper import Group
-from Grouper.libraries.Libraries import NodeTrace
+from Grouper.libraries.Libraries import GroupExtension
 from Grouper.tests.base_test import BaseTest
 from Grouper.utils import convert_to_nx
-from Grouper.visualization import visualize, visualize_node_trace
+from Grouper.visualization import visualize, visualize_group_extension
 
 
 class TestGroupGraph(BaseTest):
@@ -40,9 +40,9 @@ class TestGroupGraph(BaseTest):
             )
         ),
     )
-    def test_visualize_node(self, smarts, smiles, hubs):
-        nt = NodeTrace(Group("desc", smiles, hubs), "", smarts, None)
-        img = visualize_node_trace(nt)
+    def test_visualize_group_extension(self, smarts, smiles, hubs):
+        nt = GroupExtension(Group("desc", smiles, hubs, "SMARTS"), "", smarts, None)
+        img = visualize_group_extension(nt)
         assert img
 
     @pytest.mark.parametrize(
@@ -71,11 +71,11 @@ class TestGroupGraph(BaseTest):
             )
         ),
     )
-    def test_visualize_node_errors(self, smarts, smiles, hubs):
+    def test_visualize_group_errors(self, smarts, smiles, hubs):
         # smartsList = ["[C](-[C])(-[C])(-[C])", "[NX3](-[C])(-[O-])(-[O-])", "[CX3]([C])(-[H])(-[H])","c1ccccc1", "c1(-[O](-[C]))ccccc1", "[C]", "bad_smarts"]
         # smilesList = ["CCCC", "N(=O)(O)", "[C]([H])([C])", "N", "C=O", "bad_smiles", "C"]
         # hubsList = [[0], [0], [0], [0,0], [0,0,1], [], []]
-        nt = NodeTrace(Group("desc", smiles, hubs), "", smarts, None)
         with pytest.raises((ValueError, AttributeError)) as e:
-            visualize_node_trace(nt)
+            nt = GroupExtension(Group("desc", smiles, hubs, "SMARTS"), "", smarts, None)
+            visualize_group_extension(nt)
             print(e, smarts, smiles, hubs)
