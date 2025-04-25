@@ -268,6 +268,7 @@ void process_nauty_output(
     std::unordered_map<std::string, std::vector<int>> node_types;
     std::unordered_map<std::string, std::vector<int>> node_type_to_hub;
     std::unordered_map<int, std::string> int_to_pattern;
+    std::unordered_map<std::string, std::string> node_type_to_pattern_type;
     std::unordered_map<std::string, std::string> type_to_pattern;
     std::vector<GroupGraph> group_graphs_list;
     std::unordered_set<std::vector<setword>, hash_vector> canon_set;
@@ -278,6 +279,7 @@ void process_nauty_output(
     for (const auto& node : node_defs) {
         node_types[node.ntype] = node.ports;
         type_to_pattern[node.ntype] = node.pattern;
+        node_type_to_pattern_type[node.ntype] = node.patternType;
     }
     for (const auto& node: node_defs) {
         for (const auto& h : node.hubs) {
@@ -324,7 +326,7 @@ void process_nauty_output(
             int_to_node_type.at(colors[i]),
             int_to_pattern.at(colors[i]),
             node_type_to_hub.at(int_to_node_type.at(colors[i])),
-            "SMILES" // assume default of smiles
+            node_type_to_pattern_type.at(int_to_node_type.at(colors[i]))
         );
     }
 
