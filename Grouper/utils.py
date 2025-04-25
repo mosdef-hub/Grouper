@@ -106,7 +106,7 @@ def convert_edges_to_nodetype(G):
 
     return new_G
 
-class nxGroupGraph(nx.Graph):
+class nxGroupGraph(nx.DiGraph): # needs to be a DiGraph so the edges are directed for the PyG Data
     """A graph with ports as parts of nodes that can be connected to other ports."""
 
     def __init__(self, node_types: Dict[str, List] = None):
@@ -208,7 +208,7 @@ class nxGroupGraph(nx.Graph):
             raise AttributeError(f"Node: {nodeID} is already present in Graph")
         super(nxGroupGraph, self).add_node(nodeID)
         self.nodes[nodeID]["type"] = node_type
-        self.nodes[nodeID]["ports"] = self.node_types[self.nodes[nodeID]["type"]]
+        self.nodes[nodeID]["ports"] = range(len(hubs))
         self.nodes[nodeID]["smarts"] = smarts
         self.nodes[nodeID]["hubs"] = hubs
 
@@ -257,23 +257,19 @@ class nxGroupGraph(nx.Graph):
 
         edge_ports = []
 
-        for n, p in [
-            (node_port_1[0], node_port_1[1]),
-            (node_port_2[0], node_port_2[1]),
-        ]:
+        for n, p in [node_port_1, node_port_2]:
             # Sanity check to see if the nodes and ports are present in Graph
             if n not in self.nodes:
                 raise AttributeError(f"Node: {p} is not present in Graph")
             if p not in self.nodes(data=True)[n]["ports"]:
                 raise AttributeError(f"Port: {p} is incorrect for Node: {n}!")
-
             edge_ports.append(str(n) + "." + str(p))
 
         # Add the port points as edge attributes
         if self.has_edge(node_port_1[0], node_port_2[0]):
             self.edges[node_port_1[0], node_port_2[0]]["ports"].append(edge_ports)
         else:
-            super(nxGroupGraph, self).add_edge(node_port_1[0], node_port_2[0], ports=[edge_ports]) # I changed this because the order of the nodes was wrong, don't understand why it was like that)
+            super(nxGroupGraph, self).add_edge(node_port_1[0], node_port_2[0], ports=[edge_ports])
         
         # remove ports from portsList
 
