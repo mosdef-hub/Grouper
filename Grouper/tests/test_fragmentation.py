@@ -196,7 +196,7 @@ class TestGeneralFragmentations(BaseTest):
         node_defs = set()
         node_defs.add(Group("oxyl", "O", [0, 0]))  # oxyl group
         node_defs.add(
-            Group("ester", "[C](=O)[O]", [0, 2], is_smarts=True)
+            Group("ester", "[C](=O)[O]", [0, 2], pattern_type="SMARTS")
         )  # Ester group
         node_defs.add(Group("amine", "N", [0, 0, 0]))  # Amine group
         node_defs.add(Group("alkene_secondary_amine", "CNC", [0, 0, 1, 2, 2]))
@@ -244,22 +244,22 @@ class TestGeneralFragmentations(BaseTest):
 
     def test_fragment_match_hubs(self):
         node_defs = set()
-        node_defs.add(Group("oxyl", "O", [0, 0], True))  # oxyl group
-        node_defs.add(Group("ester", "C(=O)O", [0, 2], True))  # Ester group
-        node_defs.add(Group("amine", "N", [0, 0, 0], True))  # Amine group
+        node_defs.add(Group("oxyl", "O", [0, 0], "SMARTS"))  # oxyl group
+        node_defs.add(Group("ester", "C(=O)O", [0, 2], "SMARTS"))  # Ester group
+        node_defs.add(Group("amine", "N", [0, 0, 0], "SMARTS"))  # Amine group
         node_defs.add(
-            Group("alkene_secondary_amine", "C(N(C))", [0, 0], True)
+            Group("alkene_secondary_amine", "C(N(C))", [0, 0], "SMARTS")
         )  # can be made of amine and alkene
-        node_defs.add(Group("alkene", "C", [0, 0, 0], True))
+        node_defs.add(Group("alkene", "C", [0, 0, 0], "SMARTS"))
 
         solution = GroupGraph()
-        solution.add_node("alkene_secondary_amine", "C(N(C))", [0, 0], True)
-        solution.add_node("alkene", "C", [0, 0, 0], True)
-        solution.add_node("amine", "N", [0, 0, 0], True)
-        solution.add_node("alkene", "C", [0, 0, 0], True)
-        solution.add_node("alkene", "C", [0, 0, 0], True)
-        solution.add_node("alkene", "C", [0, 0, 0], True)
-        solution.add_node("alkene", "C", [0, 0, 0], True)
+        solution.add_node("alkene_secondary_amine", "C(N(C))", [0, 0], "SMARTS")
+        solution.add_node("alkene", "C", [0, 0, 0], "SMARTS")
+        solution.add_node("amine", "N", [0, 0, 0], "SMARTS")
+        solution.add_node("alkene", "C", [0, 0, 0], "SMARTS")
+        solution.add_node("alkene", "C", [0, 0, 0], "SMARTS")
+        solution.add_node("alkene", "C", [0, 0, 0], "SMARTS")
+        solution.add_node("alkene", "C", [0, 0, 0], "SMARTS")
         solution.add_edge((0, 1), (1, 0))
         solution.add_edge((1, 1), (2, 0))
         solution.add_edge((2, 1), (3, 0))
@@ -348,10 +348,10 @@ class TestFragmentationUtilities(BaseTest):
 
         smiles = "C(C)C(O)OCOC"
         nodesList = [
-            Group("propyl", "[C]C", [0, 0, 0, 1, 1, 1], is_smarts=True),
-            Group("alc", "[C]O", [0, 0, 0, 1], is_smarts=True),
-            Group("alkyl", "[C]", [0, 0, 0, 0], is_smarts=True),
-            Group("ether", "O", [0, 0], is_smarts=True),
+            Group("propyl", "[C]C", [0, 0, 0, 1, 1, 1], pattern_type="SMARTS"),
+            Group("alc", "[C]O", [0, 0, 0, 1], pattern_type="SMARTS"),
+            Group("alkyl", "[C]", [0, 0, 0, 0], pattern_type="SMARTS"),
+            Group("ether", "O", [0, 0], pattern_type="SMARTS"),
         ]
 
         question = fragment(smiles, nodesList, returnHandler="ideal")[0]
@@ -387,7 +387,7 @@ class TestFragmentationUtilities(BaseTest):
 
     def test_smarts_with_ports(self):
         """TODO: Benzene aromatic rings, two character elements, +- charges, and &/, booleans."""
-        # group = Group("amine", "CNC", [0,0], is_smarts=True)
+        # group = Group("amine", "CNC", [0,0], pattern_type="SMARTS")
         # solution = "[CH1,CH2,CH3][NH1][CH3]"
         # question = _smarts_with_ports(group.pattern, group.hubs)
         # assert question == solution, question
@@ -570,7 +570,7 @@ class TestFragmentationOptions(BaseTest):
         node_defs = [
             Group("ester", "COC", [0, 0, 2, 2]),
             Group("amine", "CN", [0, 0, 1, 1]),
-            Group("alkyne", "[C]#[C]", [0, 0, 1, 1], is_smarts=True),
+            Group("alkyne", "[C]#[C]", [0, 0, 1, 1], pattern_type="SMARTS"),
             Group("alkane", "C", [0, 0, 0, 0]),
         ]
         smiles = "C#CC(OC)CNCNC"

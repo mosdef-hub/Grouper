@@ -75,7 +75,7 @@ std::tuple< int, std::vector<int>, std::vector<std::pair<int, int>> > parse_naut
         edge_list.emplace_back(std::stoi(edge_description[i]), std::stoi(edge_description[i + 1]));
     }
 
-    
+
 
     int n_vertices = std::stoi(node_description[0]);
     // int n_edges = std::stoi(node_description[1]);
@@ -131,8 +131,8 @@ std::vector<int> apply_permutation(const std::vector<int>& coloring,
 
 bool check_max_bond_not_exceeded(
     const std::vector<std::pair<int,int>>& edge_list,
-    const std::vector<int>& colors, 
-    const std::unordered_map<std::string, std::vector<int>>& node_types, 
+    const std::vector<int>& colors,
+    const std::unordered_map<std::string, std::vector<int>>& node_types,
     const std::unordered_map<int, std::string>& int_to_node_type) {
 
 
@@ -164,7 +164,7 @@ std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> filterOrbits(
     const int* edge_orbits,  // Pointer to array of orbit assignments
     const std::vector<int>& colors)
 {
-    std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> edge_orbits_filtered; // Filtered edge orbits with 
+    std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> edge_orbits_filtered; // Filtered edge orbits with
     std::unordered_map<std::pair<int, int>, std::unordered_set<std::pair<int, int>, hash_pair>, hash_pair> color_orbit_map;
     int num_edges = edge_list.size();
 
@@ -185,8 +185,8 @@ std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> filterOrbits(
 }
 
 std::vector<std::vector<int>> generateOrbitCombinations(
-    const std::unordered_set<std::pair<int, int>, hash_pair>& edge_orbit, 
-    const std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair>& available_colors) 
+    const std::unordered_set<std::pair<int, int>, hash_pair>& edge_orbit,
+    const std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair>& available_colors)
 {
     std::vector<std::vector<int>> all_combinations;
     std::vector<int> all_colors;
@@ -552,7 +552,7 @@ EdgeGroup obtainEdgeAutomorphismGenerators(
 // }
 
 void process_nauty_output(
-    const std::string& line, 
+    const std::string& line,
     const std::unordered_set<GroupGraph::Group>& node_defs,
     std::unordered_set<GroupGraph>* graph_basis,
     const std::unordered_map<std::string, int> positiveConstraints,
@@ -571,6 +571,7 @@ void process_nauty_output(
     std::unordered_map<std::string, std::vector<int>> node_types;
     std::unordered_map<std::string, std::vector<int>> node_type_to_hub;
     std::unordered_map<int, std::string> int_to_pattern;
+    std::unordered_map<std::string, std::string> node_type_to_pattern_type;
     std::unordered_map<std::string, std::string> type_to_pattern;
     std::vector<GroupGraph> group_graphs_list;
     // std::unordered_set<std::vector<setword>, hash_vector> canon_set;
@@ -581,6 +582,7 @@ void process_nauty_output(
     for (const auto& node : node_defs) {
         node_types[node.ntype] = node.ports;
         type_to_pattern[node.ntype] = node.pattern;
+        node_type_to_pattern_type[node.ntype] = node.patternType;
     }
     for (const auto& node: node_defs) {
         for (const auto& h : node.hubs) {
@@ -593,7 +595,7 @@ void process_nauty_output(
         int_to_pattern[i] = type_to_pattern[node_type];
         i++;
     }
-    
+
     // Create a histogram of node types for positive constraints
     if (positiveConstraints.size() > 0) {
         std::unordered_map<std::string, int> node_hist;
@@ -603,7 +605,7 @@ void process_nauty_output(
         for (const auto& c : colors) {
             node_hist[int_to_node_type.at(c)] += 1;
         }
-        
+
         // Check if the number of nodes of each type is less than the number listed in the positive constraints
         for (const auto& [node_type, count] : node_hist) {
             if (positiveConstraints.find(node_type) == positiveConstraints.end()) {
@@ -626,7 +628,8 @@ void process_nauty_output(
         gG.addNode(
             int_to_node_type.at(colors[i]),
             int_to_pattern.at(colors[i]),
-            node_type_to_hub.at(int_to_node_type.at(colors[i]))
+            node_type_to_hub.at(int_to_node_type.at(colors[i])),
+            node_type_to_pattern_type.at(int_to_node_type.at(colors[i]))
         );
     }
 
@@ -771,4 +774,3 @@ void process_nauty_output(
         // }
     }
 }
-

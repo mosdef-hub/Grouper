@@ -76,7 +76,7 @@ public:
 
     void addNode(const std::string& ntype = "", int valency = -1);
     void addNode(Atom atom);
-    void addEdge(NodeIDType src, NodeIDType dst, unsigned int order = 1);
+    void addEdge(NodeIDType src, NodeIDType dst, unsigned int order = 1, bool validate=true);
     int getFreeValency(NodeIDType nid) const;
     std::string printGraph() const;
     std::vector<std::vector<NodeIDType>> nodeAut() const;
@@ -86,6 +86,7 @@ public:
     int getNodeIndex(int node_id) const;
     void fromSmiles(const std::string& smiles);
     void fromSmarts(const std::string& smarts);
+    void fromNonAtomic(const std::string& smarts);
     std::vector<std::vector<std::pair<AtomGraph::NodeIDType,AtomGraph::NodeIDType>>> substructureSearch(const AtomGraph& query, const std::vector<int>& hubs) const;
 private:
 };
@@ -101,11 +102,11 @@ public:
         std::string pattern;
         std::vector<NodeIDType> hubs;
         std::vector<PortType> ports;
-        bool isSmarts = false;
+        std::string patternType = "SMILES";
         bool operator==(const Group& other) const;
         bool operator!=(const Group& other) const;
         Group() : ntype(""), pattern(""), hubs(), ports() {}
-        Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs, const bool isSmarts = false);
+        Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs, const std::string patternType = "SMILES");
         // Group(const std::string& ntype, const std::string& pattern, const std::vector<int>& hubs)
         // : Group(ntype, pattern, hubs, false) {}
         std::vector<int> hubOrbits() const;
@@ -118,6 +119,7 @@ public:
     std::unordered_map<NodeIDType, Group> nodes; ///< Map of node IDs to their respective nodes.
     std::unordered_set<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> edges; ///< List of edges connecting nodes. (srcNodeID, srcPort, dstNodeID, dstPort, bondOrder)
     std::unordered_map<std::string, std::vector<PortType>> nodetypes; ///< Map of node types to their respective ports.
+    bool isCoarseGrained = false;
 
     // Operators
     GroupGraph();
@@ -129,7 +131,7 @@ public:
         std::string ntype,
         std::string pattern,
         std::vector<NodeIDType> hubs,
-        bool isSmarts = false
+        std::string patternType
     );
     void addNode(Group group);
     bool addEdge(
@@ -288,5 +290,17 @@ public:
         return message.c_str();
     }
 };
+class GrouperNotYetImplementedException : public std::exception {
+    private:
+    std::string message;
+
+public:
+    GrouperNotYetImplementedException(const std::string& msg) : message(msg) {}
+    const char* what() const noexcept override {
+        return message.c_str();
+    }
+};
+
+void validateAtomisticAtomGraph (const AtomGraph atomGraph, const std::vector<int>& hubs, const std::string pattern, const std::string patternType);
 
 #endif // DATASTRUCTURES_H
