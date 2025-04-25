@@ -5,6 +5,8 @@ from copy import deepcopy
 from Grouper import GroupGraph
 import networkx as nx
 import torch_geometric
+import torch
+import numpy as np
 
 def run_performance_eval(
         nauty_path: str = "/Users/kieran/projects/molGrouper/packages/nauty2_8_8", 
@@ -86,8 +88,6 @@ def plot_performance(performance, max_nodes):
 
     plt.savefig("performance.png")
 
-
-
 def convert_edges_to_nodetype(G):
     new_G = deepcopy(G)
     for edge in new_G.edges():
@@ -104,7 +104,7 @@ def convert_edges_to_nodetype(G):
 
     return new_G
 
-class nxGroupGraph(nx.Graph):
+class nxGroupGraph(nx.DiGraph):
     """A graph with ports as parts of nodes that can be connected to other ports."""
 
     def __init__(self, node_types: Dict[str, List] = None):
@@ -259,7 +259,7 @@ class nxGroupGraph(nx.Graph):
         if self.has_edge(node_port_1[0], node_port_2[0]):
             self.edges[node_port_1[0], node_port_2[0]]['ports'].append(edge_ports)
         else:
-            super(nxGroupGraph, self).add_edge(node_port_1[0], node_port_2[0], ports=[edge_ports])
+            super(nxGroupGraph, self).add_edge(node_port_1[0], node_port_2[0], ports=[edge_ports]) # I changed this because the order of the nodes was wrong, don't understand why it was like that)
         
         # remove ports from portsList
 
@@ -321,8 +321,10 @@ class nxGroupGraph(nx.Graph):
         # Create the edge index
         edge_index = torch.zeros((2, len(self.edges)), dtype=torch.long)
         for i, e in enumerate(self.edges):
-            edge_index[0, i] = list(self.nodes).index(e[0])
-            edge_index[1, i] = list(self.nodes).index(e[1])
+            # edge_index[0, i] = list(self.nodes).index(e[0])
+            # edge_index[1, i] = list(self.nodes).index(e[1])
+            edge_index[0, i] = e[0]
+            edge_index[1, i] = e[1]
         
         # Create the edge features
         edge_features = torch.zeros(len(self.edges), max_ports*2)
@@ -375,3 +377,14 @@ def convert_to_nx(G: GroupGraph) -> nxGroupGraph:
         dst = (edge[2], edge[3])
         nxG.add_edge(src, dst)
     return nxG
+
+def data_to_gg_edge(data, max_ports):
+    edges = []
+    for i, src_dst_one_hot_ports in enumerate(data.edge_attr):
+        one_hot_ports = torch.split(src_dst_one_hot_ports, max_ports)
+        src_port = int(np.argmax(one_hot_ports[0]).detach().numpy())
+        dst_port = int(np.argmax(one_hot_ports[1]).detach().numpy())
+        src_edge = int(data.edge_index[0][i].detach().numpy())
+        dst_edge = int(data.edge_index[1][i].detach().numpy())
+        edges.append((src_edge, src_port, dst_edge, dst_port))
+    return edges
