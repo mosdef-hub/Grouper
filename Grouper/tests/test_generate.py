@@ -9,7 +9,7 @@ from Grouper.tests.base_test import BaseTest
 
 
 class TestGeneration(BaseTest):
-    @pytest.mark.skip(reason="Too slow for general testing")
+    @pytest.mark.skippable(reason="Too slow for general testing")
     @pytest.mark.parametrize("n_nodes", [2, 3, 4, 5, 6])
     @pytest.mark.parametrize("num_procs", [1, 2, 4, 8, 16])
     @pytest.mark.parametrize(
@@ -28,22 +28,8 @@ class TestGeneration(BaseTest):
     def test_exhaustive_generate_performance(
         self, benchmark, n_nodes, num_procs, node_defs
     ):
-        # Load nauty path from config file
-        print(pathlib.Path(__file__).parent.parent.parent / "config.json")
-        with open(
-            pathlib.Path(__file__).parent.parent.parent / "config.json", "r"
-        ) as config_file:
-            config = json.load(config_file)
-        nauty_path = config.get("nauty_path")
-        if not nauty_path:
-            raise RuntimeError("Nauty path is not defined in the configuration file.")
         # Convert node_defs to the expected format
         node_defs = set(Group(n["type"], n["smiles"], n["hubs"]) for n in node_defs)
-
-        verbose = False
-        input_file_path = ""
-        positive_constraints = {}
-        negative_constraints = set()
 
         logging.info("Starting benchmark")
 
@@ -51,13 +37,7 @@ class TestGeneration(BaseTest):
             exhaustive_generate,
             n_nodes,
             node_defs,
-            nauty_path,
-            input_file_path,
             num_procs,
-            positive_constraints,
-            negative_constraints,
-            "",
-            verbose,
         )
         logging.info("Benchmark complete")
 
