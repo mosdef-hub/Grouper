@@ -1,6 +1,4 @@
-import json
 import logging
-import pathlib
 
 import pytest
 
@@ -9,7 +7,7 @@ from Grouper.tests.base_test import BaseTest
 
 
 class TestGeneration(BaseTest):
-    @pytest.mark.skippable(reason="Too slow for general testing")
+    @pytest.mark.skip(reason="Too slow for general testing")
     @pytest.mark.parametrize("n_nodes", [2, 3, 4, 5, 6])
     @pytest.mark.parametrize("num_procs", [1, 2, 4, 8, 16])
     @pytest.mark.parametrize(
