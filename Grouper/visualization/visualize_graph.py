@@ -1,16 +1,21 @@
 """A module to visualize the graph structure of GroupGraph for seeing connectivity."""
 
+import copy
 import math
 from io import BytesIO
 
 import cairosvg
+import dash_cytoscape as cyto
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import seaborn as sns
+from dash import Dash, Input, Output, dcc, html
 from matplotlib import colors
 from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 from PIL import Image
+
+import Grouper
 
 
 def visualize(group_graph, pos=None):
@@ -309,3 +314,241 @@ def generate_svg_for_node(
     )
     image = Image.open(BytesIO(png_image))
     return image
+
+
+def visualize_cytoscape(GroupGraph: Grouper.GroupGraph):
+    """Function to create a plotly dash application to visualize a graph"""
+    colorList = [
+        "#e6194b",
+        "#3cb44b",
+        "#ffe119",
+        "#4363d8",
+        "#f58231",
+        "#911eb4",
+        "#46f0f0",
+        "#f032e6",
+        "#bcf60c",
+        "#fabebe",
+        "#008080",
+        "#e6beff",
+        "#9a6324",
+        "#fffac8",
+        "#800000",
+        "#aaffc3",
+        "#808000",
+        "#ffd8b1",
+        "#000075",
+        "#808080",
+        "#ffffff",
+        "#000000",
+    ]
+    elements, styleSet, IDtotypeDict = _groupgraph_to_cyto_elements(GroupGraph)
+    colorDict = {nodeType: color for nodeType, color in zip(styleSet, colorList)}
+    colorIDDict = {nodeID: colorDict[ntype] for nodeID, ntype in IDtotypeDict.items()}
+    colorStyle = [
+        {
+            "selector": f'node[label="{node}"]',
+            "style": {"background-color": colorDict[node]},
+        }
+        for node in styleSet
+    ]
+
+    stylesheet = [
+        {
+            "selector": "node",
+            "style": {
+                "label": "data(label)",
+                # 'background-color': '#0074D9',
+                # 'color': '#fff',
+                "text-valign": "center",
+                "text-halign": "center",
+                "width": 80,  # Width of port nodes
+                "height": 80,  # Height of port nodes
+                "shape": "circle",
+                "border-color": "black",
+                "border-width": 4,
+                "font-size": "30px",
+            },
+        },
+        *colorStyle,
+    ]
+    # {"nodeID":"color"}
+    for element in elements:
+        if not element.get("data", {}).get("target"):
+            continue
+        source_id = element["data"]["source"]  # id
+        target_id = element["data"]["target"]  # id
+        selector = f"[source = {source_id}], [target = {target_id}]"
+        selector = f"#{source_id}{target_id}"
+        selector = f"#{source_id}-{target_id}"
+        source_color = colorIDDict[source_id]
+        target_color = colorIDDict[target_id]
+        # #AD, #DA
+        stylesheet.append(
+            {
+                # 'selector': f'[source = "node{i}"][target = "node{i+1}"]',
+                "selector": selector,
+                "style": {
+                    "line-gradient-stop-colors": f"{source_color} {target_color}",
+                    "line-fill": "linear-gradient",
+                    "line-gradient-stop-positions": "0% 100%",
+                    "width": 12,
+                    "label": "data(label)",
+                    "edge-text-rotation": "autorotate",
+                    "font-size": "30px",
+                    "curve-style": "straight",
+                    "target-arrow-shape": "circle",
+                    "target-arrow-color": "black",
+                    "target-arrow-width": 20,
+                    "target-endpoint": "inside-to-node",
+                    "target-distance-from-node": 20,
+                    "source-arrow-shape": "circle",
+                    "source-arrow-color": "black",
+                    "source-arrow-width": 20,
+                    "source-endpoint": "inside-to-node",
+                    "source-distance-from-node": 20,
+                },
+            }
+        )
+    app = Dash(__name__)
+
+    app.layout = html.Div(
+        [
+            # html.P("Dash Cytoscape:"),
+            cyto.Cytoscape(
+                id="cytoscape-drag-node",
+                elements=elements,
+                layout={"name": "cose", "randomize": False, "idealEdgeLength": 60},
+                style={
+                    "width": "100%",
+                    "height": "400px",
+                    "background-color": "lightgray",
+                },
+                stylesheet=stylesheet,
+            ),
+            dcc.Interval(id="interval", interval=1000, n_intervals=0, max_intervals=2),
+        ]
+    )
+
+    @app.callback(
+        Output("cytoscape-drag-node", "elements", allow_duplicate=True),
+        Input("cytoscape-drag-node", "elements"),
+        Input("interval", "n_intervals"),
+        prevent_initial_call=True,
+    )
+    def init_labels(elements, n_intervals):
+        updated_elements = []
+        # Question: is it safe to assume all nodes come first in elements array? probably
+        # if not next(iter(elements)).get("data", {}).get("old_positions"):
+        _handle_edge_initializations(elements, updated_elements)
+        return updated_elements
+
+    @app.callback(
+        Output("cytoscape-drag-node", "elements"),
+        Input("cytoscape-drag-node", "elements"),
+        prevent_initial_call=True,
+    )
+    def node_dragged(
+        elements,
+    ):
+        updated_elements = []
+        moved_element = None
+        nodeDict = {}
+
+        for i in range(len(elements)):
+            element = elements[i]
+            if "position" not in element:  # skip to edges
+                break
+            node_id = element["data"]["id"]
+            nodeDict[node_id] = element
+            current_position = element["position"]
+            old_position = element["data"].get("old_position")
+
+            # Check if the position has changed
+            if current_position != old_position:
+                # Update the old_position in the data
+                element["data"]["old_position"] = current_position
+                moved_element = element
+
+            # Append the updated element to the new list
+            updated_elements.append(element)
+
+        for j in range(i, len(elements)):  # now check for elements that are edges
+            element = elements[j]
+            if "target" in element["data"]:  # edges only
+                if moved_element and (
+                    element["data"]["source"] == moved_element["data"]["id"]
+                    or element["data"]["target"] == moved_element["data"]["id"]
+                ):
+                    ele_source = nodeDict[element["data"]["source"]]
+                    ele_target = nodeDict[element["data"]["target"]]
+                    element["data"]["label"] = _get_label_for_edge(
+                        element, ele_source, ele_target
+                    )
+                updated_elements.append(element)
+
+        return updated_elements
+
+    app.run(debug=False)
+    return app
+
+
+def _groupgraph_to_cyto_elements(gG, colors=None):
+    """Returns cytoscape elements needed to visualize the graph."""
+    styleSet = set()
+    elements = []
+    node_template = {"data": {"id": None, "label": None}}
+    IDtotypeDict = {}
+    for nodeid, node in gG.nodes.items():
+        new_node = copy.deepcopy(node_template)
+        new_node["data"]["id"] = str(nodeid)
+        new_node["data"]["label"] = str(node.type)
+        styleSet.add(node.type)
+        IDtotypeDict[str(nodeid)] = node.type
+        new_node["position"] = {"x": 0, "y": 0}
+        elements.append(new_node)
+    edge_template = {"data": {"source": None, "target": None}}
+    for edge in gG.edges:
+        new_edge = copy.deepcopy(edge_template)
+        new_edge["data"]["source"] = str(edge[0])
+        new_edge["data"]["target"] = str(edge[2])
+        new_edge["data"]["id"] = str(edge[0]) + "-" + str(edge[2])
+        # new_edge["data"]["label"] = str(edge[0]) + "  -  " + str(edge[2])
+        new_edge["data"]["label"] = str(edge[1]) + "  -  " + str(edge[3])
+        # new_edge["data"]["source-to-target-label"] = str(edge[0]) + "  -  " + str(edge[2])
+        new_edge["data"]["source-to-target-label"] = (
+            str(edge[1]) + "  -  " + str(edge[3])
+        )
+        elements.append(new_edge)
+
+    return elements, styleSet, IDtotypeDict
+
+
+def _get_label_for_edge(edge, node1, node2, element_label="label"):
+    """return ordered string label based on x positions of node1 and node2"""
+    orientation1 = edge["data"]["source-to-target-label"]
+    if node1["position"]["x"] > node2["position"]["x"]:
+        # label = node2["data"][element_label] + "  -  " + node1["data"][element_label]
+        label = orientation1[::-1]
+    elif node1["position"]["x"] <= node2["position"]["x"]:
+        # label = node1["data"][element_label] + "  -  " + node2["data"][element_label]
+        label = orientation1
+    return label
+
+
+def _handle_edge_initializations(elements, updated_elements):
+    nodeDict = {}
+    for element in elements:
+        if element.get("position"):  # is a node
+            element["data"]["old_position"] = element["position"]
+            # element["data"]["label"] += str(element["position"])
+            nodeDict[element["data"]["id"]] = element
+        elif "target" in element["data"]:  # edges only
+            ele_source = nodeDict[element["data"]["source"]]
+            ele_target = nodeDict[element["data"]["target"]]
+            element["data"]["label"] = _get_label_for_edge(
+                element, ele_source, ele_target
+            )
+        updated_elements.append(element)
+
+    return
