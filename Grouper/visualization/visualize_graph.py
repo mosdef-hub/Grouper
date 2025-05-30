@@ -3,6 +3,7 @@
 import copy
 import math
 from io import BytesIO
+from typing import Dict, List, Union
 
 import cairosvg
 import dash_cytoscape as cyto
@@ -29,9 +30,7 @@ def visualize(group_graph, pos=None):
     """
     if pos is None:
         pos = spring_layout(group_graph, iterations=50, k=1.0)
-    fig, ax = plt.subplots(
-        figsize=(5, 5),
-    )
+    fig, ax = plt.subplots(figsize=(5, 5))
 
     # Set axis limits
     x_values, y_values = zip(*pos.values())
@@ -73,10 +72,7 @@ def visualize(group_graph, pos=None):
         distance_from_center = radius * 0.85
 
         port_positions[node] = calculate_port_positions(
-            x,
-            y,
-            num_ports,
-            distance_from_center,
+            x, y, num_ports, distance_from_center
         )
 
     # Manually draw edges between specified ports
@@ -316,100 +312,114 @@ def generate_svg_for_node(
     return image
 
 
-def visualize_cytoscape(GroupGraph: Grouper.GroupGraph):
-    """Function to create a plotly dash application to visualize a graph"""
-    colorList = [
-        "#e6194b",
-        "#3cb44b",
-        "#ffe119",
-        "#4363d8",
-        "#f58231",
-        "#911eb4",
-        "#46f0f0",
-        "#f032e6",
-        "#bcf60c",
-        "#fabebe",
-        "#008080",
-        "#e6beff",
-        "#9a6324",
-        "#fffac8",
-        "#800000",
-        "#aaffc3",
-        "#808000",
-        "#ffd8b1",
-        "#000075",
-        "#808080",
-        "#ffffff",
-        "#000000",
-    ]
-    elements, styleSet, IDtotypeDict = _groupgraph_to_cyto_elements(GroupGraph)
-    colorDict = {nodeType: color for nodeType, color in zip(styleSet, colorList)}
+def visualize_cytoscape(
+    group_graph: Grouper.GroupGraph,
+    stylesheet: dict = None,
+    node_colors: Union[List, Dict] = None,
+    debug: bool = False,
+):
+    """
+    Function to create a plotly dash application to visualize a graph.
+
+    Parameters
+    ----------
+    - group_graph : Grouper.GroupGraph
+        The graph object to be visualized.
+    - stylesheet : dict, optional, default None
+        A dash cytoscape stylesheet. See https://dash.plotly.com/cytoscape/styling for more details.
+    - colorList : list, optional, default None
+        The colors to apply to each node. Colors are assigned based on the order of Groups in GroupGraph.nodes.
+        The default stylesheet selects nodes based on Group.type name. Colorlist colors can be selected from
+        Standard RGB and Hex colors are accepted, along with basic colors recognized by CSS.
+        Note that by default edges are colored from the source node to target node colors.
+    - debug : bool, optional, default False
+        App debugger to call when running the app.
+
+    """
+    elements, node_styleSet, IDtotypeDict = _groupgraph_to_cyto_elements(group_graph)
+    if node_colors is None:
+        colorList = (
+            ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4"]
+            + ["#46f0f0", "#f032e6", "#bcf60c", "#fabebe", "#008080", "#e6beff"]
+            + ["#9a6324", "#fffac8", "#800000", "#aaffc3", "#808000", "#ffd8b1"]
+            + ["#000075", "#808080", "#ffffff", "#000000"]
+        )
+        colorDict = {
+            nodeType: color for nodeType, color in zip(node_styleSet, colorList)
+        }
+    elif isinstance(node_colors, dict):
+        colorDict = node_colors
+    elif isinstance(node_colors, list):
+        colorDict = {
+            nodeType: color for nodeType, color in zip(node_styleSet, colorList)
+        }
+    else:
+        raise TypeError(
+            f"node_colors is type {type(node_colors)}, should be either a List or Dictionary"
+        )
+
     colorIDDict = {nodeID: colorDict[ntype] for nodeID, ntype in IDtotypeDict.items()}
     colorStyle = [
         {
             "selector": f'node[label="{node}"]',
             "style": {"background-color": colorDict[node]},
         }
-        for node in styleSet
+        for node in node_styleSet
     ]
-
-    stylesheet = [
-        {
-            "selector": "node",
-            "style": {
-                "label": "data(label)",
-                # 'background-color': '#0074D9',
-                # 'color': '#fff',
-                "text-valign": "center",
-                "text-halign": "center",
-                "width": 80,  # Width of port nodes
-                "height": 80,  # Height of port nodes
-                "shape": "circle",
-                "border-color": "black",
-                "border-width": 4,
-                "font-size": "30px",
-            },
-        },
-        *colorStyle,
-    ]
-    # {"nodeID":"color"}
-    for element in elements:
-        if not element.get("data", {}).get("target"):
-            continue
-        source_id = element["data"]["source"]  # id
-        target_id = element["data"]["target"]  # id
-        selector = f"[source = {source_id}], [target = {target_id}]"
-        selector = f"#{source_id}{target_id}"
-        selector = f"#{source_id}-{target_id}"
-        source_color = colorIDDict[source_id]
-        target_color = colorIDDict[target_id]
-        # #AD, #DA
-        stylesheet.append(
+    if stylesheet is None:
+        stylesheet = [
             {
-                # 'selector': f'[source = "node{i}"][target = "node{i+1}"]',
-                "selector": selector,
+                "selector": "node",
                 "style": {
-                    "line-gradient-stop-colors": f"{source_color} {target_color}",
-                    "line-fill": "linear-gradient",
-                    "line-gradient-stop-positions": "0% 100%",
-                    "width": 12,
                     "label": "data(label)",
-                    "edge-text-rotation": "autorotate",
+                    "text-valign": "center",
+                    "text-halign": "center",
+                    "width": 120,
+                    "height": 120,
+                    "shape": "circle",
+                    "border-color": "black",
+                    "border-width": 4,
                     "font-size": "30px",
-                    "curve-style": "straight",
-                    "target-arrow-shape": "circle",
-                    "target-arrow-color": "black",
-                    "target-arrow-width": 20,
-                    "target-endpoint": "inside-to-node",
-                    "target-distance-from-node": 20,
-                    "source-arrow-shape": "circle",
-                    "source-arrow-color": "black",
-                    "source-arrow-width": 20,
-                    "source-endpoint": "inside-to-node",
-                    "source-distance-from-node": 20,
                 },
-            }
-        )
+            },
+            *colorStyle,  # add in specific node colors
+        ]
+
+        # set edge styling based on node_data
+        for element in elements:
+            if not element.get("data", {}).get("target"):
+                continue  # only function on edges
+            source_id = element["data"]["source"]  # id
+            target_id = element["data"]["target"]  # id
+            selector = f"#{source_id}-{target_id}"
+            source_color = colorIDDict[source_id]
+            target_color = colorIDDict[target_id]
+            stylesheet.append(
+                {
+                    "selector": selector,
+                    "style": {
+                        "line-gradient-stop-colors": f"{source_color} {target_color}",
+                        "line-fill": "linear-gradient",
+                        "line-gradient-stop-positions": "0% 100%",
+                        "width": 16,
+                        "label": "data(label)",
+                        "edge-text-rotation": "autorotate",
+                        "font-size": "30px",
+                        "curve-style": "straight",
+                        "target-arrow-shape": "circle",
+                        "target-arrow-color": "black",
+                        "target-arrow-width": 20,
+                        "target-endpoint": "inside-to-node",
+                        "target-distance-from-node": 20,
+                        "source-arrow-shape": "circle",
+                        "source-arrow-color": "black",
+                        "source-arrow-width": 20,
+                        "source-endpoint": "inside-to-node",
+                        "source-distance-from-node": 20,
+                    },
+                }
+            )
+    # Initialize Dash App
     app = Dash(__name__)
 
     app.layout = html.Div(
@@ -426,10 +436,13 @@ def visualize_cytoscape(GroupGraph: Grouper.GroupGraph):
                 },
                 stylesheet=stylesheet,
             ),
+            # Interval updates edge labeling after initialization to make sure ports are labeled based on
+            # relative position of source and target nodes.
             dcc.Interval(id="interval", interval=1000, n_intervals=0, max_intervals=2),
         ]
     )
 
+    # An updator callback to correctly label the edges with port information on initial call
     @app.callback(
         Output("cytoscape-drag-node", "elements", allow_duplicate=True),
         Input("cytoscape-drag-node", "elements"),
@@ -443,14 +456,13 @@ def visualize_cytoscape(GroupGraph: Grouper.GroupGraph):
         _handle_edge_initializations(elements, updated_elements)
         return updated_elements
 
+    # An updator callback to correctly label the edges with port information on node drag
     @app.callback(
         Output("cytoscape-drag-node", "elements"),
         Input("cytoscape-drag-node", "elements"),
         prevent_initial_call=True,
     )
-    def node_dragged(
-        elements,
-    ):
+    def node_dragged(elements):
         updated_elements = []
         moved_element = None
         nodeDict = {}
@@ -489,7 +501,7 @@ def visualize_cytoscape(GroupGraph: Grouper.GroupGraph):
 
         return updated_elements
 
-    app.run(debug=False)
+    app.run(debug=debug)
     return app
 
 
