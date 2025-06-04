@@ -26,6 +26,6 @@ dependencies:
   - nlohmann_json
   - python-igraph
   - dash
-  - dash-cytoscape==1.0.1
+  - dash-cytoscape
   - pip:
     - grakel
