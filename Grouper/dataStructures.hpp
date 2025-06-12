@@ -8,6 +8,7 @@
 #include <memory>
 #include <tuple>
 #include <stdexcept>
+#include <utility>
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -42,6 +43,24 @@ namespace std {
             std::size_t h5 = std::hash<unsigned int>{}(std::get<4>(t));
 
             return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
+        }
+    };
+    template <>
+    struct hash<std::pair<int, int>> {
+        std::size_t operator()(const std::pair<int, int>& p) const {
+            std::size_t h1 = std::hash<int>{}(p.first);
+            std::size_t h2 = std::hash<int>{}(p.second);
+            return h1 ^ (h2 << 1); // or use another combination method
+        }
+    };
+    template <>
+    struct hash<std::vector<int>> {
+        std::size_t operator()(const std::vector<int>& vec) const {
+            std::size_t h = 0;
+            for (const auto& elem : vec) {
+                h ^= std::hash<int>{}(elem) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            }
+            return h;
         }
     };
 }
@@ -120,12 +139,14 @@ public:
     std::unordered_set<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> edges; ///< List of edges connecting nodes. (srcNodeID, srcPort, dstNodeID, dstPort, bondOrder)
     std::unordered_map<std::string, std::vector<PortType>> nodetypes; ///< Map of node types to their respective ports.
     bool isCoarseGrained = false;
+    std::unordered_set<std::pair<NodeIDType, PortType>> used_ports; // Fast lookup for used ports
 
     // Operators
     GroupGraph();
     GroupGraph(const GroupGraph& other);
     GroupGraph& operator=(const GroupGraph& other);
     bool operator==(const GroupGraph& other) const;
+    
     // Modifing methods
     void addNode(
         std::string ntype,
@@ -257,24 +278,6 @@ namespace std {
                 h ^= std::hash<std::tuple<AtomGraph::NodeIDType, AtomGraph::NodeIDType, unsigned int>>{}(std::make_tuple(src, dst, order)) + 0x9e3779b9 + (h << 6) + (h >> 2);
             }
 
-            return h;
-        }
-    };
-    template <>
-    struct hash<std::pair<int, int>> {
-        std::size_t operator()(const std::pair<int, int>& p) const {
-            std::size_t h1 = std::hash<int>{}(p.first);
-            std::size_t h2 = std::hash<int>{}(p.second);
-            return h1 ^ (h2 << 1); // or use another combination method
-        }
-    };
-    template <>
-    struct hash<std::vector<int>> {
-        std::size_t operator()(const std::vector<int>& vec) const {
-            std::size_t h = 0;
-            for (const auto& elem : vec) {
-                h ^= std::hash<int>{}(elem) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            }
             return h;
         }
     };

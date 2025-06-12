@@ -566,14 +566,7 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
     NodeIDType to = std::get<0>(toNodePort);
     PortType toPort = std::get<1>(toNodePort);
 
-
     // Error handling
-    if (numFreePorts(from) <= 0) {
-        throw std::invalid_argument("Source node doesn't have enough ports!");
-    }
-    if (numFreePorts(to) <= 0) {
-        throw std::invalid_argument("Destination node doesn't have enough ports!");
-    }
     if (from == to) {
         throw std::invalid_argument("Source and destination nodes are the same");
     }
@@ -589,25 +582,21 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
     if (std::find(nodes[to].ports.begin(), nodes[to].ports.end(), toPort) == nodes[to].ports.end()) {
         throw std::invalid_argument("Destination port does not exist");
     }
+
     const std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int> edge = std::make_tuple(from, fromPort, to, toPort, bondOrder);
-    // Use unordered_set::count for O(1) edge existence check
     if (edges.count(edge) != 0) {
         throw std::invalid_argument("Edge already exists");
     }
-    // Optimize port usage checks by combining into a single loop and breaking early
-    for (const auto& e : edges) {
-        // Check if fromPort is already used on 'from'
-        if ((std::get<0>(e) == from && std::get<1>(e) == fromPort) || (std::get<2>(e) == from && std::get<3>(e) == fromPort)) {
-            throw std::invalid_argument("Source port already in use");
-        }
-        // Check if toPort is already used on 'to'
-        if ((std::get<0>(e) == to && std::get<1>(e) == toPort) || (std::get<2>(e) == to && std::get<3>(e) == toPort)) {
-            throw std::invalid_argument("Destination port already in use");
-        }
+    if (used_ports.count({from, fromPort}) > 0) {
+        throw std::invalid_argument("Source port already in use");
     }
-    // Add the edge
+    if (used_ports.count({to, toPort}) > 0) {
+        throw std::invalid_argument("Destination port already in use");
+    }
+    // Add the edge and mark both ports as used
     edges.insert(edge);
-    // edges.insert(std::make_tuple(to, toPort, from, fromPort, bondOrder)); // Uncomment this line to make the graph undirected
+    used_ports.insert({from, fromPort});
+    used_ports.insert({to, toPort});
     return true;
 }
 
@@ -643,6 +632,7 @@ bool GroupGraph::isPortFree(NodeIDType nodeID, PortType port) const {
 
 void GroupGraph::clearEdges() {
     edges.clear();
+    used_ports.clear();
 }
 
 void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int stabvertex, int n) {
