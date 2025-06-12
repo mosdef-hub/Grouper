@@ -590,20 +590,23 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
         throw std::invalid_argument("Destination port does not exist");
     }
     const std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int> edge = std::make_tuple(from, fromPort, to, toPort, bondOrder);
-    if (std::find(edges.begin(), edges.end(), edge) != edges.end()) {
-            throw std::invalid_argument("Edge already exists");
+    // Use unordered_set::count for O(1) edge existence check
+    if (edges.count(edge) != 0) {
+        throw std::invalid_argument("Edge already exists");
     }
-    for (const auto& [srcNode, srcPort, dstNode, dstPort, bO] : edges) {
-        if ((srcNode == from && srcPort == fromPort) || (dstNode == from && dstPort == fromPort)) {
+    // Optimize port usage checks by combining into a single loop and breaking early
+    for (const auto& e : edges) {
+        // Check if fromPort is already used on 'from'
+        if ((std::get<0>(e) == from && std::get<1>(e) == fromPort) || (std::get<2>(e) == from && std::get<3>(e) == fromPort)) {
             throw std::invalid_argument("Source port already in use");
         }
-        if ((dstNode == to && dstPort == toPort) || (srcNode == to && srcPort == toPort)) {
+        // Check if toPort is already used on 'to'
+        if ((std::get<0>(e) == to && std::get<1>(e) == toPort) || (std::get<2>(e) == to && std::get<3>(e) == toPort)) {
             throw std::invalid_argument("Destination port already in use");
         }
     }
-
     // Add the edge
-    edges.insert(std::make_tuple(from, fromPort, to, toPort, bondOrder));
+    edges.insert(edge);
     // edges.insert(std::make_tuple(to, toPort, from, fromPort, bondOrder)); // Uncomment this line to make the graph undirected
     return true;
 }
@@ -1195,7 +1198,6 @@ std::vector<setword> GroupGraph::canonize() const {
 
     std::vector<int> lab(n), ptn(n), orbits(n);
     std::vector<setword> canong(n);
-
     DEFAULTOPTIONS_GRAPH(options);
     statsblk stats;
     options.getcanon = TRUE;
@@ -1928,7 +1930,8 @@ std::vector<setword> AtomGraph::canonize() {
     for (int i = 0; i < n; i++) {
         const auto& atom = nodes.at(i);
         if (atom_type_map.find(atom.ntype) == atom_type_map.end()) {
-            atom_type_map[atom.ntype] = color_index++;
+            atom_type_map[atom.ntype] = color_index;
+            color_index++;
         }
         node_colors[i] = atom_type_map[atom.ntype];
     }
