@@ -1,5 +1,4 @@
 #include <iostream>
-#include <unordered_map>
 #include <vector>
 #include <stdexcept>
 #include <sstream>
@@ -560,7 +559,7 @@ void GroupGraph::addNode(Group group) {
     nodetypes[group.ntype] = group.hubs;
 }
 
-bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, unsigned int bondOrder, bool verbose) {
+bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, unsigned int bondOrder, bool strict) {
     NodeIDType from = std::get<0>(fromNodePort);
     PortType fromPort = std::get<1>(fromNodePort);
     NodeIDType to = std::get<0>(toNodePort);
@@ -568,30 +567,54 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
 
     // Error handling
     if (from == to) {
-        throw std::invalid_argument("Source and destination nodes are the same");
+        if (strict) {
+            throw std::invalid_argument("Source and destination nodes are the same");
+        }
+        return false;
     }
     if (nodes.find(from) == nodes.end()) {
-        throw std::invalid_argument("Source node does not exist");
+        if (strict) {
+            throw std::invalid_argument("Source node does not exist");
+        }
+        return false;
     }
     if (nodes.find(to) == nodes.end()) {
-        throw std::invalid_argument("Destination node does not exist");
+        if (strict) {
+            throw std::invalid_argument("Destination node does not exist");
+        }
+        return false;
     }
     if (std::find(nodes[from].ports.begin(), nodes[from].ports.end(), fromPort) == nodes[from].ports.end()) {
-        throw std::invalid_argument("Source port does not exist");
+        if (strict) {
+            throw std::invalid_argument("Source port does not exist");
+        }
+        return false;
     }
     if (std::find(nodes[to].ports.begin(), nodes[to].ports.end(), toPort) == nodes[to].ports.end()) {
-        throw std::invalid_argument("Destination port does not exist");
+        if (strict) {
+            throw std::invalid_argument("Destination port does not exist");
+        }
+        return false;
     }
 
     const std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int> edge = std::make_tuple(from, fromPort, to, toPort, bondOrder);
     if (edges.count(edge) != 0) {
-        throw std::invalid_argument("Edge already exists");
+        if (strict) {
+            throw std::invalid_argument("Edge already exists");
+        }
+        return false;
     }
     if (used_ports.count({from, fromPort}) > 0) {
-        throw std::invalid_argument("Source port already in use");
+        if (strict) {
+            throw std::invalid_argument("Source port already in use");
+        }
+        return false;
     }
     if (used_ports.count({to, toPort}) > 0) {
-        throw std::invalid_argument("Destination port already in use");
+        if (strict) {
+            throw std::invalid_argument("Destination port already in use");
+        }
+        return false;
     }
     // Add the edge and mark both ports as used
     edges.insert(edge);
@@ -2097,8 +2120,3 @@ std::vector<AtomGraph::NodeIDType> AtomGraph::nodeOrbits() const {
 
     return orbits;
 }
-
-
-// std::string AtomGraph::toSmiles(
-// ) const {
-// }
