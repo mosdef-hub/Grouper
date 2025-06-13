@@ -24,43 +24,53 @@
 
 // Hash function for std::tuple
 namespace std {
+    // General-purpose mixing function
+    inline void hash_combine(std::size_t& seed, std::size_t value) {
+        seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+
     template <>
     struct hash<std::tuple<int, int, unsigned int>> {
         std::size_t operator()(const std::tuple<int, int, unsigned int>& t) const {
-            std::size_t h1 = std::hash<int>{}(std::get<0>(t));
-            std::size_t h2 = std::hash<int>{}(std::get<1>(t));
-            std::size_t h3 = std::hash<unsigned int>{}(std::get<2>(t));
-            return h1 ^ (h2 << 1) ^ (h3 << 2);
+            std::size_t seed = 0;
+            hash_combine(seed, std::hash<int>{}(std::get<0>(t)));
+            hash_combine(seed, std::hash<int>{}(std::get<1>(t)));
+            hash_combine(seed, std::hash<unsigned int>{}(std::get<2>(t)));
+            return seed;
         }
     };
-    template <> // Custom hash for std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int> GroupGraph::edges
-    struct hash<std::tuple<int, int, int, int, unsigned int>> {
-        std::size_t operator()(const std::tuple<int,int,int,int, unsigned int>& t) const {
-            std::size_t h1 = std::hash<int>{}(std::get<0>(t));
-            std::size_t h2 = std::hash<int>{}(std::get<1>(t));
-            std::size_t h3 = std::hash<int>{}(std::get<2>(t));
-            std::size_t h4 = std::hash<int>{}(std::get<3>(t));
-            std::size_t h5 = std::hash<unsigned int>{}(std::get<4>(t));
 
-            return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
+    template <>
+    struct hash<std::tuple<int, int, int, int, unsigned int>> {
+        std::size_t operator()(const std::tuple<int, int, int, int, unsigned int>& t) const {
+            std::size_t seed = 0;
+            hash_combine(seed, std::hash<int>{}(std::get<0>(t)));
+            hash_combine(seed, std::hash<int>{}(std::get<1>(t)));
+            hash_combine(seed, std::hash<int>{}(std::get<2>(t)));
+            hash_combine(seed, std::hash<int>{}(std::get<3>(t)));
+            hash_combine(seed, std::hash<unsigned int>{}(std::get<4>(t)));
+            return seed;
         }
     };
+
     template <>
     struct hash<std::pair<int, int>> {
         std::size_t operator()(const std::pair<int, int>& p) const {
-            std::size_t h1 = std::hash<int>{}(p.first);
-            std::size_t h2 = std::hash<int>{}(p.second);
-            return h1 ^ (h2 << 1); // or use another combination method
+            std::size_t seed = 0;
+            hash_combine(seed, std::hash<int>{}(p.first));
+            hash_combine(seed, std::hash<int>{}(p.second));
+            return seed;
         }
     };
+
     template <>
     struct hash<std::vector<int>> {
         std::size_t operator()(const std::vector<int>& vec) const {
-            std::size_t h = 0;
+            std::size_t seed = 0;
             for (const auto& elem : vec) {
-                h ^= std::hash<int>{}(elem) + 0x9e3779b9 + (h << 6) + (h >> 2);
+                hash_combine(seed, std::hash<int>{}(elem));
             }
-            return h;
+            return seed;
         }
     };
 }

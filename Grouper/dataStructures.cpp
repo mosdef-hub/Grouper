@@ -849,73 +849,81 @@ std::string GroupGraph::printGraph() const {
 }
 
 std::string GroupGraph::toSmiles() const {
+    using AtomIndexMap = std::unordered_map<int, int>;
+
     std::unique_ptr<RDKit::RWMol> molecularGraph(new RDKit::RWMol());
-    std::unordered_map<std::string, std::unordered_map<int, int>> nodePortToAtomIndex;
-    int atomCount = 0;
 
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        std::string pattern = entry.second.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        for (size_t i = 0; i < node.ports.size(); ++i) {
-            nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
+    std::unordered_map<NodeIDType, std::unique_ptr<RDKit::ROMol>> subGraphs;
+    std::unordered_map<NodeIDType, AtomIndexMap> nodePortToAtomIndex;
+    std::unordered_map<NodeIDType, AtomIndexMap> nodeLocalToGlobalAtomIndex;
+
+    int globalAtomIndex = 0;
+
+    // === Step 1: Create and store all subgraphs ===
+    for (const auto& [nodeID, node] : nodes) {
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(node.pattern, node.patternType != "SMILES");
+        if (!subGraph) {
+            throw std::runtime_error("Failed to create molecule for node " + std::to_string(nodeID));
         }
-        atomCount += subGraph->getNumAtoms();
+        nodePortToAtomIndex[nodeID] = AtomIndexMap();
+        subGraphs[nodeID] = std::move(subGraph);
     }
 
+    // === Step 2: Add atoms to molecularGraph and track index mapping ===
+    for (const auto& [nodeID, node] : nodes) {
+        RDKit::ROMol* subGraph = subGraphs[nodeID].get();
+        const std::vector<int>& hubs = node.hubs;
 
-    int atomId = -1;
-    std::unordered_map<std::string, std::unordered_map<int, int>> nodeSubGraphIndicesToMolecularGraphIndices;
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
-            atomId++;
-            nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
+        AtomIndexMap& localToGlobal = nodeLocalToGlobalAtomIndex[nodeID];
+        AtomIndexMap& portToGlobal = nodePortToAtomIndex[nodeID];
+
+        int localIndex = 0;
+        for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom, ++localIndex) {
+            RDKit::Atom* newAtom = new RDKit::Atom(**atom);
+            molecularGraph->addAtom(newAtom, true);
+
+            localToGlobal[localIndex] = globalAtomIndex;
+
+            // If this local atom is a hub, associate it with the port
+            for (size_t i = 0; i < hubs.size(); ++i) {
+                if (hubs[i] == localIndex) {
+                    portToGlobal[node.ports[i]] = globalAtomIndex;
+                }
+            }
+
+            ++globalAtomIndex;
         }
     }
 
+    // === Step 3: Add intra-subgraph bonds ===
+    for (const auto& [nodeID, _] : nodes) {
+        RDKit::ROMol* subGraph = subGraphs[nodeID].get();
+        const AtomIndexMap& localToGlobal = nodeLocalToGlobalAtomIndex[nodeID];
 
-    atomId = -1;
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
-            atomId++;
-            RDKit::Atom newAtom = **atom;
-            molecularGraph->addAtom(&newAtom, true);
-        }
-        for (RDKit::ROMol::BondIterator bond = subGraph->beginBonds(); bond != subGraph->endBonds(); ++bond) {
-            RDKit::Bond newBond = **bond;
+        for (auto bond = subGraph->beginBonds(); bond != subGraph->endBonds(); ++bond) {
+            int beginLocal = (*bond)->getBeginAtomIdx();
+            int endLocal = (*bond)->getEndAtomIdx();
             RDKit::Bond::BondType bondType = (*bond)->getBondType();
-            int atomIdx1 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getBeginAtomIdx()];
-            int atomIdx2 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getEndAtomIdx()];
-            molecularGraph->addBond(atomIdx1, atomIdx2, bondType);
+
+            int beginGlobal = localToGlobal.at(beginLocal);
+            int endGlobal = localToGlobal.at(endLocal);
+
+            molecularGraph->addBond(beginGlobal, endGlobal, bondType);
         }
     }
 
-
-    for (const auto& edge : edges) {
-        NodeIDType from = std::get<0>(edge);
-        PortType fromPort = std::get<1>(edge);
-        NodeIDType to = std::get<2>(edge);
-        PortType toPort = std::get<3>(edge);
-        unsigned int bondOrder = std::get<4>(edge);
-        int fromAtom = nodePortToAtomIndex[std::to_string(from)][fromPort];
-        int toAtom = nodePortToAtomIndex[std::to_string(to)][toPort];
+    // === Step 4: Add inter-subgraph (edge) bonds ===
+    for (const auto& [from, fromPort, to, toPort, bondOrder] : edges) {
+        int fromAtom = nodePortToAtomIndex.at(from).at(fromPort);
+        int toAtom   = nodePortToAtomIndex.at(to).at(toPort);
 
         molecularGraph->addBond(fromAtom, toAtom, static_cast<RDKit::Bond::BondType>(bondOrder));
     }
 
+    // === Step 5: Convert to SMILES and return ===
     return RDKit::MolToSmiles(*molecularGraph, true);
 }
+
 
 std::vector<std::vector<int>> GroupGraph::toEdgeGraph(const std::vector<std::pair<int, int>>& edge_list) const {
     int num_edges = edge_list.size();
