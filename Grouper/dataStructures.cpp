@@ -1,5 +1,4 @@
 #include <iostream>
-#include <unordered_map>
 #include <vector>
 #include <stdexcept>
 #include <sstream>
@@ -560,51 +559,67 @@ void GroupGraph::addNode(Group group) {
     nodetypes[group.ntype] = group.hubs;
 }
 
-bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, unsigned int bondOrder, bool verbose) {
+bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, unsigned int bondOrder, bool strict) {
     NodeIDType from = std::get<0>(fromNodePort);
     PortType fromPort = std::get<1>(fromNodePort);
     NodeIDType to = std::get<0>(toNodePort);
     PortType toPort = std::get<1>(toNodePort);
 
-
     // Error handling
-    if (numFreePorts(from) <= 0) {
-        throw std::invalid_argument("Source node doesn't have enough ports!");
-    }
-    if (numFreePorts(to) <= 0) {
-        throw std::invalid_argument("Destination node doesn't have enough ports!");
-    }
     if (from == to) {
-        throw std::invalid_argument("Source and destination nodes are the same");
+        if (strict) {
+            throw std::invalid_argument("Source and destination nodes are the same");
+        }
+        return false;
     }
     if (nodes.find(from) == nodes.end()) {
-        throw std::invalid_argument("Source node does not exist");
+        if (strict) {
+            throw std::invalid_argument("Source node does not exist");
+        }
+        return false;
     }
     if (nodes.find(to) == nodes.end()) {
-        throw std::invalid_argument("Destination node does not exist");
+        if (strict) {
+            throw std::invalid_argument("Destination node does not exist");
+        }
+        return false;
     }
     if (std::find(nodes[from].ports.begin(), nodes[from].ports.end(), fromPort) == nodes[from].ports.end()) {
-        throw std::invalid_argument("Source port does not exist");
+        if (strict) {
+            throw std::invalid_argument("Source port does not exist");
+        }
+        return false;
     }
     if (std::find(nodes[to].ports.begin(), nodes[to].ports.end(), toPort) == nodes[to].ports.end()) {
-        throw std::invalid_argument("Destination port does not exist");
-    }
-    const std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int> edge = std::make_tuple(from, fromPort, to, toPort, bondOrder);
-    if (std::find(edges.begin(), edges.end(), edge) != edges.end()) {
-            throw std::invalid_argument("Edge already exists");
-    }
-    for (const auto& [srcNode, srcPort, dstNode, dstPort, bO] : edges) {
-        if ((srcNode == from && srcPort == fromPort) || (dstNode == from && dstPort == fromPort)) {
-            throw std::invalid_argument("Source port already in use");
+        if (strict) {
+            throw std::invalid_argument("Destination port does not exist");
         }
-        if ((dstNode == to && dstPort == toPort) || (srcNode == to && srcPort == toPort)) {
-            throw std::invalid_argument("Destination port already in use");
-        }
+        return false;
     }
 
-    // Add the edge
-    edges.insert(std::make_tuple(from, fromPort, to, toPort, bondOrder));
-    // edges.insert(std::make_tuple(to, toPort, from, fromPort, bondOrder)); // Uncomment this line to make the graph undirected
+    const std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int> edge = std::make_tuple(from, fromPort, to, toPort, bondOrder);
+    if (edges.count(edge) != 0) {
+        if (strict) {
+            throw std::invalid_argument("Edge already exists");
+        }
+        return false;
+    }
+    if (used_ports.count({from, fromPort}) > 0) {
+        if (strict) {
+            throw std::invalid_argument("Source port already in use");
+        }
+        return false;
+    }
+    if (used_ports.count({to, toPort}) > 0) {
+        if (strict) {
+            throw std::invalid_argument("Destination port already in use");
+        }
+        return false;
+    }
+    // Add the edge and mark both ports as used
+    edges.insert(edge);
+    used_ports.insert({from, fromPort});
+    used_ports.insert({to, toPort});
     return true;
 }
 
@@ -640,6 +655,7 @@ bool GroupGraph::isPortFree(NodeIDType nodeID, PortType port) const {
 
 void GroupGraph::clearEdges() {
     edges.clear();
+    used_ports.clear();
 }
 
 void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int stabvertex, int n) {
@@ -833,73 +849,81 @@ std::string GroupGraph::printGraph() const {
 }
 
 std::string GroupGraph::toSmiles() const {
+    using AtomIndexMap = std::unordered_map<int, int>;
+
     std::unique_ptr<RDKit::RWMol> molecularGraph(new RDKit::RWMol());
-    std::unordered_map<std::string, std::unordered_map<int, int>> nodePortToAtomIndex;
-    int atomCount = 0;
 
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        std::string pattern = entry.second.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        for (size_t i = 0; i < node.ports.size(); ++i) {
-            nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
+    std::unordered_map<NodeIDType, std::unique_ptr<RDKit::ROMol>> subGraphs;
+    std::unordered_map<NodeIDType, AtomIndexMap> nodePortToAtomIndex;
+    std::unordered_map<NodeIDType, AtomIndexMap> nodeLocalToGlobalAtomIndex;
+
+    int globalAtomIndex = 0;
+
+    // === Step 1: Create and store all subgraphs ===
+    for (const auto& [nodeID, node] : nodes) {
+        std::unique_ptr<RDKit::ROMol> subGraph = createMol(node.pattern, node.patternType != "SMILES");
+        if (!subGraph) {
+            throw std::runtime_error("Failed to create molecule for node " + std::to_string(nodeID));
         }
-        atomCount += subGraph->getNumAtoms();
+        nodePortToAtomIndex[nodeID] = AtomIndexMap();
+        subGraphs[nodeID] = std::move(subGraph);
     }
 
+    // === Step 2: Add atoms to molecularGraph and track index mapping ===
+    for (const auto& [nodeID, node] : nodes) {
+        RDKit::ROMol* subGraph = subGraphs[nodeID].get();
+        const std::vector<int>& hubs = node.hubs;
 
-    int atomId = -1;
-    std::unordered_map<std::string, std::unordered_map<int, int>> nodeSubGraphIndicesToMolecularGraphIndices;
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
-            atomId++;
-            nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
+        AtomIndexMap& localToGlobal = nodeLocalToGlobalAtomIndex[nodeID];
+        AtomIndexMap& portToGlobal = nodePortToAtomIndex[nodeID];
+
+        int localIndex = 0;
+        for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom, ++localIndex) {
+            RDKit::Atom* newAtom = new RDKit::Atom(**atom);
+            molecularGraph->addAtom(newAtom, true);
+
+            localToGlobal[localIndex] = globalAtomIndex;
+
+            // If this local atom is a hub, associate it with the port
+            for (size_t i = 0; i < hubs.size(); ++i) {
+                if (hubs[i] == localIndex) {
+                    portToGlobal[node.ports[i]] = globalAtomIndex;
+                }
+            }
+
+            ++globalAtomIndex;
         }
     }
 
+    // === Step 3: Add intra-subgraph bonds ===
+    for (const auto& [nodeID, _] : nodes) {
+        RDKit::ROMol* subGraph = subGraphs[nodeID].get();
+        const AtomIndexMap& localToGlobal = nodeLocalToGlobalAtomIndex[nodeID];
 
-    atomId = -1;
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
-            atomId++;
-            RDKit::Atom newAtom = **atom;
-            molecularGraph->addAtom(&newAtom, true);
-        }
-        for (RDKit::ROMol::BondIterator bond = subGraph->beginBonds(); bond != subGraph->endBonds(); ++bond) {
-            RDKit::Bond newBond = **bond;
+        for (auto bond = subGraph->beginBonds(); bond != subGraph->endBonds(); ++bond) {
+            int beginLocal = (*bond)->getBeginAtomIdx();
+            int endLocal = (*bond)->getEndAtomIdx();
             RDKit::Bond::BondType bondType = (*bond)->getBondType();
-            int atomIdx1 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getBeginAtomIdx()];
-            int atomIdx2 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getEndAtomIdx()];
-            molecularGraph->addBond(atomIdx1, atomIdx2, bondType);
+
+            int beginGlobal = localToGlobal.at(beginLocal);
+            int endGlobal = localToGlobal.at(endLocal);
+
+            molecularGraph->addBond(beginGlobal, endGlobal, bondType);
         }
     }
 
-
-    for (const auto& edge : edges) {
-        NodeIDType from = std::get<0>(edge);
-        PortType fromPort = std::get<1>(edge);
-        NodeIDType to = std::get<2>(edge);
-        PortType toPort = std::get<3>(edge);
-        unsigned int bondOrder = std::get<4>(edge);
-        int fromAtom = nodePortToAtomIndex[std::to_string(from)][fromPort];
-        int toAtom = nodePortToAtomIndex[std::to_string(to)][toPort];
+    // === Step 4: Add inter-subgraph (edge) bonds ===
+    for (const auto& [from, fromPort, to, toPort, bondOrder] : edges) {
+        int fromAtom = nodePortToAtomIndex.at(from).at(fromPort);
+        int toAtom   = nodePortToAtomIndex.at(to).at(toPort);
 
         molecularGraph->addBond(fromAtom, toAtom, static_cast<RDKit::Bond::BondType>(bondOrder));
     }
 
+    // === Step 5: Convert to SMILES and return ===
     return RDKit::MolToSmiles(*molecularGraph, true);
 }
+
 
 std::vector<std::vector<int>> GroupGraph::toEdgeGraph(const std::vector<std::pair<int, int>>& edge_list) const {
     int num_edges = edge_list.size();
@@ -1195,7 +1219,6 @@ std::vector<setword> GroupGraph::canonize() const {
 
     std::vector<int> lab(n), ptn(n), orbits(n);
     std::vector<setword> canong(n);
-
     DEFAULTOPTIONS_GRAPH(options);
     statsblk stats;
     options.getcanon = TRUE;
@@ -1928,7 +1951,8 @@ std::vector<setword> AtomGraph::canonize() {
     for (int i = 0; i < n; i++) {
         const auto& atom = nodes.at(i);
         if (atom_type_map.find(atom.ntype) == atom_type_map.end()) {
-            atom_type_map[atom.ntype] = color_index++;
+            atom_type_map[atom.ntype] = color_index;
+            color_index++;
         }
         node_colors[i] = atom_type_map[atom.ntype];
     }
@@ -2104,8 +2128,3 @@ std::vector<AtomGraph::NodeIDType> AtomGraph::nodeOrbits() const {
 
     return orbits;
 }
-
-
-// std::string AtomGraph::toSmiles(
-// ) const {
-// }

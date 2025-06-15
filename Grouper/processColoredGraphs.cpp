@@ -715,20 +715,12 @@ void process_nauty_output(
             std::pair<int,int> colorPort = color_to_port_pair.at(edge)[color];
             int sPort = colorPort.first;
             int tPort = colorPort.second;
-            bool added = false;
-            try {
-                gG.addEdge({s, sPort}, {t, tPort});
-                added = true;
-            }
-            catch (...) {
-                try {
-                    gG.addEdge({s, tPort}, {t, sPort});
-                    added = true;
-                }
-                catch (...) {
-                    // std::cout << "Edge add failed for both port directions\n";
-                }
-            }
+            bool added;
+
+            added = gG.addEdge({s, sPort}, {t, tPort}, 1, false);
+            if (!added)
+                added = gG.addEdge({s, tPort}, {t, sPort}, 1, false);
+
             if (!added) {
                 all_edges_added = false;
                 break;
