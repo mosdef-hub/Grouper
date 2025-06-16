@@ -120,7 +120,7 @@ void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGrap
         const auto& bond = mol->getBondWithIdx(i);
         double border = bond->getBondTypeAsDouble();
         int borderInt = (int)border;
-        aG.addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt, validate=validate);
+        aG.addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt, validate);
     }
 }
 
@@ -278,8 +278,8 @@ std::vector<int> GroupGraph::Group::hubOrbits() const {
 
 std::vector<std::vector<int>> GroupGraph::Group::getPossibleAttachments(int degree) const {
     std::vector<std::vector<int>> possible_attachments;
-
-    if (degree > hubs.size()) {
+    // Cast value
+    if (degree > static_cast<int>(hubs.size())) {
         return possible_attachments; // Not enough ports for the given degree
     }
 
@@ -330,12 +330,13 @@ std::vector<std::vector<int>> GroupGraph::Group::getPossibleAttachments(int degr
 
         // Sort nodes by color and initialize `lab` and `ptn`
         int n = modifiedGraph.nodes.size();
+        int n_nodes = static_cast<int>(modifiedGraph.nodes.size());
         std::vector<std::string> node_colors(modifiedGraph.nodes.size());
-        for (int i = 0; i < modifiedGraph.nodes.size(); ++i) node_colors[i] = modifiedGraph.nodes[i].ntype;
+        for (int i = 0; i < n_nodes; ++i) node_colors[i] = modifiedGraph.nodes[i].ntype;
 
         std::unordered_map<std::string, int> color_to_index;
         int color_index = 0;
-        for (const auto [id, atom] : modifiedGraph.nodes) {
+        for (auto [id, atom] : modifiedGraph.nodes) {
             if (color_to_index.find(atom.ntype) == color_to_index.end()){
                 color_to_index[atom.ntype] = color_index;
                 color_index++;
@@ -1625,7 +1626,7 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
             addNode(symbol, maxValence);
             currentNode = nodes.size() - 1;
 
-            if (centralNodeVec.size() <= currentDepth) {
+            if (static_cast<int>(centralNodeVec.size()) <= currentDepth) {
                 centralNodeVec.resize(currentDepth + 1, currentNode);
             }
 
@@ -1659,7 +1660,7 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
             addNode(symbol, standardElementValency[symbol]);
             currentNode = nodes.size() - 1;
 
-            if (centralNodeVec.size() <= currentDepth) {
+            if (static_cast<int>(centralNodeVec.size()) <= currentDepth) {
                 centralNodeVec.resize(currentDepth + 1, currentNode);
             }
 
@@ -2052,7 +2053,6 @@ std::vector<setword> AtomGraph::canonize() {
     // Run Nauty with the sparse graph representation
     sparsenauty(&sg, lab.data(), ptn.data(), orbits.data(), &options, &stats, &canon_sg);
 
-    printf("Nauty: %d vertices, %d edges\n", canon_sg.nv, canon_sg.nde);
     
     // Get the canonical labeling
     std::vector<setword> canon_g(n * m);
