@@ -213,14 +213,17 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     // std::unordered_set<std::vector<setword>, hash_vector> canon_basis;
     std::unordered_set<std::string> canon_basis;
 
+    // Prepare per-thread local_basis sets
+    int max_threads = num_procs;
+    std::vector<std::unordered_set<GroupGraph>> all_local_bases(max_threads);
+
     omp_set_num_threads(num_procs);      // Set the number of threads to match
-
     int n_finished = 0;
-
     std::cout<< "Using "<<num_procs << " processors" << std::endl;
 
     #pragma omp parallel
     {
+        int tid = omp_get_thread_num();
         // Thread-local nauty structures using std::vector
         int n = 20; // Max number of nodes (adjustable)
         int m = SETWORDSNEEDED(n);
@@ -229,8 +232,8 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         DEFAULTOPTIONS_GRAPH(options);
         statsblk stats;
 
-        // Thread-local basis set
-        std::unordered_set<GroupGraph> local_basis;
+        // Thread-local basis set (now in all_local_bases)
+        std::unordered_set<GroupGraph>& local_basis = all_local_bases[tid];
 
         #pragma omp for schedule(dynamic) nowait
         for (int i = 0; i < total_lines; ++i) {
@@ -243,33 +246,25 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
             );
 
+            // Only update progress every 100 lines to reduce contention
+            if ((++n_finished % 100) == 0 || n_finished == total_lines) {
             #pragma omp critical
             {
-                n_finished++;
                 update_progress(n_finished, total_lines);
+                }
+            }
             }
         }
 
-        #pragma omp critical
-        {
+    // Merge all thread-local bases into the global set serially
+    for (const auto& local_basis : all_local_bases) {
             for (const auto& graph : local_basis) {
                 if (canon_basis.find(graph.toSmiles()) == canon_basis.end()) {
                     canon_basis.insert(graph.toSmiles());
                     global_basis.insert(graph);
                 }
-                // auto aG = graph.toAtomicGraph();
-                // if (canon_basis.find(aG->canonize()) == canon_basis.end()) {
-                //     canon_basis.insert(aG->canonize());
-                //     global_basis.insert(graph);
-                // }
-                // if (canon_basis.find(graph.canonize()) == canon_basis.end()) {
-                //     canon_basis.insert(graph.canonize());
-                //     global_basis.insert(graph);
-                // }
-            }
         }
     }
-
     std::cout << std::endl;
 
 

@@ -360,11 +360,11 @@ void scan_edge_coloring_full(int index,
                              const std::vector<std::vector<int>>& allowed_colors,
                              const EdgeGroup& group,
                              std::vector<int>& current_coloring,
-                             std::vector<std::vector<int>>& all_colorings) {
+                             std::function<void(const std::vector<int>&)> coloring_callback) {
     if (index == num_edges) {
         // A complete edge coloring has been built.
         if (full_maximality_test(current_coloring, group)) {
-            all_colorings.push_back(current_coloring);
+            coloring_callback(current_coloring);
         }
         return;
     }
@@ -372,7 +372,7 @@ void scan_edge_coloring_full(int index,
     for (int color : allowed_colors[index]) {
         current_coloring[index] = color;
         scan_edge_coloring_full(index + 1, num_edges, allowed_colors, group, 
-                                current_coloring, all_colorings);
+                                current_coloring, coloring_callback);
     }
     // Backtrack: mark current position as uncolored.
     current_coloring[index] = -1;
@@ -386,11 +386,11 @@ void scan_edge_coloring_full(int index,
 //
 // In this approach, we assign colors one edge at a time and, when a full assignment
 // is reached, we check that no automorphic image of that assignment is lexicographically greater.
-std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings_Full(
+void generateNonAutomorphicEdgeColorings_Full(
     const std::vector<std::pair<int, int>>& edge_list,
     const std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair>& available_colors,
-    const EdgeGroup& group) {
-
+    const EdgeGroup& group,
+    std::function<void(const std::vector<int>&)> coloring_callback) {
     int num_edges = edge_list.size();
     // Precompute the list of allowed colors for each edge (using the ordering in edge_list).
     std::vector<std::vector<int>> allowed_colors(num_edges);
@@ -407,11 +407,9 @@ std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings_Full(
 
     // Prepare a vector for the current coloring: -1 means uncolored.
     std::vector<int> current_coloring(num_edges, -1);
-    std::vector<std::vector<int>> all_colorings;
 
     // Begin the recursive search.
-    scan_edge_coloring_full(0, num_edges, allowed_colors, group, current_coloring, all_colorings);
-    return all_colorings;
+    scan_edge_coloring_full(0, num_edges, allowed_colors, group, current_coloring, coloring_callback);
 }
 
 //***************************************************************************
@@ -515,14 +513,57 @@ EdgeGroup obtainEdgeAutomorphismGenerators(
     return edgeGroup;
 }
 
+//*****************************************************************************
+void processColoring(
+    const std::vector<int>& coloring,
+    const std::vector<std::pair<int, int>>& edge_list,
+    const std::unordered_map<std::pair<int, int>, std::vector<std::pair<int, int>>, hash_pair>& color_to_port_pair,
+    const std::unordered_map<int, std::string>& int_to_node_type,
+    const std::unordered_map<std::string, std::vector<int>>& node_types,
+    const std::vector<int>& colors,
+    std::unordered_set<std::string>& canon_set,
+    std::unordered_set<GroupGraph>* graph_basis,
+    GroupGraph& gG
+) {
+    gG.clearEdges();
+    bool all_edges_added = true;
+    size_t edge_index = 0;
 
-// Initialize logger
-// Logger& logger = Logger::getInstance();
+    for (const auto& edge : edge_list) {
+        int s = edge.first;
+        int t = edge.second;
+        int color = coloring[edge_index++];
+        std::pair<int, int> colorPort = color_to_port_pair.at(edge)[color];
+        int sPort = colorPort.first;
+        int tPort = colorPort.second;
 
-// void initializeLogger() {
-//     logger.setLogLevel(Logger::LogLevel::DEBUG);
-//     logger.enableFileLogging("log.txt");
-// }
+        bool added = false;
+        try {
+            gG.addEdge({s, sPort}, {t, tPort});
+            added = true;
+        } catch (...) {
+            try {
+                gG.addEdge({s, tPort}, {t, sPort});
+                added = true;
+            } catch (...) {
+                // both attempts failed
+            }
+        }
+
+        if (!added) {
+            all_edges_added = false;
+            break;
+        }
+    }
+
+    if (!all_edges_added) return;
+
+    std::string smiles = gG.toSmiles();
+    if (canon_set.insert(smiles).second) {
+        graph_basis->insert(gG);
+    }
+}
+//*****************************************************************************
 
 void process_nauty_output(
     const std::string& line,
@@ -532,9 +573,7 @@ void process_nauty_output(
     const std::unordered_set<std::string> negativeConstraints,
     graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats // Pass nauty structures
 ) {
-    // initializeLogger();
-    // logger.log("This is a debug message", Logger::LogLevel::DEBUG);
-
+    // logMemoryUsage("Start process_nauty_output");
     // Process the nauty output line
     auto [n_vertices, colors, edge_list] = parse_nauty_graph_line(line, node_defs);
 
@@ -650,107 +689,84 @@ void process_nauty_output(
         color_to_port_pair[{src, dst}] = port_pairs;
     }
 
-    // Calculate node orbits using nauty then compute edge orbits
-    // auto [nodeOrbits, edgeOrbits] = gG.computeOrbits(
-    //     edge_list, colors,
-    //     g, lab, ptn, orbits, options, stats // Pass nauty structures
-    // );
-
     // Generate edge automorphism group
     EdgeGroup edgeGroup = obtainEdgeAutomorphismGenerators(
         edge_list, colors, 
         g, lab, ptn, orbits, options, stats // Pass nauty structures
     );
-
-
-    // Change the edge orbits to a vector of sets for generating colorings
-    // std::vector<std::unordered_set<std::pair<int, int>, hash_pair>> edge_orbits_vector;
-    // std::unordered_set<int> unique_orbits;
-    // for (const auto& orbit : edgeOrbits) {
-    //     unique_orbits.insert(orbit);
-    // }
-    // // Put edge orbits in same order into a set
-    // for (int i = 0; i < unique_orbits.size(); i++) {
-    //     edge_orbits_vector.push_back({});
-    // }
-    // std::unordered_map<int,int> orbit_to_index;
-    // int index = 0;
-    // for (const auto& orbit : unique_orbits) {
-    //     if (orbit_to_index.find(orbit) == orbit_to_index.end()) {
-    //         orbit_to_index[orbit] = index;
-    //         index++;
-    //     }
-    // }
-    // std::unordered_map<std::pair<int, int>, int, hash_pair> edge_to_index;
-    // for (int i = 0; i < edge_list.size(); i++) {
-    //     edge_to_index[edge_list[i]] = i;
-    // }
-    // for (const auto& edge : edge_list) {
-    //     int edge_index = edge_to_index[edge];  // Get unique edge index
-    //     edge_orbits_vector[orbit_to_index[edgeOrbits[edge_index]]].insert(edge);
-    // }
-
-    // Compute all non-automorphic colorings
-    // std::vector<std::vector<int>> unique_colorings = generateNonAutomorphicEdgeColorings(edge_list, edge_orbits_vector, possible_edge_colors);
-
-    
-
-    std::vector<std::vector<int>> unique_colorings = generateNonAutomorphicEdgeColorings_Full(edge_list, possible_edge_colors, edgeGroup);
-
-    // Iterate over unique colorings
-    for (const auto& coloring: unique_colorings){
-        gG.clearEdges();
-        // Add edges with the current coloring
-        size_t edge_index = 0;
-        bool all_edges_added = true;
-        for (const auto& edge : edge_list) {
-            // Ensure canonical order for undirected edge:
-            int s = edge.first;
-            int t = edge.second;
+    // logMemoryUsage("After obtainEdgeAutomorphismGenerators");
+    // std::vector<std::vector<int>> unique_colorings = generateNonAutomorphicEdgeColorings_Full(edge_list, possible_edge_colors, edgeGroup);
+    generateNonAutomorphicEdgeColorings_Full(
+        edge_list, possible_edge_colors, edgeGroup,
+        [&](const std::vector<int>& coloring) {
+            processColoring(
+                coloring,
+                edge_list,
+                color_to_port_pair,
+                int_to_node_type,
+                node_types,
+                colors,
+                canon_set,
+                graph_basis,
+                gG
+            );
+        }
+    );
+    // logMemoryUsage("End process_nauty_output");
+    // // Iterate over unique colorings
+    // for (const auto& coloring: unique_colorings){
+    //     gG.clearEdges();
+    //     // Add edges with the current coloring
+    //     size_t edge_index = 0;
+    //     bool all_edges_added = true;
+    //     for (const auto& edge : edge_list) {
+    //         // Ensure canonical order for undirected edge:
+    //         int s = edge.first;
+    //         int t = edge.second;
         
-            int color = coloring[edge_index++];
-            // Use the canonical order for color conversion.
-            // std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(colors[s])),
-            //                                                 node_types.at(int_to_node_type.at(colors[t])));
-            std::pair<int,int> colorPort = color_to_port_pair.at(edge)[color];
-            int sPort = colorPort.first;
-            int tPort = colorPort.second;
-            bool added = false;
-            try {
-                gG.addEdge({s, sPort}, {t, tPort});
-                added = true;
-            }
-            catch (...) {
-                try {
-                    gG.addEdge({s, tPort}, {t, sPort});
-                    added = true;
-                }
-                catch (...) {
-                    // std::cout << "Edge add failed for both port directions\n";
-                }
-            }
-            if (!added) {
-                all_edges_added = false;
-                break;
-            }
-        }
-        if (!all_edges_added) {
-            continue;
-        }
-    //  Check if the graph is unique considering permutations
-        if (canon_set.find(gG.toSmiles()) == canon_set.end()) {
-            canon_set.insert(gG.toSmiles());
-            graph_basis->insert(gG);
-        }
-        // auto aG = gG.toAtomicGraph();
-        // if (canon_set.find(aG->canonize()) == canon_set.end()) {
-        //     canon_set.insert(aG->canonize());
-        //     graph_basis->insert(gG);
-        //     printf("Graph: %s\n", gG.toSmiles().c_str());
-        // }
-        // if (canon_set.find(gG.canonize()) == canon_set.end()) {
-        //     canon_set.insert(gG.canonize());
-        //     graph_basis->insert(gG);
-        // }
-    }
+    //         int color = coloring[edge_index++];
+    //         // Use the canonical order for color conversion.
+    //         // std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(colors[s])),
+    //         //                                                 node_types.at(int_to_node_type.at(colors[t])));
+    //         std::pair<int,int> colorPort = color_to_port_pair.at(edge)[color];
+    //         int sPort = colorPort.first;
+    //         int tPort = colorPort.second;
+    //         bool added = false;
+    //         try {
+    //             gG.addEdge({s, sPort}, {t, tPort});
+    //             added = true;
+    //         }
+    //         catch (...) {
+    //             try {
+    //                 gG.addEdge({s, tPort}, {t, sPort});
+    //                 added = true;
+    //             }
+    //             catch (...) {
+    //                 // std::cout << "Edge add failed for both port directions\n";
+    //             }
+    //         }
+    //         if (!added) {
+    //             all_edges_added = false;
+    //             break;
+    //         }
+    //     }
+    //     if (!all_edges_added) {
+    //         continue;
+    //     }
+    // //  Check if the graph is unique considering permutations
+    //     if (canon_set.find(gG.toSmiles()) == canon_set.end()) {
+    //         canon_set.insert(gG.toSmiles());
+    //         graph_basis->insert(gG);
+    //     }
+    //     // auto aG = gG.toAtomicGraph();
+    //     // if (canon_set.find(aG->canonize()) == canon_set.end()) {
+    //     //     canon_set.insert(aG->canonize());
+    //     //     graph_basis->insert(gG);
+    //     //     printf("Graph: %s\n", gG.toSmiles().c_str());
+    //     // }
+    //     // if (canon_set.find(gG.canonize()) == canon_set.end()) {
+    //     //     canon_set.insert(gG.canonize());
+    //     //     graph_basis->insert(gG);
+    //     // }
+    // }
 }
