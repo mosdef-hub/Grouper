@@ -526,38 +526,32 @@ void processColoring(
     GroupGraph& gG
 ) {
     gG.clearEdges();
-    bool all_edges_added = true;
     size_t edge_index = 0;
-
+    bool all_edges_added = true;
+    
     for (const auto& edge : edge_list) {
+        // Ensure canonical order for undirected edge:
         int s = edge.first;
         int t = edge.second;
+
         int color = coloring[edge_index++];
-        std::pair<int, int> colorPort = color_to_port_pair.at(edge)[color];
+        std::pair<int,int> colorPort = color_to_port_pair.at(edge)[color];
         int sPort = colorPort.first;
         int tPort = colorPort.second;
+        bool added;
 
-        bool added = false;
-        try {
-            gG.addEdge({s, sPort}, {t, tPort});
-            added = true;
-        } catch (...) {
-            try {
-                gG.addEdge({s, tPort}, {t, sPort});
-                added = true;
-            } catch (...) {
-                // both attempts failed
-            }
-        }
+        added = gG.addEdge({s, sPort}, {t, tPort}, 1, false);
+        if (!added)
+            added = gG.addEdge({s, tPort}, {t, sPort}, 1, false);
 
         if (!added) {
             all_edges_added = false;
             break;
         }
     }
-
+    
     if (!all_edges_added) return;
-
+    
     std::string smiles = gG.toSmiles();
     if (canon_set.insert(smiles).second) {
         graph_basis->insert(gG);
@@ -712,61 +706,4 @@ void process_nauty_output(
             );
         }
     );
-    // logMemoryUsage("End process_nauty_output");
-    // // Iterate over unique colorings
-    // for (const auto& coloring: unique_colorings){
-    //     gG.clearEdges();
-    //     // Add edges with the current coloring
-    //     size_t edge_index = 0;
-    //     bool all_edges_added = true;
-    //     for (const auto& edge : edge_list) {
-    //         // Ensure canonical order for undirected edge:
-    //         int s = edge.first;
-    //         int t = edge.second;
-        
-    //         int color = coloring[edge_index++];
-    //         // Use the canonical order for color conversion.
-    //         // std::pair<int,int> colorPort = color_to_ports(color, node_types.at(int_to_node_type.at(colors[s])),
-    //         //                                                 node_types.at(int_to_node_type.at(colors[t])));
-    //         std::pair<int,int> colorPort = color_to_port_pair.at(edge)[color];
-    //         int sPort = colorPort.first;
-    //         int tPort = colorPort.second;
-    //         bool added = false;
-    //         try {
-    //             gG.addEdge({s, sPort}, {t, tPort});
-    //             added = true;
-    //         }
-    //         catch (...) {
-    //             try {
-    //                 gG.addEdge({s, tPort}, {t, sPort});
-    //                 added = true;
-    //             }
-    //             catch (...) {
-    //                 // std::cout << "Edge add failed for both port directions\n";
-    //             }
-    //         }
-    //         if (!added) {
-    //             all_edges_added = false;
-    //             break;
-    //         }
-    //     }
-    //     if (!all_edges_added) {
-    //         continue;
-    //     }
-    // //  Check if the graph is unique considering permutations
-    //     if (canon_set.find(gG.toSmiles()) == canon_set.end()) {
-    //         canon_set.insert(gG.toSmiles());
-    //         graph_basis->insert(gG);
-    //     }
-    //     // auto aG = gG.toAtomicGraph();
-    //     // if (canon_set.find(aG->canonize()) == canon_set.end()) {
-    //     //     canon_set.insert(aG->canonize());
-    //     //     graph_basis->insert(gG);
-    //     //     printf("Graph: %s\n", gG.toSmiles().c_str());
-    //     // }
-    //     // if (canon_set.find(gG.canonize()) == canon_set.end()) {
-    //     //     canon_set.insert(gG.canonize());
-    //     //     graph_basis->insert(gG);
-    //     // }
-    // }
 }

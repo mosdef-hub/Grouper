@@ -65,7 +65,7 @@ PYBIND11_MODULE(_Grouper, m) {
             py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
             py::arg("dst") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
             py::arg("order") = 1,
-            py::arg("verbose") = false
+            py::arg("strict") = true
         )
         .def("n_free_ports", &GroupGraph::numFreePorts)
         .def("clear_edges", &GroupGraph::clearEdges)

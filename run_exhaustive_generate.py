@@ -15,15 +15,12 @@ import io
 if __name__ == "__main__":
 
     node_defs = set()
-    node_defs.add(Group('carbon', 'C', [0,0,0,0]))
-    # node_defs.add(Group(0, 'methine', 'C', [0,1,2], [0,0,0]))
-    # node_defs.add(Group(0, 'methylene', 'C', [0,1], [0,0]))
-    # node_defs.add(Group(0, 'methyl', 'C', [0], [0]))
-    # node_defs.add(Group(0, 'hydroxymethyl', 'CO', [0], [0]))
-    # node_defs.add(Group(0, 'primary_amine', 'CN', [0,1,2], [0,0,0]))
-    # node_defs.add(Group(0, 'secondary_amine', 'CNC', [0,1], [0,0]))
-    node_defs.add(Group('tertiary_amine', 'N', [0,0,0]))
-    node_defs.add(Group('hydroxyl', 'O',  [0]))
+
+    node_defs.add(Group("t2", "N", [0, 0, 0]))
+    node_defs.add(Group("Methyl", "C", [0, 0, 0]))
+    node_defs.add(Group("ester", "C(=O)O", [0, 2]))
+    node_defs.add(Group("extra1", "O", [0, 0]))
+
 
     # positive_constraints = {"hydroxyl" : 1, "tertiary_amine" : 1}
     # negative_constraints = {'NN', 'NO', 'NCN', 'NCO', 'OCO'}
@@ -48,54 +45,15 @@ if __name__ == "__main__":
     # call nauty
     start = time.time()
     result = exhaustive_generate(
-        args.n, 
-        node_defs, 
-        input_file_path="",
+        args.n,
+        node_defs,
         num_procs=args.n_cpus,
+        vcolg_output_file="",
         positive_constraints=positive_constraints,
         negative_constraints=negative_constraints,
         config_path=args.config_path,
     )
     end = time.time()
     print(f"Time taken for generation: {end - start}")
-
     print(f"Total graphs: {len(result)}")
 
-
-    # save image of each molecule  
-    mols = []
-    for i, graph in enumerate(result):
-        mol = Chem.MolFromSmiles(graph.to_smiles())
-        mols.append(mol)
-    Chem.Draw.MolsToGridImage(mols, molsPerRow=5, subImgSize=(200,200)).save(f"{parent}/molecules_{args.n}.png")
-
-    # Function to convert matplotlib figure to PIL Image
-    def fig_to_img(fig):
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight')
-        buf.seek(0)
-        return Image.open(buf)
-    
-    # save grid image of each graph
-    figures  = []
-    for graph in result:
-        fig = visualize(graph)
-        figures.append(fig_to_img(fig))
-        plt.close(fig)
-
-    # Arrange the figures in a grid 5 per row
-    fig_width, fig_height = figures[0].size  # Assume all figures have the same size
-    composite = Image.new('RGB', (fig_width * 5, fig_height * ((len(result) // 5) + 1)))  # Create blank canvas
-
-    for i, figure in enumerate(figures):
-        x = (i % 5) * fig_width
-        y = (i // 5) * fig_height
-        composite.paste(figure, (x, y))
-
-    # Show or save the composite image
-    composite.save(f'graphs_{args.n}.png')
-
-
-    # # Save to pickle
-    with open(f"{parent}/graphs_{args.n}.pkl", 'wb') as f:
-        pickle.dump(result, f)
