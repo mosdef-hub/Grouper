@@ -569,7 +569,11 @@ void process_nauty_output(
 ) {
     // logMemoryUsage("Start process_nauty_output");
     // Process the nauty output line
-    auto [n_vertices, colors, edge_list] = parse_nauty_graph_line(line, node_defs);
+    // auto [n_vertices, colors, edge_list] = parse_nauty_graph_line(line, node_defs);
+    auto nauty_result = parse_nauty_graph_line(line, node_defs);
+    int n_vertices = std::get<0>(nauty_result);
+    std::vector<int> colors = std::get<1>(nauty_result);
+    std::vector<std::pair<int, int>> edge_list = std::get<2>(nauty_result);
 
     // Actual function starts here
     std::unordered_map<int, std::string> int_to_node_type;
