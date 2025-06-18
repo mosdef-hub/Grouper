@@ -17,7 +17,7 @@ def fragment(
     incompleteGraphHandler: Literal["remove", "keep", "raise error"] = "remove",
     matchHubs: bool = False,
 ) -> list:
-    """Fragmenter a smiles definied molecule based on a list of nodes.
+    """Fragmente a smiles defined molecule based on a list of nodes.
 
     Parameters
     ----------
