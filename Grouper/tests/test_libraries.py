@@ -27,7 +27,7 @@ class TestLibraries(BaseTest):
     )
     def test_build_library(self, library, n_graphs):
         library = Libraries[library]()
-        assert library.n_nodes == n_graphs
+        assert library.n_groups == n_graphs
 
     def test_node_trace(self):
         library = Libraries["saftgm"]()
@@ -45,7 +45,7 @@ class TestLibraries(BaseTest):
     def test_add_node(self):
         library = BasisSet()
         library.add_node(Group("-CH3", "[CH3]", [0], "SMARTS"), "", "[CX4H3]", None)
-        assert library.n_nodes == 1
+        assert library.n_groups == 1
 
     def test_query_node(self):
         library = Libraries["joback"]()
@@ -57,7 +57,7 @@ class TestLibraries(BaseTest):
     def test_list_nodes(self):
         library = Libraries["joback"]()
         nodes = list(library.get_nodes())
-        assert len(nodes) == 41 == library.n_nodes
+        assert len(nodes) == 41 == library.n_groups
 
 class TestLibrariesFragmentations(BaseTest):  
     def assert_equal_edgeDicts(self, edge1, edge2):
