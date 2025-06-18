@@ -169,7 +169,6 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     AtomGraph atomGraph;
     if (patternType == "SMARTS") {
         atomGraph.fromSmarts(pattern);
-        std::cout << "MADE ATOMGRAPH";
         validateAtomisticAtomGraph(atomGraph, hubs, pattern, patternType);
     }
     else if (patternType == "SMILES") {
@@ -184,7 +183,6 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
             }
         }
     }
-    std::cout << " FINISHED attaching points";
     this->ntype = ntype;
     this->pattern = pattern;
     this->hubs = hubs;
@@ -200,7 +198,6 @@ void validateAtomisticAtomGraph (const AtomGraph atomGraph, const std::vector<in
     if (!mol) {
         throw GrouperParseException("Invalid "+ patternType +": " + pattern + " provided");
     }
-    std::cout << " - CREATEMOLED - ";
     // Validate connected molecules
     std::vector<std::vector<int>> moleculesVector;
     RDKit::MolOps::getMolFrags(*mol, moleculesVector);
@@ -208,7 +205,6 @@ void validateAtomisticAtomGraph (const AtomGraph atomGraph, const std::vector<in
     if (moleculesVector.size()>1) {
         throw GrouperParseException("Invalid "+ patternType +": " + pattern + " with detached molecules.");
     }
-    std::cout << " - Connected molecules - ";
     // Valency Checks
     std::unordered_map<int, int> atomFreeValency;
     for (const auto& [id, node] : atomGraph.nodes) {
@@ -217,7 +213,6 @@ void validateAtomisticAtomGraph (const AtomGraph atomGraph, const std::vector<in
             throw GrouperParseException("Atom "+std::to_string(id)+" has a negative valency after adding the hub for pattern "+ pattern);
         }
     }
-    std::cout << " - got valency checked - ";
     // Validate hubs
     for (int hub : hubs) {
         if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
