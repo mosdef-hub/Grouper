@@ -77,13 +77,13 @@ class TestLibrariesFragmentations(BaseTest):
 
     # TODO: How to handle "CN", which has a UNIFAC Group GCPair(raw"[CX4;H3][NX3;H2]","CH3NH2"), but no ports
     # TODO: More failing molecules that I tried to test -NCC
-    unifac_fail_molecules = ["C(=O)N", "OCC(=O)N(C)C", "C(=O)N(C)C", "CN", "C[O-]", "CCC(=O)[O-]", "CCS(=O)(=O)[O-]", "CCC#N", "C(=O)[N-]",# bases]
+    unifac_fail_molecules = ["C(=O)N", "OCC(=O)N(C)C", "C(=O)N(C)C", "CN", "C[O-]", "CCC(=O)[O-]", "CCS(=O)(=O)[O-]", "CCC#N", "C(=O)[N-]"] # bases
     test_molecules = [ # NOTE that "C(=O)N", or formaldehyde doesn't work
         "CC", "CC(C)C", "CCC(C)(C)C", "CC(C)(C)C",# alkanes
         "CO", "OCC(O)CO", # alcohols
         "O=CO", "COC(C)=O", "OCCCC(=O)O", "CC(N)=O", "CNC(C)=O", # carboxyls/amides
         "CNC", "CNCNC",# amines
-        "C(F)(F)(F)F", "CCCCF",# fluorines
+        "FC(F)F", "NCCCCF",# fluorines
         "C1CCCCC1C","C1CCCC(C)C1C", "C1CCC(C)CC1C", "C1CC(C)CCC1C",# rings
         "CC1=C(C=C(C=C1[N+](=O)[O-])[N+](=O)[O-])[N+](=O)[O-]", "C1=CC=C(C=C1)C(=O)O",# phenyls
     ]
@@ -92,12 +92,14 @@ class TestLibrariesFragmentations(BaseTest):
         {"CH3OH":1}, {"OH (P)":2, "CH2":2, "CH":1, "OH (S)":1},
         {"HCOO":1}, {"CH3COO":1, "CH3":1}, {"CH2COO":1, "CH2":2, "OH (P)":1}, {"CONH2":1, "CH3":1}, {"CONHCH3":1, "CH3":1},
         {"CH3":1, "CH3NH":1}, {"CH2":1, "CH3NH":2},  # amines
+        {"CF3":1}, {"CH2NH2":1, "CH2":2, "CF":1}, # fluorines
         ]
     edgesList = [
         {("CH3","CH3"):1}, {("CH3","CH"):3}, {("CH3","CH2"):1, ("CH3","C"):3, ("CH2","C"):1}, {("C","CH3"):4},
         {}, {("OH (P)", "CH2"):2, ("OH (S)", "CH"):1, ("CH2", "CH"):2},
         {}, {("CH3COO", "CH3"):1}, {("CH2COO", "CH2"):1, ("CH2", "CH2"):1, ("CH2", "OH (P)"):1}, {("CONH2",  "CH3"):1}, {("CONHCH3", "CH3"):1},
         {("CH3", "CH3NH"):1}, {("CH2", "CH3NH"):2},  #amines
+        {}, {("CH2NH2","CH2"):1,("CH2", "CF"):1, ("CH2", "CH2"):1}# fluorines
     ]
 
     @pytest.fixture(scope="session")
