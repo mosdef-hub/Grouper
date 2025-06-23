@@ -64,7 +64,7 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("add_edge", &GroupGraph::addEdge,
             py::arg("src") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
             py::arg("dst") = std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType>{0, 0},
-            py::arg("order") = 1,
+            py::arg("order") = 1.,
             py::arg("strict") = true
         )
         .def("n_free_ports", &GroupGraph::numFreePorts)
@@ -124,7 +124,7 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("add_edge", &AtomGraph::addEdge,
             py::arg("src"),
             py::arg("dst"),
-            py::arg("order") = 1,
+            py::arg("order") = 1.,
             py::arg("validate") = true)
         .def("from_smiles", &AtomGraph::fromSmiles)
         .def("from_smarts", &AtomGraph::fromSmarts)

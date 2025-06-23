@@ -193,6 +193,21 @@ class TestGroupGraph(BaseTest):
         graph.add_edge((2, 1), (1, 1))
         assert (2, 1, 1, 1, 1) in graph.edges
 
+    def test_add_edge_bond_order(self):
+        graph = GroupGraph()
+        graph.add_node("type1", "C", [0, 0, 0, 0])
+        graph.add_node("type2", "C", [0, 0, 0, 0])
+        graph.add_node("type3", "C", [0, 0, 0, 0])
+
+        graph.add_edge((0, 0), (1, 0), 2)
+        assert (0, 0, 1, 0, 2) in graph.edges
+
+        graph.add_edge((2, 1), (1, 1), 1.5)
+        assert (2, 1, 1, 1, 1.5) in graph.edges
+
+        graph.add_edge((2, 2), (1, 2), 1)
+        assert (2, 2, 1, 2, 1) in graph.edges
+
     def test_add_edge_with_invalid_nodes(self):
         graph = GroupGraph()
         graph.add_node("node1", "C", [0, 0])
