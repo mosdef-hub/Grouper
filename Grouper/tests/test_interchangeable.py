@@ -165,3 +165,11 @@ class TestConversion(BaseTest):
             for gg in all_gGs:
                 s = gg.to_smiles()
                 assert smiles == s
+                
+    def test_aromatic_smiles(self):
+        smiles = "c1ccccc1"
+        node_defs = set()
+        node_defs.add(Group('ringC', '[cX3]', [0,0,0], "SMARTS"))
+        node_defs.add(Group('COOH', '[CX3](=[OX1])[O;H1]', [0], "SMARTS"))
+        gg = fragment(smiles, node_defs)[0]
+        assert gg.to_smiles() == smiles

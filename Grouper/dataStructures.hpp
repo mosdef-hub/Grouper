@@ -30,25 +30,25 @@ namespace std {
     }
 
     template <>
-    struct hash<std::tuple<int, int, unsigned int>> {
-        std::size_t operator()(const std::tuple<int, int, unsigned int>& t) const {
+    struct hash<std::tuple<int, int, double>> {
+        std::size_t operator()(const std::tuple<int, int, double>& t) const {
             std::size_t seed = 0;
             hash_combine(seed, std::hash<int>{}(std::get<0>(t)));
             hash_combine(seed, std::hash<int>{}(std::get<1>(t)));
-            hash_combine(seed, std::hash<unsigned int>{}(std::get<2>(t)));
+            hash_combine(seed, std::hash<double>{}(std::get<2>(t)));
             return seed;
         }
     };
 
     template <>
-    struct hash<std::tuple<int, int, int, int, unsigned int>> {
-        std::size_t operator()(const std::tuple<int, int, int, int, unsigned int>& t) const {
+    struct hash<std::tuple<int, int, int, int, double>> {
+        std::size_t operator()(const std::tuple<int, int, int, int, double>& t) const {
             std::size_t seed = 0;
             hash_combine(seed, std::hash<int>{}(std::get<0>(t)));
             hash_combine(seed, std::hash<int>{}(std::get<1>(t)));
             hash_combine(seed, std::hash<int>{}(std::get<2>(t)));
             hash_combine(seed, std::hash<int>{}(std::get<3>(t)));
-            hash_combine(seed, std::hash<unsigned int>{}(std::get<4>(t)));
+            hash_combine(seed, std::hash<double>{}(std::get<4>(t)));
             return seed;
         }
     };
@@ -96,7 +96,7 @@ public:
     };
 
     std::unordered_map<NodeIDType, Atom> nodes; ///< Map of node IDs to their respective nodes.
-    std::unordered_set<std::tuple<NodeIDType, NodeIDType, unsigned int>> edges; ///< Map of node IDs to their respective neighbors. (srcNodeID, dstNodeID, bondOrder)
+    std::unordered_set<std::tuple<NodeIDType, NodeIDType, double>> edges; ///< Map of node IDs to their respective neighbors. (srcNodeID, dstNodeID, bondOrder)
 
     AtomGraph();
     AtomGraph(const AtomGraph& other);
@@ -105,7 +105,7 @@ public:
 
     void addNode(const std::string& ntype = "", int valency = -1);
     void addNode(Atom atom);
-    void addEdge(NodeIDType src, NodeIDType dst, unsigned int order = 1, bool validate=true);
+    void addEdge(NodeIDType src, NodeIDType dst, double order = 1, bool validate=true);
     int getFreeValency(NodeIDType nid) const;
     std::string printGraph() const;
     std::vector<std::vector<NodeIDType>> nodeAut() const;
@@ -146,7 +146,7 @@ public:
 
     // Attributes
     std::unordered_map<NodeIDType, Group> nodes; ///< Map of node IDs to their respective nodes.
-    std::unordered_set<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>> edges; ///< List of edges connecting nodes. (srcNodeID, srcPort, dstNodeID, dstPort, bondOrder)
+    std::unordered_set<std::tuple<NodeIDType, PortType, NodeIDType, PortType, double>> edges; ///< List of edges connecting nodes. (srcNodeID, srcPort, dstNodeID, dstPort, bondOrder)
     std::unordered_map<std::string, std::vector<PortType>> nodetypes; ///< Map of node types to their respective ports.
     bool isCoarseGrained = false;
     std::unordered_set<std::pair<NodeIDType, PortType>> used_ports; // Fast lookup for used ports
@@ -168,7 +168,7 @@ public:
     bool addEdge(
         std::tuple<NodeIDType, PortType> fromNodePort,
         std::tuple<NodeIDType, PortType> toNodePort,
-        unsigned int bondOrder = 1,
+        double bondOrder = 1,
         bool verbose = false
     );
     int numFreePorts(NodeIDType nid) const;
@@ -255,7 +255,7 @@ namespace std {
             }
             for (const auto& edge : graph.edges) {
                 h ^= std::hash<std::tuple<GroupGraph::NodeIDType, GroupGraph::PortType,
-                                        GroupGraph::NodeIDType, GroupGraph::PortType, unsigned int>>{}(edge)
+                                        GroupGraph::NodeIDType, GroupGraph::PortType, double>>{}(edge)
                     + 0x9e3779b9 + (h << 6) + (h >> 2);
             }
             return h;
@@ -285,7 +285,7 @@ namespace std {
             //     }
             // }
             for(const auto& [src, dst, order] : graph.edges) {
-                h ^= std::hash<std::tuple<AtomGraph::NodeIDType, AtomGraph::NodeIDType, unsigned int>>{}(std::make_tuple(src, dst, order)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+                h ^= std::hash<std::tuple<AtomGraph::NodeIDType, AtomGraph::NodeIDType, double>>{}(std::make_tuple(src, dst, order)) + 0x9e3779b9 + (h << 6) + (h >> 2);
             }
 
             return h;

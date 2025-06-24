@@ -237,9 +237,7 @@ def _get_group_bonds(mol, group, latest_group_indices):
                 latest_group_indices[:-1], bondedAtomIndex
             )  # latest_group_indices[:-1] because we don't want to count group, which is already added to latest_group_indices
             if bonded_groupIndex != -1:
-                bond_order = int(
-                    bond.GetBondTypeAsDouble()
-                )  # NOTE: Since we have ints, aromatic 1.5 bonds are treated as single bonds
+                bond_order = bond.GetBondTypeAsDouble()
                 bonds.append(
                     (
                         (newest_groupIndex, i),

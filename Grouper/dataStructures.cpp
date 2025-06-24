@@ -119,8 +119,7 @@ void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGrap
     for (size_t i=0; i<mol->getNumBonds(); i++) {
         const auto& bond = mol->getBondWithIdx(i);
         double border = bond->getBondTypeAsDouble();
-        int borderInt = (int)border;
-        aG.addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), borderInt, validate);
+        aG.addEdge(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), border, validate);
     }
 }
 
@@ -200,7 +199,8 @@ void validateAtomisticAtomGraph (const AtomGraph atomGraph, const std::vector<in
         throw GrouperParseException("Invalid "+ patternType +": " + pattern + " provided");
     }
     // Validate connected molecules
-    std::vector<boost::shared_ptr<RDKit::ROMol>> moleculesVector = RDKit::MolOps::getMolFrags(*mol);
+    std::vector<std::vector<int>> moleculesVector;
+    RDKit::MolOps::getMolFrags(*mol, moleculesVector);
     if (moleculesVector.size()>1) {
         throw GrouperParseException("Invalid "+ patternType +": " + pattern + " with detached molecules.");
     }
@@ -560,7 +560,7 @@ void GroupGraph::addNode(Group group) {
     nodetypes[group.ntype] = group.hubs;
 }
 
-bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, unsigned int bondOrder, bool strict) {
+bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, double bondOrder, bool strict) {
     NodeIDType from = std::get<0>(fromNodePort);
     PortType fromPort = std::get<1>(fromNodePort);
     NodeIDType to = std::get<0>(toNodePort);
@@ -598,7 +598,7 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
         return false;
     }
 
-    const std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int> edge = std::make_tuple(from, fromPort, to, toPort, bondOrder);
+    const std::tuple<NodeIDType, PortType, NodeIDType, PortType, double> edge = std::make_tuple(from, fromPort, to, toPort, bondOrder);
     if (edges.count(edge) != 0) {
         if (strict) {
             throw std::invalid_argument("Edge already exists");
@@ -915,15 +915,20 @@ std::string GroupGraph::toSmiles() const {
     }
 
     // === Step 4: Add inter-subgraph (edge) bonds ===
-    for (const auto& [from, fromPort, to, toPort, bondOrder] : edges) {
+    std::unordered_map<double, RDKit::Bond::BondType> bondOrderMap;
+    bondOrderMap[1.0] = RDKit::Bond::BondType::SINGLE;
+    bondOrderMap[2.0] = RDKit::Bond::BondType::DOUBLE;
+    bondOrderMap[3.0] = RDKit::Bond::BondType::TRIPLE;
+    bondOrderMap[1.5] = RDKit::Bond::BondType::AROMATIC;
+    for (const auto &[from, fromPort, to, toPort, bondOrder] : edges)
+    {
         int fromAtom = nodePortToAtomIndex.at(from).at(fromPort);
         int toAtom   = nodePortToAtomIndex.at(to).at(toPort);
-
-        molecularGraph->addBond(fromAtom, toAtom, static_cast<RDKit::Bond::BondType>(bondOrder));
+        molecularGraph->addBond(fromAtom, toAtom, bondOrderMap[bondOrder]);
     }
 
     // === Step 5: Convert to SMILES and return ===
-    return RDKit::MolToSmiles(*molecularGraph, true);
+    return RDKit::MolToSmiles(*molecularGraph, true, false, -1, true, false);
 }
 
 
@@ -1021,7 +1026,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
             int atomIdx1 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getBeginAtomIdx()];
             int atomIdx2 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getEndAtomIdx()];
             // molecularGraph->addBond(atomIdx1, atomIdx2, newBond.getBondType());
-            unsigned int bondOrder = (*bond)->getBondTypeAsDouble();
+            double bondOrder = (*bond)->getBondTypeAsDouble();
             atomGraph->addEdge(atomIdx1, atomIdx2, bondOrder);
         }
     }
@@ -1034,7 +1039,7 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         PortType toPort = std::get<3>(edge);
         NodeIDType fromAtom = nodePortToAtomIndex[std::to_string(from)][fromPort];
         NodeIDType toAtom = nodePortToAtomIndex[std::to_string(to)][toPort];
-        unsigned int bondOrder = std::get<4>(edge);
+        double bondOrder = std::get<4>(edge);
         atomGraph->addEdge(fromAtom, toAtom, bondOrder);
     }
 
@@ -1168,7 +1173,7 @@ void GroupGraph::deserialize(const std::string& data) {
 void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
     std::unordered_map<NodeIDType, int> group_to_nauty;
     std::unordered_map<std::pair<NodeIDType, PortType>, int> port_to_nauty;
-    std::unordered_map<std::tuple<NodeIDType, PortType, NodeIDType, PortType, unsigned int>, int> edge_to_nauty;
+    std::unordered_map<std::tuple<NodeIDType, PortType, NodeIDType, PortType, double>, int> edge_to_nauty;
 
     int nodeIndex = 0;
 
@@ -1357,7 +1362,7 @@ void AtomGraph::addNode(Atom atom) {
     nodes[id] = atom;
 }
 
-void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, unsigned int order, bool validate) {
+void AtomGraph::addEdge(NodeIDType src, NodeIDType dst, double order, bool validate) {
     if (nodes.find(src) == nodes.end() || nodes.find(dst) == nodes.end())
     {
         if (nodes.find(src) == nodes.end()) {
@@ -1568,7 +1573,7 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
     int prevDepth = 0;
     int currentDepth = 0;
     NodeIDType currentNode = 0;
-    int bondOrder = 1;
+    double bondOrder = 1;
 
     for (size_t i = 0; i < smarts.length(); ++i) {
         char c = smarts[i];
@@ -1740,7 +1745,7 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
     std::stack<NodeIDType> nodeStack; // Stack to handle branching
     std::unordered_map<int, NodeIDType> ringClosures; // Map for ring closure indices
     NodeIDType lastNode = -1;
-    int bondOrder = 1; // Default to single bond
+    double bondOrder = 1; // Default to single bond
 
     for (size_t i = 0; i < smiles.size(); ++i) {
         char c = smiles[i];
@@ -1889,7 +1894,7 @@ std::string AtomGraph::printGraph() const {
         output << "    Atom " << entry.first << " (" << entry.second.ntype << ")" << " Valency: " << entry.second.valency << "\n";
     }
     output << "Edges (without duplication):\n";
-    std::unordered_set<std::tuple<NodeIDType, NodeIDType, unsigned int>> uniqueEdges;
+    std::unordered_set<std::tuple<NodeIDType, NodeIDType, double>> uniqueEdges;
     for (const auto& [src, dst, order] : edges) {
         if (uniqueEdges.find(std::make_tuple(src, dst, order)) == uniqueEdges.end()) {
             output << "    Edge: " << src << " <-> " << dst <<" Order: (" <<order<<")"<<"\n";
@@ -2129,3 +2134,4 @@ std::vector<AtomGraph::NodeIDType> AtomGraph::nodeOrbits() const {
 
     return orbits;
 }
+
