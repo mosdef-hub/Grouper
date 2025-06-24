@@ -852,7 +852,8 @@ std::string GroupGraph::printGraph() const {
 std::string GroupGraph::toSmiles() const {
     using AtomIndexMap = std::unordered_map<int, int>;
 
-    std::unique_ptr<RDKit::RWMol> molecularGraph(new RDKit::RWMol());
+    // Allocate molecular graph using smart pointer
+    auto molecularGraph = std::make_unique<RDKit::RWMol>();
 
     std::unordered_map<NodeIDType, std::unique_ptr<RDKit::ROMol>> subGraphs;
     std::unordered_map<NodeIDType, AtomIndexMap> nodePortToAtomIndex;
@@ -880,8 +881,8 @@ std::string GroupGraph::toSmiles() const {
 
         int localIndex = 0;
         for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom, ++localIndex) {
-            RDKit::Atom* newAtom = new RDKit::Atom(**atom);
-            molecularGraph->addAtom(newAtom, true);
+            // FIXED: Avoid manual memory allocation to prevent memory leaks
+            molecularGraph->addAtom(*atom, true);
 
             localToGlobal[localIndex] = globalAtomIndex;
 
