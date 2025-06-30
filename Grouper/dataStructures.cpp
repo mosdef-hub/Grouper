@@ -156,9 +156,6 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
     if (ntype.empty() && pattern.empty()) {
         throw std::invalid_argument("Either SMARTS or type must be provided");
     }
-    if (hubs.empty()) {
-        throw std::invalid_argument("Hubs must be provided");
-    }
     for (int hub : hubs) {
         if (hub < 0) {
             throw std::invalid_argument("Hub ID must be greater than or equal to 0");
@@ -541,9 +538,6 @@ void GroupGraph::addNode(Group group) {
     }
     if (group.pattern.empty()) {
         throw std::invalid_argument("Group pattern must be provided");
-    }
-    if (group.hubs.empty()) {
-        throw std::invalid_argument("Group hubs must be provided");
     }
     for (int hub : group.hubs) {
         if (hub < 0) {
