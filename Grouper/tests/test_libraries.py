@@ -89,7 +89,7 @@ class TestLibrariesFragmentations(BaseTest):
         "CNC", "CNCNC",# amines
         "FC(F)F", "NCCCCF",# fluorines
         "CC1CCCCC1", "CC1CCCCC1C", "CC1CCCC(C)C1", "CC1CCC(C)CC1",# rings
-        "Cc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-]", "c1ccc(cc1)C(=O)O",# phenyls
+        "Cc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-]", "'O=C(O)c1ccccc1'",# phenyls
     ]
     groupsList = [
         {"CH3":2}, {"CH":1, "CH3":3}, {"CH3":4, "CH2":1, "C":1}, {"CH3":4, "C":1}, # alkanes

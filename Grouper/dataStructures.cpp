@@ -177,9 +177,9 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
             if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
                 std::stringstream hubsStr;
                 for (const int hubnumber : hubs) {
-                    hubsStr << hub_number; // Append the integer followed by a space
+                    hubsStr << hubnumber; // Append the integer followed by a space
                 }
-                throw std::invalid_argument("Hub Index ["+ hubsStr + "] of " + std::to_string(hubs) + " is greater than the number of atoms in the group");
+                throw std::invalid_argument("Hub Index [" + hubsStr.str() + "] of " + std::to_string(hub) + " is greater than the number of atoms in the group");
             }
         }
     }

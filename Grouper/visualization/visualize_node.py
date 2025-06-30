@@ -61,14 +61,14 @@ def visualize_group_extension(
     # initialize SMARTS and SMILES objects for molecule
     # note, sanitize can sometimes improve the implicit/explicit hydrogens found in RDKit. Only turn on if you verify the SMARTS string is matched properly
     smarts_subgraph = Chem.MolFromSmiles(
-        group_extension.node.pattern, sanitize=sanitize_smiles
+        group_extension.group.pattern, sanitize=sanitize_smiles
     )
     if not smarts_subgraph:
-        raise ValueError(f"Could not parse SMARTS: {group_extension.node.patttern}")
+        raise ValueError(f"Could not parse SMARTS: {group_extension.group.patttern}")
     match_atoms = list(mol.GetSubstructMatch(smarts_subgraph))
     if not match_atoms:
         raise ValueError(
-            f"Could not find substructure match for node {group_extension.node.type} in SMARTS: {group_extension.extended_smarts}"
+            f"Could not find substructure match for node {group_extension.group.type} in SMARTS: {group_extension.extended_smarts}"
         )
 
     # identify atoms to highlight
