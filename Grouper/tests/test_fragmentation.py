@@ -1,4 +1,5 @@
 """Tests on fragmentation of a molecule into GroupGraph."""
+import pytest
 
 from Grouper import Group, GroupGraph
 from Grouper.fragmentation import (
@@ -10,6 +11,7 @@ from Grouper.fragmentation import (
     fragment,
 )
 from Grouper.tests.base_test import BaseTest
+from Grouper._Grouper import GrouperParseException
 
 
 class TestGeneralFragmentations(BaseTest):
@@ -166,13 +168,8 @@ class TestGeneralFragmentations(BaseTest):
 
         node_defs = set()
         smiles = "C==C"  # Invalid SMILES
-
-        try:
+        with pytest.raises(GrouperParseException):
             fragment(smiles, node_defs)
-        except Exception as e:
-            assert isinstance(
-                e, ValueError
-            )  # or the appropriate exception class for invalid SMILES
 
     def test_specific_graph_alkene(self):
         node_defs = set()

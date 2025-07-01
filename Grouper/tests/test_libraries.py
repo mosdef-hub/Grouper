@@ -78,16 +78,10 @@ class TestLibrariesFragmentations(BaseTest):
     # TODO: How to handle "CN", which has a UNIFAC Group GCPair(raw"[CX4;H3][NX3;H2]","CH3NH2"), but no ports
     # TODO: More failing molecules that I tried to test -NCC
     unifac_fail_molecules = [
-        "C(=O)N",
-        "OCC(=O)N(C)C",
-        "C(=O)N(C)C",
-        "CN",
         "C[O-]",
         "CCC(=O)[O-]",
         "CCS(=O)(=O)[O-]",
-        "CCC#N",
         "C(=O)[N-]",
-        "CO",
     ]
     test_molecules = [  # NOTE that "C(=O)N", or formaldehyde doesn't work
         "CC",
@@ -98,6 +92,7 @@ class TestLibrariesFragmentations(BaseTest):
         "O=CO",
         "COC(C)=O",
         "OCCCC(=O)O",
+        "NC=O",
         "CC(N)=O",
         "CNC(C)=O",  # carboxyls/amides
         "CNC",
@@ -110,6 +105,11 @@ class TestLibrariesFragmentations(BaseTest):
         "CC1CCC(C)CC1",  # rings
         "Cc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-]",
         "O=C(O)c1ccccc1",  # phenyls
+        "CN(C)C(=O)CO", # failing molecules
+        "CN(C)C=O",
+        "CN",
+        "CCC#N",
+        "CO",
     ]
     groupsList = [
         {"CH3": 2},
@@ -120,6 +120,7 @@ class TestLibrariesFragmentations(BaseTest):
         {"HCOO": 1},
         {"CH3COO": 1, "CH3": 1},
         {"CH2COO": 1, "CH2": 2, "OH (P)": 1},
+        {'CONH2': 1},
         {"CONH2": 1, "CH3": 1},
         {"CONHCH3": 1, "CH3": 1},  # carboxyl/amides
         {"CH3": 1, "CH3NH": 1},
@@ -132,6 +133,8 @@ class TestLibrariesFragmentations(BaseTest):
         {"CY-CH2": 4, "CH3": 2, "CY-CH": 2},  # rings
         {"ACCH3": 1, "ACH": 2, "ACNO2": 3},
         {"ACH": 5, "AC": 1, "COOH": 1},  # phenyl groups
+        {'CH2CO': 1, 'CH3': 1, 'CH3N': 1, 'OH (P)': 1}, 
+        {'DMF': 1}, {'CH3NH2': 1}, {'CH2CN': 1, 'CH3': 1}, {'CH3OH': 1},# failing molecules
     ]
     edgesList = [
         {("CH3", "CH3"): 1},
@@ -142,6 +145,7 @@ class TestLibrariesFragmentations(BaseTest):
         {},
         {("CH3COO", "CH3"): 1},
         {("CH2COO", "CH2"): 1, ("CH2", "CH2"): 1, ("CH2", "OH (P)"): 1},
+        {},
         {("CONH2", "CH3"): 1},
         {("CONHCH3", "CH3"): 1},  # carbxoyls/amides
         {("CH3", "CH3NH"): 1},
@@ -159,6 +163,7 @@ class TestLibrariesFragmentations(BaseTest):
         {("CY-CH2", "CY-CH2"): 2, ("CH3", "CY-CH"): 2, ("CY-CH2", "CY-CH"): 4},  # rings
         {("ACCH3", "ACNO2"): 2, ("ACNO2", "ACH"): 4},
         {("ACH", "ACH"): 4, ("AC", "ACH"): 2, ("AC", "COOH"): 1},  # phenyl groups
+        {('CH2CO','OH (P)'): 1, ('CH2CO', 'CH3N'): 1, ('CH3N', "CH3"):1}, {}, {}, {('CH2CN', 'CH3'): 1}, {},  # failing molecules
     ]
 
     @pytest.fixture(scope="session")

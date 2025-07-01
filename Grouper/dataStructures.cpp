@@ -180,9 +180,9 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
             if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
                 std::stringstream hubsStr;
                 for (const int hubnumber : hubs) {
-                    hubsStr << hub_number; // Append the integer followed by a space
+                    hubsStr << hubnumber; // Append the integer followed by a space
                 }
-                throw std::invalid_argument("Hub Index ["+ hubsStr + "] of " + std::to_string(hubs) + " is greater than the number of atoms in the group");
+                throw std::invalid_argument("Hub Index ["+ hubsStr.str() + "] of " + std::to_string(hub) + " is greater than the number of atoms in the group");
             }
         }
     }
@@ -497,7 +497,7 @@ void GroupGraph::addNode(
         throw std::invalid_argument("Group type must be provided");
     }
     // Case 0: Group type, pattern, and hubs are provided
-    if (!ntype.empty() && !pattern.empty() && !hubs.empty()) {
+    if (!ntype.empty() && !pattern.empty()) {
         // Error handling
         for (int hub : hubs) {
             if (hub < 0) {
@@ -514,7 +514,7 @@ void GroupGraph::addNode(
         nodetypes[ntype] = hubs;
     }
     // Case 1: Group type (ntype) is provided
-    else if (!ntype.empty() && pattern.empty() && hubs.empty()) {
+    else if (!ntype.empty() && pattern.empty()) {
         if (nodetypes.find(ntype) == nodetypes.end()) {
             throw std::invalid_argument("Group type does not exist yet, please provide SMARTS and hubs");
         }
@@ -530,11 +530,12 @@ void GroupGraph::addNode(
         nodes[id] = Group(ntype, pattern, hubs, patternType);
     }
     else {
-        std::string hubs_str = "";
+        std::string hubs_str = "[";
         for (int hub : hubs) {
             hubs_str += std::to_string(hub) + " ";
         }
-        throw std::invalid_argument("Invalid input for add_node ntype: " + ntype + " SMARTS/SMILES: " + pattern + " hubs: " + hubs_str);
+        hubs_str += "]";
+        throw std::invalid_argument("Invalid input for add_node -- ntype: " + ntype + " pattern: " + pattern + " hubs: " + hubs_str);
     }
 }
 

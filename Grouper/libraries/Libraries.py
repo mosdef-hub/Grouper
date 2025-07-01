@@ -354,9 +354,9 @@ class Unifac(BasisSet):
             GroupExtension(Group('NEP', '[OX1H0]=[CH0X3;R][NX3H0;R][CH2]', [1,2,3], 'SMARTS'), self.doi, 'NEP', None),
             GroupExtension(Group('NIPP', '[OX1H0;!R]=[CX3H0;R][NX3H0;R][C;!R]', [1,2,3,3,3], 'SMARTS'), self.doi, 'O=CNC', None),
             GroupExtension(Group('NTBP', '[OX1H0;!R]=[CH0X3;R][NX3H0;R][CH0;!R]', [0,1,2,2,2], 'SMARTS'), self.doi, 'O=CNC', None),
-            GroupExtension(Group('CONH2', '[CX3H0](=[OX1H0])[NX3H2]', [0], 'SMARTS'), self.doi, 'C(=O)N', None),
-            GroupExtension(Group('CONHCH3', '[OX1H0;!R]=[CX3H0;!R][NH1X3;!R][CH3;!R]', [1], 'SMARTS'), self.doi, 'C(=O)NC', None),
-            GroupExtension(Group('CONHCH2', '[CH2X4;!R][NH1X3;!R][CX3H0;!R]=[OX1H0;!R]', [0,2], 'SMARTS'), self.doi, 'CNC(=O)', None),
+            GroupExtension(Group('CONH2', '[CX3](=[OX1H0])[NX3H2]', [0], 'SMARTS'), self.doi, 'C(=O)N', None),
+            GroupExtension(Group('CONHCH3', '[OX1H0;!R]=[CX3;!R][NH1X3;!R][CH3;!R]', [1], 'SMARTS'), self.doi, 'C(=O)NC', None),
+            GroupExtension(Group('CONHCH2', '[CH2X4;!R][NH1X3;!R][CX3;!R]=[OX1H0;!R]', [0,2], 'SMARTS'), self.doi, 'CNC(=O)', None),
         ]
 
 
