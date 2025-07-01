@@ -140,116 +140,47 @@ class Joback(BasisSet):
         self.doi = "https://doi.org/10.1021/i200013a024"
         ref = "https://github.com/ClapeyronThermo/GCIdentifier.jl/tree/main/src/database/Joback.jl"
         self.group_traces = [
-            GroupExtension(Group("-CH3", "C", [0]), "", "[CX4H3]", None),
-            GroupExtension(Group("-CH2-", "C", [0, 0]), "", "[!R;CX4H2]", None),
-            GroupExtension(Group(">CH-", "C", [0, 0, 0]), "", "[!R;CX4H]", None),
-            GroupExtension(Group(">C<", "C", [0, 0, 0, 0]), "", "[!R;CX4H0]", None),
-            GroupExtension(Group("CH2=CH-", "C=C", [0]), "", "[CX3H2][CX3H1]", None),
-            GroupExtension(Group("-CH=CH-", "C=C", [0, 1]), "", "[CX3H1][CX3H1]", None),
-            GroupExtension(
-                Group("=C<", "C", [0, 0, 0]),
-                self.doi,
-                "[$([!R;#6X3H0]);!$([!R;#6X3H0]=[#8])]",
-                None,
-            ),
-            GroupExtension(Group("=C=", "C", [0, 0]), self.doi, "[$([CX2H0](=*)=*)]", None),
-            GroupExtension(Group("CH", "C", [0]), self.doi, "[$([CX2H1]#[!#7])]", None),
-            GroupExtension(Group("C", "C", [0, 0]), self.doi, "[$([CX2H0]#[!#7])]", None),
-            GroupExtension(Group("ring-CH2-", "C", [0, 0]), self.doi, "[R;CX4H2]", None),
-            GroupExtension(Group("ring>CH-", "C", [0, 0, 0]), self.doi, "[R;CX4H]", None),
-            GroupExtension(Group("ring>C<", "C", [0, 0, 0, 0]), self.doi, "[R;CX4H0]", None),
-            GroupExtension(
-                Group("ring=CH-", "C", [0, 0]), self.doi, "[R;CX3H1,cX3H1]", None
-            ),
-            GroupExtension(
-                Group("ring=C<", "C", [0, 0, 0]),
-                self.doi,
-                "[$([R;#6X3H0]);!$([R;#6X3H0]=[#8])]",
-                None,
-            ),
-            GroupExtension(Group("-F", "F", [0]), self.doi, "[F;X1]", None),
-            GroupExtension(Group("-Cl", "[Cl]", [0], "SMARTS"), self.doi, "[Cl;X1]", None),
-            GroupExtension(Group("-Br", "[Br]", [0], "SMARTS"), self.doi, "[Br;X1]", None),
-            GroupExtension(Group("-I", "I", [0]), self.doi, "[I;X1]", None),
-            GroupExtension(
-                Group("-OH (alcohol)", "O", [0]),
-                self.doi,
-                "[OX2H;!$([OX2H]-[#6]=[O]);!$([OX2H]-a)]",
-                None,
-            ),
-            GroupExtension(
-                Group("-OH (phenol)", "O", [0]), self.doi, "[O;H1;$(O-!@c)]", None
-            ),
-            GroupExtension(
-                Group("-O- (non-ring)", "O", [0, 0]),
-                self.doi,
-                "[OX2H0;!R;!$([OX2H0]-[#6]=[#8])]",
-                None,
-            ),
-            GroupExtension(
-                Group("-O- (ring)", "O", [0, 0]),
-                self.doi,
-                "[#8X2H0;R;!$([#8X2H0]~[#6]=[#8])]",
-                None,
-            ),
-            GroupExtension(
-                Group(">C=O (non-ring)", "C=O", [0, 0]),
-                self.doi,
-                "[$([CX3H0](=[OX1]));!$([CX3](=[OX1])-[OX2]);!R]=O",
-                None,
-            ),
-            GroupExtension(
-                Group(">C=O (ring)", "C=O", [0, 0]),
-                self.doi,
-                "[$([#6X3H0](=[OX1]));!$([#6X3](=[#8X1])~[#8X2]);R]=O",
-                None,
-            ),
-            GroupExtension(
-                Group("O=CH- (aldehyde)", "O=C", [1]), self.doi, "[CH;D2](=O)", None
-            ),
-            GroupExtension(
-                Group("-COOH (acid)", "C(=O)O", [0]), self.doi, "[OX2H]-[C]=O", None
-            ),
-            GroupExtension(
-                Group("-COO- (ester)", "C(=O)O", [0, 2]),
-                self.doi,
-                "[#6X3H0;!$([#6X3H0](~O)(~O)(~O))](=[#8X1])[#8X2H0]",
-                None,
-            ),
-            GroupExtension(
-                Group("=O (other than above)", "O", [0]),
-                "",
-               "[OX1H0;!$([OX1H0]~[#6X3]);!$([OX1H0]~[#7X3]~[#8])]",
-                None,
-            ),
-            GroupExtension(Group("-NH2", "N", [0]), self.doi, "[NX3H2]", None),
-            GroupExtension(
-                Group(">NH (non-ring)", "N", [0, 0]), self.doi, "[NX3H1;!R]", None
-            ),
-            GroupExtension(Group(">NH (ring)", "N", [0, 0]), self.doi, "[#7X3H1;R]", None),
-            GroupExtension(
-                Group(">N- (non-ring)", "N", [0, 0, 0]),
-                self.doi,
-                "[#7X3H0;!$([#7](~O)~O)]",
-                None,
-            ),
-            GroupExtension(
-                Group("-N= (non-ring)", "N", [0, 0]), self.doi, "[#7X2H0;!R]", None
-            ),
-            GroupExtension(Group("-N= (ring)", "N", [0, 0]), self.doi, "[#7X2H0;R]", None),
-            GroupExtension(Group("=NH", "N", [0]), self.doi, "[#7X2H1]", None),
-            GroupExtension(Group("-CN", "CN", [0]), self.doi, "[#6X2]#[#7X1H0]", None),
-            GroupExtension(
-                Group("-NO2", "[N+]([O-])[O]", [0], "SMARTS"),
-                self.doi,
-                "[$([#7X3,#7X3+][!#8])](=[O])~[O-]",
-                None,
-            ),
-            GroupExtension(Group("-SH", "S", [0]), self.doi, "[SX2H]", None),
-            GroupExtension(
-                Group("-S- (non-ring)", "S", [0, 0]), self.doi, "[#16X2H0;!R]", None
-            ),
-            GroupExtension(Group("-S- (ring)", "S", [0, 0]), self.doi, "[#16X2H0;R]", None),
+            GroupExtension(Group('-CH3', '[CX4H3]', [0], 'SMARTS'), self.doi, 'C', None),
+            GroupExtension(Group('-CH2-', '[!R;CX4H2]', [0,0], 'SMARTS'), self.doi, 'C', None),
+            GroupExtension(Group('>CH-', '[!R;CX4H]', [0,0,0], 'SMARTS'), self.doi, 'C', None),
+            GroupExtension(Group('>C<', '[!R;CX4H0]', [0,0,0,0], 'SMARTS'), self.doi, 'C', None),
+            GroupExtension(Group('CH2=CH-', '[CX3H2][CX3H1]', [1], 'SMARTS'), self.doi, 'C=C', None),
+            GroupExtension(Group('-CH=CH-', '[CX3H1][CX3H1]', [0,1], 'SMARTS'), self.doi, 'C=C', None),
+            GroupExtension(Group('=C<', '[$([!R;#6X3H0]);!$([!R;#6X3H0]=[#8])]', [0,0,0], 'SMARTS'), self.doi, 'C', None),
+            GroupExtension(Group('=C=', '[$([CX2H0](=*)=*)]', [0,0], 'SMARTS'), self.doi, 'C', None),
+            GroupExtension(Group('CH', '[$([CX2H1]#[!#7])]', [0], 'SMARTS'), self.doi, 'C#', None),
+            GroupExtension(Group('C', '[$([CX2H0]#[!#7])]', [0,0], 'SMARTS'), self.doi, 'C#', None),
+            GroupExtension(Group('ring-CH2-', '[R;CX4H2]', [0,0], 'SMARTS'), self.doi, 'Cring', None),
+            GroupExtension(Group('ring>CH-', '[R;CX4H]', [0,0,0], 'SMARTS'), self.doi, 'Cring', None),
+            GroupExtension(Group('ring>C<', '[R;CX4H0]', [0,0,0,0], 'SMARTS'), self.doi, 'Cring', None),
+            GroupExtension(Group('ring=CH-', '[R;CX3H1,cX3H1]', [0,0], 'SMARTS'), self.doi, 'Cring', None),
+            GroupExtension(Group('ring=C<', '[$([R;#6X3H0]);!$([R;#6X3H0]=[#8])]', [0,0,0], 'SMARTS'), self.doi, 'Cring', None),
+            GroupExtension(Group('-F', '[F;X1]', [0], 'SMARTS'), self.doi, 'F', None),
+            GroupExtension(Group('-Cl', '[Cl;X1]', [0], 'SMARTS'), self.doi, 'Cl', None),
+            GroupExtension(Group('-Br', '[Br;X1]', [0], 'SMARTS'), self.doi, 'Br', None),
+            GroupExtension(Group('-I', '[I;X1]', [0], 'SMARTS'), self.doi, 'I', None),
+            GroupExtension(Group('-OH (alcohol)', '[OX2H;!$([OX2H]-[#6]=[O]);!$([OX2H]-a)]', [0], 'SMARTS'), self.doi, 'O', None),
+            GroupExtension(Group('-OH (phenol)', '[O;H1;$(O-!@c)]', [0], 'SMARTS'), self.doi, 'O', None),
+            GroupExtension(Group('-O- (non-ring)', '[OX2H0;!R;!$([OX2H0]-[#6]=[#8])]', [0], 'SMARTS'), self.doi, 'O', None),
+            GroupExtension(Group('-O- (ring)', '[#8X2H0;R;!$([#8X2H0]~[#6]=[#8])]', [0,0], 'SMARTS'), self.doi, 'Oring', None),
+            GroupExtension(Group('>C=O (non-ring)', '[$([CX3H0](=[OX1]));!$([CX3](=[OX1])-[OX2]);!R]=O', [0,0], 'SMARTS'), self.doi, 'C=O', None),
+            GroupExtension(Group('>C=O (ring)', '[$([#6X3H0](=[OX1]));!$([#6X3](=[#8X1])~[#8X2]);R]=O', [0,0], 'SMARTS'), self.doi, 'C=O', None),
+            GroupExtension(Group('O=CH- (aldehyde)', '[CH;D2](=O)', [0], 'SMARTS'), self.doi, 'C=O', None),
+            GroupExtension(Group('-COOH (acid)', '[OX2H]-[C]=O', [1], 'SMARTS'), self.doi, 'C(=O)O', None),
+            GroupExtension(Group('-COO- (ester)', '[#6X3H0;!$([#6X3H0](~O)(~O)(~O))](=[#8X1])[#8X2H0]', [0,2], 'SMARTS'), self.doi, 'C(=O)O', None),
+            GroupExtension(Group('=O (other than above)', '[OX1H0;!$([OX1H0]~[#6X3]);!$([OX1H0]~[#7X3]~[#8])]', [0], 'SMARTS'), self.doi, 'O', None),
+            GroupExtension(Group('-NH2', '[NX3H2]', [0], 'SMARTS'), self.doi, 'N', None),
+            GroupExtension(Group('>NH (non-ring)', '[NX3H1;!R]', [0,0], 'SMARTS'), self.doi, 'N', None),
+            GroupExtension(Group('>NH (ring)', '[#7X3H1;R]', [0,0], 'SMARTS'), self.doi, 'Nring', None),
+            GroupExtension(Group('>N- (non-ring)', '[#7X3H0;!$([#7](~O)~O)]', [0,0,0], 'SMARTS'), self.doi, 'N', None),
+            GroupExtension(Group('-N= (non-ring)', '[#7X2H0;!R]', [0,0], 'SMARTS'), self.doi, 'N', None),
+            GroupExtension(Group('-N= (ring)', '[#7X2H0;R]', [0,0], 'SMARTS'), self.doi, 'Nring', None),
+            GroupExtension(Group('=NH', '[#7X2H1]', [0], 'SMARTS'), self.doi, 'N', None),
+            GroupExtension(Group('-CN', '[#6X2]#[#7X1H0]', [0], 'SMARTS'), self.doi, 'CN', None),
+            GroupExtension(Group('-NO2', '[$([#7X3,#7X3+][!#8])](=[O])[O-]', [0], 'SMARTS'), self.doi, 'N(=O)O', None),
+            GroupExtension(Group('-SH', '[SX2H]', [0], 'SMARTS'), self.doi, 'S', None),
+            GroupExtension(Group('-S- (non-ring)', '[#16X2H0;!R]', [0,0], 'SMARTS'), self.doi, 'S', None),
+            GroupExtension(Group('-S- (ring)', '[#16X2H0;R]', [0,0], 'SMARTS'), self.doi, 'Sring', None),
         ]
 
 

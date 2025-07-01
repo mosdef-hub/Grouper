@@ -50,9 +50,9 @@ class TestLibraries(BaseTest):
     def test_query_group(self):
         library = Libraries["joback"]()
         nt = library.query_groups(
-            {"extended_smarts": "[$([!R;#6X3H0]);!$([!R;#6X3H0]=[#8])]"}
+            {"extended_smarts": "I"}
         )[0]
-        assert nt.group == Group("=C<", "C", [0, 0, 0])
+        assert nt.group == Group('-I', '[I;X1]', [0], 'SMARTS')
 
     def test_list_groups(self):
         library = Libraries["joback"]()
