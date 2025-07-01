@@ -13,7 +13,9 @@ import rdkit.Chem.Draw
 from Grouper import Group
 
 # Declaring namedtuple for defining adding groups and their SMARTS to a library.
+# Declaring namedtuple for defining adding groups and their SMARTS to a library.
 GroupExtension = namedtuple(
+    "GroupExtension", ["group", "doi", "extended_smarts", "priority"]
     "GroupExtension", ["group", "doi", "extended_smarts", "priority"]
 )
 
@@ -23,15 +25,18 @@ class BasisSet(object):
 
     Attributes:
         group_traces_ (list): A list of GroupExtension objects representing the groups in the library.
+        group_traces_ (list): A list of GroupExtension objects representing the groups in the library.
     """
 
     def __init__(self):
         """Initialize an empty BasisSet."""
         self.group_traces_ = []
+        self.group_traces_ = []
 
     def __repr__(self):
         """Return a string representation of the BasisSet."""
         init_message = (
+            f"{self.__class__.__name__} has {len(self.group_traces_)} unique groups."
             f"{self.__class__.__name__} has {len(self.group_traces_)} unique groups."
         )
         if self.doi and self.ref:
@@ -43,10 +48,14 @@ class BasisSet(object):
 
     def add_group(
         self, group: Group, doi: str = None, smarts: str = None, priority: int = None
+    def add_group(
+        self, group: Group, doi: str = None, smarts: str = None, priority: int = None
     ):
+        """Add a group to the library.
         """Add a group to the library.
 
         Args:
+            group (Group): The chemical group to add.
             group (Group): The chemical group to add.
             doi (str, optional): DOI reference for the group. Defaults to None.
             smarts (str, optional): SMARTS pattern for the group. Defaults to None.
@@ -54,7 +63,11 @@ class BasisSet(object):
         """
         trace = GroupExtension(group, doi, smarts, priority)
         self.group_traces_.append(trace)
+        trace = GroupExtension(group, doi, smarts, priority)
+        self.group_traces_.append(trace)
 
+    def query_groups(self, query: Dict[str, Union[str, int]]):
+        """Query the library for groups that match the query.
     def query_groups(self, query: Dict[str, Union[str, int]]):
         """Query the library for groups that match the query.
 
@@ -63,7 +76,13 @@ class BasisSet(object):
 
         Returns:
             list: A list of groups that match the query.
+            list: A list of groups that match the query.
         """
+        matched_groups = []
+        for group in self.group_traces:
+            if any([getattr(group, var) == value for var, value in query.items()]):
+                matched_groups.append(group)
+        return matched_groups
         matched_groups = []
         for group in self.group_traces:
             if any([getattr(group, var) == value for var, value in query.items()]):
@@ -72,10 +91,15 @@ class BasisSet(object):
 
     def get_groups(self):
         """Return an iterator of the groups in the library.
+    def get_groups(self):
+        """Return an iterator of the groups in the library.
 
         Yields:
             Group: The next group in the library.
+            Group: The next group in the library.
         """
+        for trace in self.group_traces:
+            yield trace.group
         for trace in self.group_traces:
             yield trace.group
 
@@ -88,6 +112,8 @@ class BasisSet(object):
         mols = []
         for group in self.get_groups():
             mol = rdkit.Chem.MolFromSmarts(group.pattern)
+        for group in self.get_groups():
+            mol = rdkit.Chem.MolFromSmarts(group.pattern)
             if mol:
                 mols.append(mol)
         return rdkit.Chem.Draw.MolsToGridImage(
@@ -95,13 +121,20 @@ class BasisSet(object):
             molsPerRow=10,
             subImgSize=(200, 200),
             legends=[group.type for group in self.get_groups()],
+            legends=[group.type for group in self.get_groups()],
         )
 
     @property
     def group_traces(self):
         """Get the list of group traces."""
         return self.group_traces_
+    def group_traces(self):
+        """Get the list of group traces."""
+        return self.group_traces_
 
+    @group_traces.setter
+    def group_traces(self, value):
+        """Set the list of group traces.
     @group_traces.setter
     def group_traces(self, value):
         """Set the list of group traces.
@@ -110,14 +143,19 @@ class BasisSet(object):
             value (list): A list of GroupExtension objects.
         """
         self.group_traces_ = value
+        self.group_traces_ = value
 
     @property
+    def n_groups(self):
+        """Get the number of groups in the library.
     def n_groups(self):
         """Get the number of groups in the library.
 
         Returns:
             int: The number of groups.
+            int: The number of groups.
         """
+        return len(self.group_traces_)
         return len(self.group_traces_)
 
 
@@ -128,6 +166,7 @@ class Joback(BasisSet):
     """
 
     def __init__(self):
+        """Initialize the Joback library with predefined groups."""
         """Initialize the Joback library with predefined groups."""
         super().__init__()
         self.doi = "https://doi.org/10.1021/i200013a024"
@@ -141,69 +180,71 @@ class Joback(BasisSet):
             GroupExtension(Group("-CH=CH-", "C=C", [0, 1]), "", "[CX3H1][CX3H1]", None),
             GroupExtension(
                 Group("=C<", "C", [0, 0, 0]),
-                "",
+                doi,
                 "[$([!R;#6X3H0]);!$([!R;#6X3H0]=[#8])]",
                 None,
             ),
-            GroupExtension(Group("=C=", "C", [0, 0]), "", "[$([CX2H0](=*)=*)]", None),
-            GroupExtension(Group("CH", "C", [0]), "", "[$([CX2H1]#[!#7])]", None),
-            GroupExtension(Group("C", "C", [0, 0]), "", "[$([CX2H0]#[!#7])]", None),
-            GroupExtension(Group("ring-CH2-", "C", [0, 0]), "", "[R;CX4H2]", None),
-            GroupExtension(Group("ring>CH-", "C", [0, 0, 0]), "", "[R;CX4H]", None),
-            GroupExtension(Group("ring>C<", "C", [0, 0, 0, 0]), "", "[R;CX4H0]", None),
-            GroupExtension(Group("ring=CH-", "C", [0, 0]), "", "[R;CX3H1,cX3H1]", None),
+            GroupExtension(Group("=C=", "C", [0, 0]), doi, "[$([CX2H0](=*)=*)]", None),
+            GroupExtension(Group("CH", "C", [0]), doi, "[$([CX2H1]#[!#7])]", None),
+            GroupExtension(Group("C", "C", [0, 0]), doi, "[$([CX2H0]#[!#7])]", None),
+            GroupExtension(Group("ring-CH2-", "C", [0, 0]), doi, "[R;CX4H2]", None),
+            GroupExtension(Group("ring>CH-", "C", [0, 0, 0]), doi, "[R;CX4H]", None),
+            GroupExtension(Group("ring>C<", "C", [0, 0, 0, 0]), doi, "[R;CX4H0]", None),
+            GroupExtension(
+                Group("ring=CH-", "C", [0, 0]), doi, "[R;CX3H1,cX3H1]", None
+            ),
             GroupExtension(
                 Group("ring=C<", "C", [0, 0, 0]),
-                "",
+                doi,
                 "[$([R;#6X3H0]);!$([R;#6X3H0]=[#8])]",
                 None,
             ),
-            GroupExtension(Group("-F", "F", [0]), "", "[F;X1]", None),
-            GroupExtension(Group("-Cl", "[Cl]", [0], "SMARTS"), "", "[Cl;X1]", None),
-            GroupExtension(Group("-Br", "[Br]", [0], "SMARTS"), "", "[Br;X1]", None),
-            GroupExtension(Group("-I", "I", [0]), "", "[I;X1]", None),
+            GroupExtension(Group("-F", "F", [0]), doi, "[F;X1]", None),
+            GroupExtension(Group("-Cl", "[Cl]", [0], "SMARTS"), doi, "[Cl;X1]", None),
+            GroupExtension(Group("-Br", "[Br]", [0], "SMARTS"), doi, "[Br;X1]", None),
+            GroupExtension(Group("-I", "I", [0]), doi, "[I;X1]", None),
             GroupExtension(
                 Group("-OH (alcohol)", "O", [0]),
-                "",
+                doi,
                 "[OX2H;!$([OX2H]-[#6]=[O]);!$([OX2H]-a)]",
                 None,
             ),
             GroupExtension(
-                Group("-OH (phenol)", "O", [0]), "", "[O;H1;$(O-!@c)]", None
+                Group("-OH (phenol)", "O", [0]), doi, "[O;H1;$(O-!@c)]", None
             ),
             GroupExtension(
                 Group("-O- (non-ring)", "O", [0, 0]),
-                "",
+                doi,
                 "[OX2H0;!R;!$([OX2H0]-[#6]=[#8])]",
                 None,
             ),
             GroupExtension(
                 Group("-O- (ring)", "O", [0, 0]),
-                "",
+                doi,
                 "[#8X2H0;R;!$([#8X2H0]~[#6]=[#8])]",
                 None,
             ),
             GroupExtension(
                 Group(">C=O (non-ring)", "C=O", [0, 0]),
-                "",
+                doi,
                 "[$([CX3H0](=[OX1]));!$([CX3](=[OX1])-[OX2]);!R]=O",
                 None,
             ),
             GroupExtension(
                 Group(">C=O (ring)", "C=O", [0, 0]),
-                "",
+                doi,
                 "[$([#6X3H0](=[OX1]));!$([#6X3](=[#8X1])~[#8X2]);R]=O",
                 None,
             ),
             GroupExtension(
-                Group("O=CH- (aldehyde)", "O=C", [1]), "", "[CH;D2](=O)", None
+                Group("O=CH- (aldehyde)", "O=C", [1]), doi, "[CH;D2](=O)", None
             ),
             GroupExtension(
-                Group("-COOH (acid)", "C(=O)O", [0]), "", "[OX2H]-[C]=O", None
+                Group("-COOH (acid)", "C(=O)O", [0]), doi, "[OX2H]-[C]=O", None
             ),
             GroupExtension(
                 Group("-COO- (ester)", "C(=O)O", [0, 2]),
-                "",
+                doi,
                 "[#6X3H0;!$([#6X3H0](~O)(~O)(~O))](=[#8X1])[#8X2H0]",
                 None,
             ),
@@ -213,34 +254,34 @@ class Joback(BasisSet):
                "[OX1H0;!$([OX1H0]~[#6X3]);!$([OX1H0]~[#7X3]~[#8])]",
                 None,
             ),
-            GroupExtension(Group("-NH2", "N", [0]), "", "[NX3H2]", None),
+            GroupExtension(Group("-NH2", "N", [0]), doi, "[NX3H2]", None),
             GroupExtension(
-                Group(">NH (non-ring)", "N", [0, 0]), "", "[NX3H1;!R]", None
+                Group(">NH (non-ring)", "N", [0, 0]), doi, "[NX3H1;!R]", None
             ),
-            GroupExtension(Group(">NH (ring)", "N", [0, 0]), "", "[#7X3H1;R]", None),
+            GroupExtension(Group(">NH (ring)", "N", [0, 0]), doi, "[#7X3H1;R]", None),
             GroupExtension(
                 Group(">N- (non-ring)", "N", [0, 0, 0]),
-                "",
+                doi,
                 "[#7X3H0;!$([#7](~O)~O)]",
                 None,
             ),
             GroupExtension(
-                Group("-N= (non-ring)", "N", [0, 0]), "", "[#7X2H0;!R]", None
+                Group("-N= (non-ring)", "N", [0, 0]), doi, "[#7X2H0;!R]", None
             ),
-            GroupExtension(Group("-N= (ring)", "N", [0, 0]), "", "[#7X2H0;R]", None),
-            GroupExtension(Group("=NH", "N", [0]), "", "[#7X2H1]", None),
-            GroupExtension(Group("-CN", "CN", [0]), "", "[#6X2]#[#7X1H0]", None),
+            GroupExtension(Group("-N= (ring)", "N", [0, 0]), doi, "[#7X2H0;R]", None),
+            GroupExtension(Group("=NH", "N", [0]), doi, "[#7X2H1]", None),
+            GroupExtension(Group("-CN", "CN", [0]), doi, "[#6X2]#[#7X1H0]", None),
             GroupExtension(
                 Group("-NO2", "[N+]([O-])[O]", [0], "SMARTS"),
-                "",
+                doi,
                 "[$([#7X3,#7X3+][!#8])](=[O])~[O-]",
                 None,
             ),
-            GroupExtension(Group("-SH", "S", [0]), "", "[SX2H]", None),
+            GroupExtension(Group("-SH", "S", [0]), doi, "[SX2H]", None),
             GroupExtension(
-                Group("-S- (non-ring)", "S", [0, 0]), "", "[#16X2H0;!R]", None
+                Group("-S- (non-ring)", "S", [0, 0]), doi, "[#16X2H0;!R]", None
             ),
-            GroupExtension(Group("-S- (ring)", "S", [0, 0]), "", "[#16X2H0;R]", None),
+            GroupExtension(Group("-S- (ring)", "S", [0, 0]), doi, "[#16X2H0;R]", None),
         ]
 
 
@@ -251,6 +292,7 @@ class Unifac(BasisSet):
     """
 
     def __init__(self):
+        """Initialize the UNIFAC library with predefined groups."""
         """Initialize the UNIFAC library with predefined groups."""
         super().__init__()
         self.doi = "https://self.doi.org/10.1021/i200013a024"
