@@ -23,7 +23,7 @@ Libraries = {
 class TestLibraries(BaseTest):
     @pytest.mark.parametrize(
         "library,n_graphs",
-        [("saftgm", 1), ("joback", 41), ("UNIFAC", 69), ("base", 0)],
+        [("saftgm", 1), ("joback", 41), ("UNIFAC", 92), ("base", 0)],
     )
     def test_build_library(self, library, n_graphs):
         library = Libraries[library]()
