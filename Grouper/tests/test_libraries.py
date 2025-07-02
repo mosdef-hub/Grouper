@@ -23,7 +23,7 @@ Libraries = {
 class TestLibraries(BaseTest):
     @pytest.mark.parametrize(
         "library,n_graphs",
-        [("saftgm", 1), ("joback", 41), ("UNIFAC", 92), ("base", 0)],
+        [("saftgm", 36), ("joback", 41), ("UNIFAC", 92), ("base", 0)],
     )
     def test_build_library(self, library, n_graphs):
         library = Libraries[library]()
@@ -31,11 +31,11 @@ class TestLibraries(BaseTest):
 
     def test_group_extension(self):
         library = Libraries["saftgm"]()
-        group = Group("-CH3", "[CH3]", [0], "SMARTS")
+        group = Group("CH3", "[CX4H3]", [0], "SMARTS")
         nt = library.query_groups({"group": group})[0]
 
         assert nt.group == group
-        assert nt.extended_smarts == "[CX4H3]"
+        assert nt.extended_smarts == "C"
         assert nt.doi == "https://doi.org/10.1080/00268978800101601"
         assert nt.priority is None
 
