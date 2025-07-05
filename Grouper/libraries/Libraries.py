@@ -311,7 +311,7 @@ class SaftGammaMie(BasisSet):
             GroupExtension(Group('CH2', '[!R;CX4H2]', [0,0], 'SMARTS'), self.doi, 'C', None),
             GroupExtension(Group('CH', '[!R;CX4H]', [0,0,0], 'SMARTS'), self.doi, 'C', None),
             GroupExtension(Group('C', '[!R;CX4H0]', [0,0,0,0], 'SMARTS'), self.doi, 'C', None),
-            GroupExtension(Group('aCH', '[cX3;H1]', [0], 'SMARTS'), self.doi, 'C(=O)', None),
+            GroupExtension(Group('aCH', '[cX3;H1]', [0,0], 'SMARTS'), self.doi, 'C(=O)', None),
             GroupExtension(Group('aCCH2', '[cX3;H0][CX4;H2]', [0,0,1], 'SMARTS'), self.doi, 'CC(=O)', None),
             GroupExtension(Group('aCCH', '[cX3;H0][CX4;H1]', [0,0,1,1], 'SMARTS'), self.doi, 'CC(=O)', None),
             GroupExtension(Group('CH2=', '[CX3H2]', [0], 'SMARTS'), self.doi, 'C', None),
@@ -343,8 +343,9 @@ class SaftGammaMie(BasisSet):
             GroupExtension(Group('H2O', '[OH2]', [], 'SMARTS'), self.doi, 'O', None),
             GroupExtension(Group('CH4', '[CH4]', [], 'SMARTS'), self.doi, 'C', None),
             GroupExtension(Group('CO2', '[C;X2](=O)(=O)', [], 'SMARTS'), self.doi, 'C(=O)=O', None),
+            # extra added groups
+            GroupExtension(Group('NC=O', '[N][CX3](=O)', [0,0,1], 'SMARTS'), self.doi, 'NC=O', None),
+            GroupExtension(Group('F', '[F]', [0], 'SMARTS'), self.doi, 'F', None),
+            GroupExtension(Group('aCNO2', '[cH0;X3][N+X3](=[OX1])[O-X1]', [0,0], 'SMARTS'), self.doi, 'acNO2', None),
+            GroupExtension(Group('C#N', '[CX2]#[NX1]', [0], 'SMARTS'), self.doi, 'C#N', None),
         ]
-
-        print(
-            "This library is not fully implemented yet... please raise a GitHub issue if you wish to use this."
-        )

@@ -1,3 +1,4 @@
+# ruff: noqa: F401
 import pytest
 from networkx import is_connected
 
@@ -12,6 +13,114 @@ from Grouper.libraries.Libraries import (
 from Grouper.tests.base_test import BaseTest
 from Grouper.utils import convert_to_nx
 
+from collections import Counter
+test_molecules = {
+	'CC': 
+        {'UNIFAC':{'GROUPS':{'CH3': 2},'EDGES':{('CH3', 'CH3'): 1}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 2}),'EDGES':Counter({('-CH3', '-CH3'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH3': 2}),'EDGES':Counter({('CH3', 'CH3'): 1})}},
+	'CC(C)C': 
+        {'UNIFAC':{'GROUPS':{'CH': 1, 'CH3': 3},'EDGES':{('CH3', 'CH'): 3}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 3, '>CH-': 1}),'EDGES':Counter({('>CH-', '-CH3'): 3})},
+        'SAFT':{'GROUPS':Counter({'CH3': 3, 'CH': 1}),'EDGES':Counter({('CH', 'CH3'): 3})}},
+	'CCC(C)(C)C': 
+        {'UNIFAC':{'GROUPS':{'CH3': 4, 'CH2': 1, 'C': 1},'EDGES':{('CH3', 'CH2'): 1, ('CH3', 'C'): 3, ('CH2', 'C'): 1}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 4, '>C<': 1, '-CH2-': 1}),'EDGES':Counter({('>C<', '-CH3'): 3, ('-CH2-', '-CH3'): 1, ('>C<', '-CH2-'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH3': 4, 'C': 1, 'CH2': 1}),'EDGES':Counter({('C', 'CH3'): 3, ('CH2', 'CH3'): 1, ('C', 'CH2'): 1})}},
+	'CC(C)(C)C': 
+        {'UNIFAC':{'GROUPS':{'CH3': 4, 'C': 1},'EDGES':{('C', 'CH3'): 4}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 4, '>C<': 1}),'EDGES':Counter({('>C<', '-CH3'): 4})},
+        'SAFT':{'GROUPS':Counter({'CH3': 4, 'C': 1}),'EDGES':Counter({('C', 'CH3'): 4})}},
+	'OCC(O)CO': 
+        {'UNIFAC':{'GROUPS':{'OH (P)': 2, 'CH2': 2, 'CH': 1, 'OH (S)': 1},'EDGES':{('OH (P)', 'CH2'): 2, ('OH (S)', 'CH'): 1, ('CH2', 'CH'): 2}},
+        'JOBACK':{'GROUPS':Counter({'-OH (alcohol)': 3, '-CH2-': 2, '>CH-': 1}),'EDGES':Counter({('-CH2-', '-OH (alcohol)'): 2, ('>CH-', '-CH2-'): 2, ('>CH-', '-OH (alcohol)'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH2OH': 2, 'CHOH': 1}),'EDGES':Counter({('CHOH', 'CH2OH'): 2})}},
+	'O=CO': 
+        {'UNIFAC':{'GROUPS':{'HCOO': 1},'EDGES':{}},
+        'JOBACK':{'GROUPS':Counter({'-COOH (acid)': 1}),'EDGES':Counter()},
+        'SAFT':{'GROUPS':Counter({'COOH': 1}),'EDGES':Counter()}},
+	'COC(C)=O': 
+        {'UNIFAC':{'GROUPS':{'CH3COO': 1, 'CH3': 1},'EDGES':{('CH3COO', 'CH3'): 1}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 2, '-COO- (ester)': 1}),'EDGES':Counter({('-CH3', '-COO- (ester)'): 2})},
+        'SAFT':{'GROUPS':Counter({'CH3': 2, 'COO': 1}),'EDGES':Counter({('CH3', 'COO'): 2})}},
+	'OCCCC(=O)O': 
+        {'UNIFAC':{'GROUPS':{'CH2COO': 1, 'CH2': 2, 'OH (P)': 1},'EDGES':{('CH2COO', 'CH2'): 1, ('CH2', 'CH2'): 1, ('CH2', 'OH (P)'): 1}},
+        'JOBACK':{'GROUPS':Counter({'-CH2-': 3, '-OH (alcohol)': 1, '-COOH (acid)': 1}),'EDGES':Counter({('-CH2-', '-CH2-'): 2, ('-CH2-', '-OH (alcohol)'): 1, ('-CH2-', '-COOH (acid)'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH2': 2, 'CH2OH': 1, 'COOH': 1}),'EDGES':Counter({('CH2', 'CH2'): 1, ('CH2', 'CH2OH'): 1, ('CH2', 'COOH'): 1})}},
+	'NC=O': 
+        {'UNIFAC':{'GROUPS':{'CONH2': 1},'EDGES':{}},
+        'JOBACK':{'GROUPS':Counter({'-NH2': 1, 'O=CH- (aldehyde)': 1}),'EDGES':Counter({('-NH2', 'O=CH- (aldehyde)'): 1})},
+        'SAFT':{'GROUPS':Counter({'NC=O': 1}),'EDGES':Counter()}},
+	'CC(N)=O': 
+        {'UNIFAC':{'GROUPS':{'CONH2': 1, 'CH3': 1},'EDGES':{('CONH2', 'CH3'): 1}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 1, '-NH2': 1, '>C=O (non-ring)': 1}),'EDGES':Counter({('-NH2', '>C=O (non-ring)'): 1, ('-CH3', '>C=O (non-ring)'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH3': 1, 'NC=O': 1}),'EDGES':Counter({('CH3', 'NC=O'): 1})}},
+	'CNC(C)=O': 
+        {'UNIFAC':{'GROUPS':{'CONHCH3': 1, 'CH3': 1},'EDGES':{('CONHCH3', 'CH3'): 1}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 2, '>NH (non-ring)': 1, '>C=O (non-ring)': 1}),'EDGES':Counter({('-CH3', '>C=O (non-ring)'): 1, ('>NH (non-ring)', '>C=O (non-ring)'): 1, ('-CH3', '>NH (non-ring)'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH3': 2, 'NC=O': 1}),'EDGES':Counter({('CH3', 'NC=O'): 2})}},
+	'CNC': 
+        {'UNIFAC':{'GROUPS':{'CH3': 1, 'CH3NH': 1},'EDGES':{('CH3', 'CH3NH'): 1}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 2, '>NH (non-ring)': 1}),'EDGES':Counter({('-CH3', '>NH (non-ring)'): 2})},
+        'SAFT':{'GROUPS':Counter({'CH3': 2, 'NH': 1}),'EDGES':Counter({('CH3', 'NH'): 2})}},
+	'CNCNC': 
+        {'UNIFAC':{'GROUPS':{'CH2': 1, 'CH3NH': 2},'EDGES':{('CH2', 'CH3NH'): 2}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 2, '>NH (non-ring)': 2, '-CH2-': 1}),'EDGES':Counter({('-CH2-', '>NH (non-ring)'): 2, ('-CH3', '>NH (non-ring)'): 2})},
+        'SAFT':{'GROUPS':Counter({'CH3': 2, 'NH': 2, 'CH2': 1}),'EDGES':Counter({('CH2', 'NH'): 2, ('CH3', 'NH'): 2})}},
+	'FC(F)F': 
+        {'UNIFAC':{'GROUPS':{'CF3': 1},'EDGES':{}},
+        'JOBACK':{'GROUPS':Counter({'-F': 3, '>CH-': 1}),'EDGES':Counter({('>CH-', '-F'): 3})},
+        'SAFT':{'GROUPS':Counter({'F': 3, 'CH': 1}),'EDGES':Counter({('CH', 'F'): 3})}},
+	'NCCCCF': 
+        {'UNIFAC':{'GROUPS':{'CH2NH2': 1, 'CH2': 2, 'CF': 1},'EDGES':{('CH2NH2', 'CH2'): 1, ('CH2', 'CF'): 1, ('CH2', 'CH2'): 1}},
+        'JOBACK':{'GROUPS':Counter({'-CH2-': 4, '-NH2': 1, '-F': 1}),'EDGES':Counter({('-CH2-', '-CH2-'): 3, ('-CH2-', '-NH2'): 1, ('-CH2-', '-F'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH2': 4, 'NH2': 1, 'F': 1}),'EDGES':Counter({('CH2', 'CH2'): 3, ('CH2', 'NH2'): 1, ('CH2', 'F'): 1})}},
+	'CC1CCCCC1': 
+        {'UNIFAC':{'GROUPS':{'CY-CH2': 5, 'CH3': 1, 'CY-CH': 1},'EDGES':{('CY-CH2', 'CY-CH2'): 4, ('CH3', 'CY-CH'): 1, ('CY-CH2', 'CY-CH'): 2}},
+        'JOBACK':{'GROUPS':Counter({'ring-CH2-': 5, 'ring>CH-': 1, '-CH3': 1}),'EDGES':Counter({('ring-CH2-', 'ring-CH2-'): 4, ('ring>CH-', 'ring-CH2-'): 2, ('ring>CH-', '-CH3'): 1})},
+        'SAFT':{'GROUPS':Counter({'cCH2': 5, 'cCH': 1, 'CH3': 1}),'EDGES':Counter({('cCH2', 'cCH2'): 4, ('cCH', 'cCH2'): 2, ('cCH', 'CH3'): 1})}},
+	'CC1CCCCC1C': 
+        {'UNIFAC':{'GROUPS':{'CY-CH2': 4, 'CH3': 2, 'CY-CH': 2},'EDGES':{('CY-CH2', 'CY-CH2'): 3, ('CH3', 'CY-CH'): 2, ('CY-CH2', 'CY-CH'): 2, ('CY-CH', 'CY-CH'): 1}},
+        'JOBACK':{'GROUPS':Counter({'ring-CH2-': 4, 'ring>CH-': 2, '-CH3': 2}),'EDGES':Counter({('ring-CH2-', 'ring-CH2-'): 3, ('ring>CH-', '-CH3'): 2, ('ring>CH-', 'ring-CH2-'): 2, ('ring>CH-', 'ring>CH-'): 1})},
+        'SAFT':{'GROUPS':Counter({'cCH2': 4, 'cCH': 2, 'CH3': 2}),'EDGES':Counter({('cCH2', 'cCH2'): 3, ('cCH', 'CH3'): 2, ('cCH', 'cCH2'): 2, ('cCH', 'cCH'): 1})}},
+	'CC1CCCC(C)C1': 
+        {'UNIFAC':{'GROUPS':{'CY-CH2': 4, 'CH3': 2, 'CY-CH': 2},'EDGES':{('CY-CH2', 'CY-CH2'): 2, ('CH3', 'CY-CH'): 2, ('CY-CH2', 'CY-CH'): 4}},
+        'JOBACK':{'GROUPS':Counter({'ring-CH2-': 4, 'ring>CH-': 2, '-CH3': 2}),'EDGES':Counter({('ring>CH-', 'ring-CH2-'): 4, ('ring>CH-', '-CH3'): 2, ('ring-CH2-', 'ring-CH2-'): 2})},
+        'SAFT':{'GROUPS':Counter({'cCH2': 4, 'cCH': 2, 'CH3': 2}),'EDGES':Counter({('cCH', 'cCH2'): 4, ('cCH', 'CH3'): 2, ('cCH2', 'cCH2'): 2})}},
+	'CC1CCC(C)CC1': 
+        {'UNIFAC':{'GROUPS':{'CY-CH2': 4, 'CH3': 2, 'CY-CH': 2},'EDGES':{('CY-CH2', 'CY-CH2'): 2, ('CH3', 'CY-CH'): 2, ('CY-CH2', 'CY-CH'): 4}},
+        'JOBACK':{'GROUPS':Counter({'ring-CH2-': 4, 'ring>CH-': 2, '-CH3': 2}),'EDGES':Counter({('ring>CH-', 'ring-CH2-'): 4, ('ring>CH-', '-CH3'): 2, ('ring-CH2-', 'ring-CH2-'): 2})},
+        'SAFT':{'GROUPS':Counter({'cCH2': 4, 'cCH': 2, 'CH3': 2}),'EDGES':Counter({('cCH', 'cCH2'): 4, ('cCH', 'CH3'): 2, ('cCH2', 'cCH2'): 2})}},
+	'Cc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-]': 
+        {'UNIFAC':{'GROUPS':{'ACCH3': 1, 'ACH': 2, 'ACNO2': 3},'EDGES':{('ACCH3', 'ACNO2'): 2, ('ACNO2', 'ACH'): 4}},
+        'JOBACK':{'GROUPS':Counter({'ring=C<': 4, '-NO2': 3, 'ring=CH-': 2, '-CH3': 1}),'EDGES':Counter({('ring=C<', 'ring=CH-'): 4, ('ring=C<', '-NO2'): 3, ('ring=C<', 'ring=C<'): 2, ('ring=C<', '-CH3'): 1})},
+        'SAFT':{'GROUPS':Counter({'aCNO2': 3, 'aCH': 2, 'aCCH3': 1}),'EDGES':Counter({('aCH', 'aCNO2'): 4, ('aCCH3', 'aCNO2'): 2})}},
+	'O=C(O)c1ccccc1': 
+        {'UNIFAC':{'GROUPS':{'ACH': 5, 'AC': 1, 'COOH': 1},'EDGES':{('ACH', 'ACH'): 4, ('AC', 'ACH'): 2, ('AC', 'COOH'): 1}},
+        'JOBACK':{'GROUPS':Counter({'ring=CH-': 5, 'ring=C<': 1, '-COOH (acid)': 1}),'EDGES':Counter({('ring=CH-', 'ring=CH-'): 4, ('ring=C<', 'ring=CH-'): 2, ('ring=C<', '-COOH (acid)'): 1})},
+        'SAFT':{'GROUPS':Counter({'aCH': 5, 'aCCOOH': 1}),'EDGES':Counter({('aCH', 'aCH'): 4, ('aCH', 'aCCOOH'): 2})}},
+	'CN(C)C(=O)CO': 
+        {'UNIFAC':{'GROUPS':{'CH2CO': 1, 'CH3': 1, 'CH3N': 1, 'OH (P)': 1},'EDGES':{('CH2CO', 'OH (P)'): 1, ('CH2CO', 'CH3N'): 1, ('CH3N', 'CH3'): 1}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 2, '-CH2-': 1, '>N- (non-ring)': 1, '>C=O (non-ring)': 1, '-OH (alcohol)': 1}),'EDGES':Counter({('-CH3', '>N- (non-ring)'): 2, ('>N- (non-ring)', '>C=O (non-ring)'): 1, ('-CH2-', '>C=O (non-ring)'): 1, ('-CH2-', '-OH (alcohol)'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH3': 2, 'CH2OH': 1, 'NC=O': 1}),'EDGES':Counter({('CH3', 'NC=O'): 2, ('CH2OH', 'NC=O'): 1})}},
+	'CN(C)C=O': 
+        {'UNIFAC':{'GROUPS':{'DMF': 1},'EDGES':{}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 2, '>N- (non-ring)': 1, 'O=CH- (aldehyde)': 1}),'EDGES':Counter({('-CH3', '>N- (non-ring)'): 2, ('>N- (non-ring)', 'O=CH- (aldehyde)'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH3': 2, 'NC=O': 1}),'EDGES':Counter({('CH3', 'NC=O'): 2})}},
+	'CN': 
+        {'UNIFAC':{'GROUPS':{'CH3NH2': 1},'EDGES':{}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 1, '-NH2': 1}),'EDGES':Counter({('-CH3', '-NH2'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH3': 1, 'NH2': 1}),'EDGES':Counter({('CH3', 'NH2'): 1})}},
+	'CCC#N': 
+        {'UNIFAC':{'GROUPS':{'CH2CN': 1, 'CH3': 1},'EDGES':{('CH2CN', 'CH3'): 1}},
+        'JOBACK':{'GROUPS':Counter({'-CH2-': 1, '-CH3': 1, '-CN': 1}),'EDGES':Counter({('-CH2-', '-CN'): 1, ('-CH2-', '-CH3'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH2': 1, 'CH3': 1, 'C#N': 1}),'EDGES':Counter({('CH2', 'C#N'): 1, ('CH2', 'CH3'): 1})}},
+	'CO': 
+        {'UNIFAC':{'GROUPS':{'CH3OH': 1},'EDGES':{}},
+        'JOBACK':{'GROUPS':Counter({'-CH3': 1, '-OH (alcohol)': 1}),'EDGES':Counter({('-CH3', '-OH (alcohol)'): 1})},
+        'SAFT':{'GROUPS':Counter({'CH3OH': 1}),'EDGES':Counter()}},
+}
+
 Libraries = {
     "base": BasisSet,
     "saftgm": SaftGammaMie,
@@ -23,7 +132,7 @@ Libraries = {
 class TestLibraries(BaseTest):
     @pytest.mark.parametrize(
         "library,n_graphs",
-        [("saftgm", 36), ("joback", 41), ("UNIFAC", 92), ("base", 0)],
+        [("saftgm", 40), ("joback", 41), ("UNIFAC", 92), ("base", 0)],
     )
     def test_build_library(self, library, n_graphs):
         library = Libraries[library]()
@@ -75,95 +184,11 @@ class TestLibrariesFragmentations(BaseTest):
             return False
         return True
 
-    # TODO: How to handle "CN", which has a UNIFAC Group GCPair(raw"[CX4;H3][NX3;H2]","CH3NH2"), but no ports
-    # TODO: More failing molecules that I tried to test -NCC
-    unifac_fail_molecules = [
+    unifac_fail_molecules = [ # molecules fail with charges
         "C[O-]",
         "CCC(=O)[O-]",
         "CCS(=O)(=O)[O-]",
         "C(=O)[N-]",
-    ]
-    test_molecules = [  # NOTE that "C(=O)N", or formaldehyde doesn't work
-        "CC",
-        "CC(C)C",
-        "CCC(C)(C)C",
-        "CC(C)(C)C",  # alkanes
-        "OCC(O)CO",  # alcohols
-        "O=CO",
-        "COC(C)=O",
-        "OCCCC(=O)O",
-        "NC=O",
-        "CC(N)=O",
-        "CNC(C)=O",  # carboxyls/amides
-        "CNC",
-        "CNCNC",  # amines
-        "FC(F)F",
-        "NCCCCF",  # fluorines
-        "CC1CCCCC1",
-        "CC1CCCCC1C",
-        "CC1CCCC(C)C1",
-        "CC1CCC(C)CC1",  # rings
-        "Cc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-]",
-        "O=C(O)c1ccccc1",  # phenyls
-        "CN(C)C(=O)CO", # failing molecules
-        "CN(C)C=O",
-        "CN",
-        "CCC#N",
-        "CO",
-    ]
-    groupsList = [
-        {"CH3": 2},
-        {"CH": 1, "CH3": 3},
-        {"CH3": 4, "CH2": 1, "C": 1},
-        {"CH3": 4, "C": 1},  # alkanes
-        {"OH (P)": 2, "CH2": 2, "CH": 1, "OH (S)": 1},  # alcohols
-        {"HCOO": 1},
-        {"CH3COO": 1, "CH3": 1},
-        {"CH2COO": 1, "CH2": 2, "OH (P)": 1},
-        {'CONH2': 1},
-        {"CONH2": 1, "CH3": 1},
-        {"CONHCH3": 1, "CH3": 1},  # carboxyl/amides
-        {"CH3": 1, "CH3NH": 1},
-        {"CH2": 1, "CH3NH": 2},  # amines
-        {"CF3": 1},
-        {"CH2NH2": 1, "CH2": 2, "CF": 1},  # fluorines
-        {"CY-CH2": 5, "CH3": 1, "CY-CH": 1},
-        {"CY-CH2": 4, "CH3": 2, "CY-CH": 2},  # rings
-        {"CY-CH2": 4, "CH3": 2, "CY-CH": 2},
-        {"CY-CH2": 4, "CH3": 2, "CY-CH": 2},  # rings
-        {"ACCH3": 1, "ACH": 2, "ACNO2": 3},
-        {"ACH": 5, "AC": 1, "COOH": 1},  # phenyl groups
-        {'CH2CO': 1, 'CH3': 1, 'CH3N': 1, 'OH (P)': 1}, 
-        {'DMF': 1}, {'CH3NH2': 1}, {'CH2CN': 1, 'CH3': 1}, {'CH3OH': 1},# failing molecules
-    ]
-    edgesList = [
-        {("CH3", "CH3"): 1},
-        {("CH3", "CH"): 3},
-        {("CH3", "CH2"): 1, ("CH3", "C"): 3, ("CH2", "C"): 1},
-        {("C", "CH3"): 4},  # alkanes
-        {("OH (P)", "CH2"): 2, ("OH (S)", "CH"): 1, ("CH2", "CH"): 2},  # alcohols
-        {},
-        {("CH3COO", "CH3"): 1},
-        {("CH2COO", "CH2"): 1, ("CH2", "CH2"): 1, ("CH2", "OH (P)"): 1},
-        {},
-        {("CONH2", "CH3"): 1},
-        {("CONHCH3", "CH3"): 1},  # carbxoyls/amides
-        {("CH3", "CH3NH"): 1},
-        {("CH2", "CH3NH"): 2},  # amines
-        {},
-        {("CH2NH2", "CH2"): 1, ("CH2", "CF"): 1, ("CH2", "CH2"): 1},  # fluorines
-        {("CY-CH2", "CY-CH2"): 4, ("CH3", "CY-CH"): 1, ("CY-CH2", "CY-CH"): 2},
-        {
-            ("CY-CH2", "CY-CH2"): 3,
-            ("CH3", "CY-CH"): 2,
-            ("CY-CH2", "CY-CH"): 2,
-            ("CY-CH", "CY-CH"): 1,
-        },  # rings
-        {("CY-CH2", "CY-CH2"): 2, ("CH3", "CY-CH"): 2, ("CY-CH2", "CY-CH"): 4},
-        {("CY-CH2", "CY-CH2"): 2, ("CH3", "CY-CH"): 2, ("CY-CH2", "CY-CH"): 4},  # rings
-        {("ACCH3", "ACNO2"): 2, ("ACNO2", "ACH"): 4},
-        {("ACH", "ACH"): 4, ("AC", "ACH"): 2, ("AC", "COOH"): 1},  # phenyl groups
-        {('CH2CO','OH (P)'): 1, ('CH2CO', 'CH3N'): 1, ('CH3N', "CH3"):1}, {}, {}, {('CH2CN', 'CH3'): 1}, {},  # failing molecules
     ]
 
     @pytest.fixture(scope="session")
@@ -172,12 +197,11 @@ class TestLibrariesFragmentations(BaseTest):
         return list(unifac.get_groups())
 
     @pytest.mark.parametrize(
-        "MOLSMILES,SITESDICT,EDGESDICT", zip(test_molecules, groupsList, edgesList)
+        "MOLSMILES", test_molecules.keys()
     )
-    def test_unifac_smiles(self, MOLSMILES, SITESDICT, EDGESDICT, unifac_groups):
+    def test_unifac_smiles(self, MOLSMILES, unifac_groups):
         from collections import Counter
 
-        # molecule = test_molecules[0]
         gGList = fragment(
             MOLSMILES,
             unifac_groups,
@@ -199,7 +223,7 @@ class TestLibrariesFragmentations(BaseTest):
         assert is_connected(convert_to_nx(firstgG).to_undirected())
         assert firstgG.to_smiles() == MOLSMILES
         groupsSmarts = Counter([group.type for group in firstgG.nodes.values()])
-        assert SITESDICT == groupsSmarts
+        assert test_molecules[MOLSMILES]["UNIFAC"]["GROUPS"] == groupsSmarts
 
         groupEdges = Counter(
             [
@@ -207,7 +231,7 @@ class TestLibrariesFragmentations(BaseTest):
                 for edge1, _, edge2, _, bond_number in firstgG.edges
             ]
         )
-        assert self.assert_equal_edgeDicts(EDGESDICT, groupEdges), (
-            EDGESDICT,
+        assert self.assert_equal_edgeDicts(test_molecules[MOLSMILES]["UNIFAC"]["EDGES"], groupEdges), (
+            test_molecules[MOLSMILES]["UNIFAC"]["EDGES"],
             groupEdges,
         )
