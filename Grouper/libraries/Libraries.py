@@ -10,9 +10,10 @@ from typing import Dict, Union
 import rdkit.Chem
 import rdkit.Chem.Draw
 
-from Grouper import Group
+from Grouper import Group, GroupGraph
+from Grouper.fragmentation import fragment
+from Grouper._Grouper import GrouperFragmentationError
 
-# Declaring namedtuple for defining adding groups and their SMARTS to a library.
 # Declaring namedtuple for defining adding groups and their SMARTS to a library.
 GroupExtension = namedtuple(
     "GroupExtension", ["group", "doi", "extended_smarts", "priority"]
@@ -24,18 +25,15 @@ class BasisSet(object):
 
     Attributes:
         group_traces_ (list): A list of GroupExtension objects representing the groups in the library.
-        group_traces_ (list): A list of GroupExtension objects representing the groups in the library.
     """
 
     def __init__(self):
         """Initialize an empty BasisSet."""
         self.group_traces_ = []
-        self.group_traces_ = []
 
     def __repr__(self):
         """Return a string representation of the BasisSet."""
         init_message = (
-            f"{self.__class__.__name__} has {len(self.group_traces_)} unique groups."
             f"{self.__class__.__name__} has {len(self.group_traces_)} unique groups."
         )
         if self.doi and self.ref:
@@ -52,7 +50,6 @@ class BasisSet(object):
 
         Args:
             group (Group): The chemical group to add.
-            group (Group): The chemical group to add.
             doi (str, optional): doi reference for the group. Defaults to None.
             smarts (str, optional): SMARTS pattern for the group. Defaults to None.
             priority (int, optional): Priority of the group. Defaults to None.
@@ -67,7 +64,6 @@ class BasisSet(object):
             query (dict): A dictionary of attributes and their values to match.
 
         Returns:
-            list: A list of groups that match the query.
             list: A list of groups that match the query.
         """
         matched_groups = []
@@ -86,11 +82,7 @@ class BasisSet(object):
             yield trace.group
 
     def visualize_library(self):
-        """Visualize the library using RDKit.
-
-        Note:
-            This method is not yet implemented.
-        """
+        """Visualize the library using RDKit."""
         mols = []
         for group in self.get_groups():
             mol = rdkit.Chem.MolFromSmarts(group.pattern)
@@ -126,6 +118,62 @@ class BasisSet(object):
             int: The number of groups.
         """
         return len(self.group_traces_)
+    
+    def fragment_smiles(self, smiles, onFail: str = "error", **kwargs):
+        """Fragment a smiles string based on the groups in self.group_traces.
+
+        Parameters
+        ----------
+        smiles : str
+            The Daylight SMILES string for the molecule to fragment.
+        onFail : str, default "error"
+            Method for handling failing fragmentation approaches.
+            - "error": raise an exception if fragmentation returns no matchin groups
+            - "itemize": all missing atoms are treated as atomistic Groups with the name
+                "DEFAULT#N", where N is the atomic number of the atom.
+            - "condense": A group is returned that is the single Group with no edges for the 
+                entire molecule. Useful if the Library does not have specific definitions for
+                small molecules such as methane `CH4`, water `H2O`, or formamide `NC=O`.
+
+        Notes
+        -----
+        See Grouper.fragmentation.fragment method for more details on **kwargs.
+
+        Returns
+        -------
+        groupGList : List[Grouper.GroupGraph]
+            The list of all fragmented group graphs generated using Grouper.fragmentation.fragment
+            to perform fragmentation.
+        """
+        nodes = list(self.get_groups())
+        groupGList = fragment(smiles, nodes, **kwargs)
+        if len(groupGList) > 0:
+            return groupGList
+        if onFail == "error":
+            raise GrouperFragmentationError(f"Failed to fully fragment {smiles=} with Library {self.__class__.__name__}.")
+        elif onFail == "itemize":
+            # add some common elements at end of list to match
+            nodes.append(Group("DEFAULT#6", "[#6]", [0,0,0,0], "SMARTS"))
+            nodes.append(Group("DEFAULT#7", "[#7]", [0,0,0], "SMARTS"))
+            nodes.append(Group("DEFAULT#8", "[#8]", [0,0], "SMARTS"))
+            nodes.append(Group("DEFAULT#9", "[#9]", [0], "SMARTS"))
+            nodes.append(Group("DEFAULT#16", "[#16]", [0,0], "SMARTS"))
+            nodes.append(Group("DEFAULT#17", "[#17]", [0], "SMARTS"))
+            nodes.append(Group("DEFAULT#35", "[#35]", [0], "SMARTS"))
+            nodes.append(Group("DEFAULT", "[*]", [0,0,0,0], "SMARTS")) # wildcard
+
+            groupGList = fragment(smiles, nodes, **kwargs)
+            if len(groupGList) == 0:
+                raise GrouperFragmentationError(f"Fragmentation with {onFail=} still failed to match all atoms in system.")
+            return groupGList
+        elif onFail == "condense":
+            groupG = GroupGraph()
+            groupG.add_node(smiles, smiles, [], "SMILES")
+            return [groupG]
+        else:
+            ValueError(f"Improper argument {onFail=} for fragmentation. Please select one of 'error', 'itemize', or 'condense'.")
+        
+        
 
 
 class Joback(BasisSet):

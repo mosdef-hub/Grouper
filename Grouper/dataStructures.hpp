@@ -314,6 +314,17 @@ public:
     }
 };
 
+class GrouperFragmentationError : public std::exception {
+    private:
+    std::string message;
+
+public:
+    GrouperFragmentationError(const std::string& msg) : message(msg) {}
+    const char* what() const noexcept override {
+        return message.c_str();
+    }
+};
+
 void validateAtomisticAtomGraph (const AtomGraph atomGraph, const std::vector<int>& hubs, const std::string pattern, const std::string patternType);
 
 #endif // DATASTRUCTURES_H
