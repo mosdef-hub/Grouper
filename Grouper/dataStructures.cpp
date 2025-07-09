@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include "dataStructures.hpp"
+#include "generate.hpp"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -850,6 +851,7 @@ std::string GroupGraph::printGraph() const {
 }
 
 std::string GroupGraph::toSmiles() const {
+    isomorphism_checks++;
     using AtomIndexMap = std::unordered_map<int, int>;
 
     // Allocate molecular graph using smart pointer
@@ -1219,6 +1221,7 @@ void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
 }
 
 std::vector<setword> GroupGraph::canonize() const {
+    isomorphism_checks++;
     int n, m;
     graph* adj = nullptr; // Initialize pointer
 
