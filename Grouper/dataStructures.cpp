@@ -101,7 +101,10 @@ void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGrap
         int atomicNumber = atom->getAtomicNum();
         // Calculate explicit charge
         int charge = atom->getFormalCharge();
-        int valence = pt->getDefaultValence(atomicNumber);;
+        int valence = pt->getDefaultValence(atomicNumber);
+        if (atomicNumber == 16) { // unique handling for sulfur, which can be larger
+            valence = 6;
+        }
         // Iterate over the bonds and sum the bond orders
         // for (size_t i=0; i<mol->getNumBonds(); i++) {
         //     const auto& bond = mol->getBondWithIdx(i);
@@ -175,11 +178,14 @@ GroupGraph::Group::Group(const std::string& ntype, const std::string& pattern, c
         atomGraph.fromNonAtomic(pattern); // Won't require validation, but parse as SMARTS
         for (int hub : hubs) { // Check that hubs can still be matched
             if (hub > static_cast<int>(atomGraph.nodes.size()) - 1) {
-                throw std::invalid_argument("Hub ID "+ std::to_string(hub) +" is greater than the number of atoms in the group");
+                std::stringstream hubsStr;
+                for (const int hubnumber : hubs) {
+                    hubsStr << hubnumber; // Append the integer followed by a space
+                }
+                throw std::invalid_argument("Hub Index ["+ hubsStr.str() + "] of " + std::to_string(hub) + " is greater than the number of atoms in the group");
             }
         }
     }
-
     this->ntype = ntype;
     this->pattern = pattern;
     this->hubs = hubs;
@@ -198,6 +204,7 @@ void validateAtomisticAtomGraph (const AtomGraph atomGraph, const std::vector<in
     // Validate connected molecules
     std::vector<std::vector<int>> moleculesVector;
     RDKit::MolOps::getMolFrags(*mol, moleculesVector);
+    // std::vector<boost::shared_ptr<RDKit::ROMol>> moleculesVector = RDKit::MolOps::getMolFrags(*mol);
     if (moleculesVector.size()>1) {
         throw GrouperParseException("Invalid "+ patternType +": " + pattern + " with detached molecules.");
     }
@@ -490,7 +497,7 @@ void GroupGraph::addNode(
         throw std::invalid_argument("Group type must be provided");
     }
     // Case 0: Group type, pattern, and hubs are provided
-    if (!ntype.empty() && !pattern.empty() && !hubs.empty()) {
+    if (!ntype.empty() && !pattern.empty()) {
         // Error handling
         for (int hub : hubs) {
             if (hub < 0) {
@@ -507,7 +514,7 @@ void GroupGraph::addNode(
         nodetypes[ntype] = hubs;
     }
     // Case 1: Group type (ntype) is provided
-    else if (!ntype.empty() && pattern.empty() && hubs.empty()) {
+    else if (!ntype.empty() && pattern.empty()) {
         if (nodetypes.find(ntype) == nodetypes.end()) {
             throw std::invalid_argument("Group type does not exist yet, please provide SMARTS and hubs");
         }
@@ -523,11 +530,12 @@ void GroupGraph::addNode(
         nodes[id] = Group(ntype, pattern, hubs, patternType);
     }
     else {
-        std::string hubs_str = "";
+        std::string hubs_str = "[";
         for (int hub : hubs) {
             hubs_str += std::to_string(hub) + " ";
         }
-        throw std::invalid_argument("Invalid input for add_node ntype: " + ntype + " SMARTS/SMILES: " + pattern + " hubs: " + hubs_str);
+        hubs_str += "]";
+        throw std::invalid_argument("Invalid input for add_node -- ntype: " + ntype + " pattern: " + pattern + " hubs: " + hubs_str);
     }
 }
 
@@ -1244,7 +1252,7 @@ AtomGraph::AtomGraph(const AtomGraph& other)
 
 AtomGraph::Atom::Atom(const std::string& ntype){
     static std::unordered_map<std::string, int> standardElementValency = {
-        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}, {"*", 12}
     };
     this->ntype = ntype;
     if (standardElementValency.count(ntype)) {
@@ -1261,7 +1269,7 @@ AtomGraph::Atom::Atom(const std::string& ntype){
 
 AtomGraph::Atom::Atom(const std::string& ntype, int valency){
     static std::unordered_map<std::string, int> standardElementValency = {
-        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}, {"*", 12}
     };
     this->ntype = ntype;
     if (valency == -1){
@@ -1558,7 +1566,7 @@ void AtomGraph::fromSmarts(const std::string& smarts) {
     // If RDKit fails...
     std::unordered_map<std::string, int> standardElementValency = {
         {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1},
-        {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1},
+        {"P", 3}, {"S", 6}, {"Cl", 1}, {"Br", 1}, {"I", 1},
     };
 
     std::vector<NodeIDType> centralNodeVec;
@@ -1733,7 +1741,7 @@ void AtomGraph::fromSmiles(const std::string& smiles) {
     };
 
     std::unordered_map<std::string, int> standardElementValency = {
-        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 2}, {"Cl", 1}, {"Br", 1}, {"I", 1}, {"c", 4}, {"n", 3}, {"o", 2}, {"s", 2}
+        {"H", 1}, {"B", 3}, {"C", 4}, {"N", 3}, {"O", 2}, {"F", 1}, {"P", 3}, {"S", 6}, {"Cl", 1}, {"Br", 1}, {"I", 1}, {"c", 4}, {"n", 3}, {"o", 2}, {"s", 2}
     };
 
     std::stack<NodeIDType> nodeStack; // Stack to handle branching
@@ -1908,12 +1916,12 @@ std::vector<setword> AtomGraph::toNautyGraph() const {
 
     // Initialize the nauty graph
     EMPTYGRAPH(g.data(), m, n);
-    
+
     // Add all edges (just once per edge, regardless of bond order)
     for (const auto& [src, dst, order] : edges) {
         ADDONEEDGE(g.data(), src, dst, m);
     }
-    
+
     return g;
 }
 
@@ -1935,7 +1943,7 @@ std::vector<setword> AtomGraph::canonize() {
     int m = SETWORDSNEEDED(n);
     std::vector<int> lab(n), ptn(n), orbits(n);
     std::vector<setword> canong(n * m);
-    
+
     // Use dynamic allocation for workspace
     DYNALLSTAT(setword, workspace, workspace_sz);
     DYNALLOC2(setword, workspace, workspace_sz, 4*m, n, "malloc workspace");
@@ -1943,12 +1951,12 @@ std::vector<setword> AtomGraph::canonize() {
     // Create edge colors based on bond orders
     // We can't directly color edges in nauty, but we can use the node coloring
     // to encode the edge color information
-    
+
     // First, group nodes by their atom type
     std::vector<int> node_colors(n);
     std::map<std::string, int> atom_type_map;
     int color_index = 0;
-    
+
     for (int i = 0; i < n; i++) {
         const auto& atom = nodes.at(i);
         if (atom_type_map.find(atom.ntype) == atom_type_map.end()) {
@@ -1957,26 +1965,26 @@ std::vector<setword> AtomGraph::canonize() {
         }
         node_colors[i] = atom_type_map[atom.ntype];
     }
-    
+
     // Set up initial coloring based on atom types
     for (int i = 0; i < n; i++) {
         lab[i] = i;  // Identity permutation initially
         ptn[i] = 1;  // All in one partition initially
     }
     ptn[n-1] = 0;    // End the last partition
-    
+
     // Sort nodes by color to set up the initial partition
     std::sort(lab.begin(), lab.end(), [&node_colors](int a, int b) {
         return node_colors[a] < node_colors[b];
     });
-    
+
     // Update the partition array to separate different atom types
     for (int i = 0; i < n-1; i++) {
         if (node_colors[lab[i]] != node_colors[lab[i+1]]) {
             ptn[i] = 0;  // End the current partition
         }
     }
-    
+
     // Set up Nauty options for sparse graphs
     static DEFAULTOPTIONS_SPARSEGRAPH(options);  // Use SPARSEGRAPH options instead of GRAPH
     options.getcanon = TRUE;
@@ -1986,60 +1994,60 @@ std::vector<setword> AtomGraph::canonize() {
     options.mininvarlevel = 1;
     options.maxinvarlevel = 100;
     options.invararg = 3;
-    
+
     statsblk stats;
 
     // Run Nauty with edge weights consideration
     // Create a SparseGraph representation for edge weights
     sparsegraph sg;
     SG_INIT(sg);
-    
+
     // Convert g to sparse format and include edge weights
     SG_ALLOC(sg, n, edges.size(), "SparseGraph");
     sg.nv = n;
     sg.nde = 0;
-    
+
     std::vector<size_t> sg_v(n+1, 0);  // Use size_t instead of int
     std::vector<int> sg_d(n, 0);
     std::vector<int> sg_e;
     std::vector<int> sg_w;  // Edge weights for bond orders
-    
+
     // Count degrees first
     for (const auto& [src, dst, order] : edges) {
         sg_d[src]++;
         sg_d[dst]++;
     }
-    
+
     // Set up vertex offsets
     sg_v[0] = 0;
     for (int i = 0; i < n; i++) {
         sg_v[i+1] = sg_v[i] + sg_d[i];
         sg_d[i] = 0;  // Reset for use as counter below
     }
-    
+
     // Resize edge arrays
     sg_e.resize(sg_v[n]);
     sg_w.resize(sg_v[n]);
-    
+
     // Fill edge arrays
     for (const auto& [src, dst, order] : edges) {
         // Add src -> dst edge
         int pos = sg_v[src] + sg_d[src]++;
         sg_e[pos] = dst;
         sg_w[pos] = order;  // Store bond order as edge weight
-        
+
         // Add dst -> src edge (for undirected graph)
         pos = sg_v[dst] + sg_d[dst]++;
         sg_e[pos] = src;
         sg_w[pos] = order;  // Same bond order
     }
-    
+
     // Set sparse graph properties
     sg.v = sg_v.data();
     sg.d = sg_d.data();
     sg.e = sg_e.data();
     sg.w = sg_w.data();  // Edge weights
-    
+
     // Initialize the canonical graph
     int total_edges = 2 * int(edges.size());
     sparsegraph canon_sg;
@@ -2049,15 +2057,15 @@ std::vector<setword> AtomGraph::canonize() {
     sg.nde = total_edges;
 
     printf("Nauty: %d vertices, %d edges\n", n, total_edges);
-    
+
     // Run Nauty with the sparse graph representation
     sparsenauty(&sg, lab.data(), ptn.data(), orbits.data(), &options, &stats, &canon_sg);
 
-    
+
     // Get the canonical labeling
     std::vector<setword> canon_g(n * m);
     EMPTYGRAPH(canon_g.data(), m, n);
-    
+
     // Build canonical graph with edge weights
     for (const auto& [src, dst, order] : edges) {
         int src_canon = lab[src];
@@ -2065,7 +2073,7 @@ std::vector<setword> AtomGraph::canonize() {
         // Add edge to canonical graph
         ADDONEEDGE(canon_g.data(), src_canon, dst_canon, m);
     }
-    
+
     return canon_g;
 }
 
