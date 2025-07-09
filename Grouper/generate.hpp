@@ -1,26 +1,31 @@
-#pragma once
+#ifndef GENERATE_HPP
+#define GENERATE_HPP
 
 #include <unordered_set>
 #include <string>
+#include <vector>
+#include <utility>
 #include "dataStructures.hpp"
 
-void update_progress(int current, int total);
+extern thread_local size_t isomorphism_checks;
 
-std::unordered_set<GroupGraph> exhaustiveGenerate(
-    int n_nodes, 
-    std::unordered_set<GroupGraph::Group> node_defs, 
-    int num_procs = -1,
-    std::string vcolg_output_file = "",
-    std::unordered_map<std::string, int> positiveConstraints = {},
-    std::unordered_set<std::string> negativeConstraints = {},
-    std::string config_path = ""
+std::pair<std::unordered_set<GroupGraph>, size_t> exhaustiveGenerate(
+    int n_nodes,
+    std::unordered_set<GroupGraph::Group> node_defs,
+    int num_procs,
+    std::string vcolg_output_file,
+    std::unordered_map<std::string, int> positiveConstraints,
+    std::unordered_set<std::string> negativeConstraints,
+    std::string config_path
 );
 
-std::unordered_set<GroupGraph> randomGenerate(
-    int n_nodes, 
+std::pair<std::unordered_set<GroupGraph>, size_t> randomGenerate(
+    int n_nodes,
     const std::unordered_set<GroupGraph::Group>& node_defs,
-    int num_graphs = 100,
-    int num_procs = -1,
-    const std::unordered_map<std::string, int>& positiveConstraints = {},
-    const std::unordered_set<std::string>& negativeConstraints = {}
+    int num_graphs,
+    int num_procs,
+    const std::unordered_map<std::string, int>& positiveConstraints,
+    const std::unordered_set<std::string>& negativeConstraints
 );
+
+#endif // GENERATE_HPP
