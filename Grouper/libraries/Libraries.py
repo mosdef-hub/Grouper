@@ -186,7 +186,7 @@ class Joback(BasisSet):
         """Initialize the Joback library with predefined groups."""
         super().__init__()
         self.doi = "https://doi.org/10.1021/i200013a024"
-        ref = "https://github.com/ClapeyronThermo/GCIdentifier.jl/tree/main/src/database/Joback.jl"
+        self.ref = "https://github.com/ClapeyronThermo/GCIdentifier.jl/tree/main/src/database/Joback.jl"
         self.group_traces = [
             GroupExtension(Group('-CH3', '[CX4H3]', [0], 'SMARTS'), self.doi, 'C', None),
             GroupExtension(Group('-CH2-', '[CX4H2;!R]', [0,0], 'SMARTS'), self.doi, 'C', None),
