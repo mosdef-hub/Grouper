@@ -111,6 +111,7 @@ std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmart
         RDKit::Atom* new_atom = new RDKit::Atom(atom->getAtomicNum()); // Dynamically allocate new atom
         new_atom->setFormalCharge(atom->getFormalCharge()); // Keep charge for valency
         processedMol.addAtom(new_atom); // Add the new atom
+        delete new_atom;
     }
 
     // Add bonds to processed molecule
