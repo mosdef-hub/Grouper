@@ -265,8 +265,6 @@ class TestLibrariesFragmentations(BaseTest):
         -----
         "C(O)CCC(=O)O" is an example of one that fails when fragmented by JOBACK
         """
-        if True: # skip for now
-            return
         LIBRARY = LIBRARYGROUPS[0]
         GROUPS = LIBRARYGROUPS[1]
         gGList = fragment(
@@ -276,5 +274,85 @@ class TestLibrariesFragmentations(BaseTest):
             incompleteGraphHandler="remove",
             nodeDefsSorter="size",
         )
+        if not test_molecules[MOLSMILES][LIBRARY]["GROUPS"]:
+            assert len(gGList) == 0 
+            return # These groups fail to match
         firstgG = gGList[0]
         assert firstgG.to_smiles() == MOLSMILES
+
+    def test_library_failed_fragmentation_returnGroup(self):
+        """Returns a single group on fragmentation Failure"""
+        library = Libraries["base"]()
+        group = Group("CH3", "[CX4H3]", [0], "SMARTS")
+        library.add_group(group)
+        group = Group("CH2", "[CX4H2]", [0,0], "SMARTS")
+        library.add_group(group)
+
+        smiles = "CC(C)C"
+        groupG = library.fragment_smiles(smiles, onFail="condense")[0]
+        assert groupG.to_smiles() == smiles
+        groupsSmarts = Counter([group.type for group in groupG.nodes.values()])
+        assert {"CC(C)C":1} == groupsSmarts
+
+        groupEdges = Counter(
+            [
+                (groupG.nodes[edge1].type, groupG.nodes[edge2].type)
+                for edge1, _, edge2, _, bond_number in groupG.edges
+            ]
+        )
+        assert not groupEdges
+
+    def test_library_failed_fragmentation_returnElement(self):
+        library = Libraries["base"]()
+        group = Group("CH3", "[CX4H3]", [0], "SMARTS")
+        library.add_group(group)
+        group = Group("CH2", "[CX4H2]", [0,0], "SMARTS")
+        library.add_group(group)
+
+        smiles = "CC(C)C"
+        groupG = library.fragment_smiles(smiles, onFail="itemize")[0]
+        assert groupG.to_smiles() == smiles
+        groupsSmarts = Counter([group.type for group in groupG.nodes.values()])
+        assert {"CH3":3, "DEFAULT#6":1} == groupsSmarts
+
+        groupEdges = Counter(
+            [
+                (groupG.nodes[edge1].type, groupG.nodes[edge2].type)
+                for edge1, _, edge2, _, bond_number in groupG.edges
+            ]
+        )
+        assert self.assert_equal_edgeDicts({("CH3", "DEFAULT#6"):3}, groupEdges), groupEdges
+
+    def test_library_failed_fragmentation_returnException(self):
+        from Grouper._Grouper import GrouperFragmentationError
+        library = Libraries["base"]()
+        group = Group("CH3", "[CX4H3]", [0], "SMARTS")
+        library.add_group(group)
+        group = Group("CH2", "[CX4H2]", [0,0], "SMARTS")
+        library.add_group(group)
+
+        smiles = "CC(C)C"
+        with pytest.raises(GrouperFragmentationError):
+            library.fragment_smiles(smiles, onFail="error")[0]
+    
+    def test_library_successful_fragmentation(self):
+        library = Libraries["base"]()
+        group = Group("CH3", "[CX4H3]", [0], "SMARTS")
+        library.add_group(group)
+        group = Group("CH2", "[CX4H2]", [0,0], "SMARTS")
+        library.add_group(group)
+
+        smiles = "CCC"
+        groupG = library.fragment_smiles(smiles)[0]
+        assert groupG.to_smiles() == smiles
+        groupsSmarts = Counter([group.type for group in groupG.nodes.values()])
+        assert {"CH3":2, "CH2":1} == groupsSmarts
+
+        groupEdges = Counter(
+            [
+                (groupG.nodes[edge1].type, groupG.nodes[edge2].type)
+                for edge1, _, edge2, _, bond_number in groupG.edges
+            ]
+        )
+        assert self.assert_equal_edgeDicts({("CH3", "CH2"):2}, groupEdges), groupEdges
+        

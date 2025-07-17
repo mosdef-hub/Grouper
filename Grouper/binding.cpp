@@ -27,6 +27,7 @@ PYBIND11_MODULE(_Grouper, m) {
     m.doc() = "Grouper bindings for Python";
     // exceptions
     py::register_exception<GrouperParseException>(m, "GrouperParseException");
+    py::register_exception<GrouperFragmentationError>(m, "GrouperFragmentationError");
     py::register_exception<GrouperNotYetImplementedException>(m, "GrouperNotYetImplementedException");
     py::class_<GroupGraph::Group>(m, "Group")
         .def(py::init<>())

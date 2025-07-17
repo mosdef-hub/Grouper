@@ -10,9 +10,10 @@ from typing import Dict, Union
 import rdkit.Chem
 import rdkit.Chem.Draw
 
-from Grouper import Group
+from Grouper import Group, GroupGraph
+from Grouper.fragmentation import fragment
+from Grouper._Grouper import GrouperFragmentationError
 
-# Declaring namedtuple for defining adding groups and their SMARTS to a library.
 # Declaring namedtuple for defining adding groups and their SMARTS to a library.
 GroupExtension = namedtuple(
     "GroupExtension", ["group", "doi", "extended_smarts", "priority"]
@@ -24,18 +25,15 @@ class BasisSet(object):
 
     Attributes:
         group_traces_ (list): A list of GroupExtension objects representing the groups in the library.
-        group_traces_ (list): A list of GroupExtension objects representing the groups in the library.
     """
 
     def __init__(self):
         """Initialize an empty BasisSet."""
         self.group_traces_ = []
-        self.group_traces_ = []
 
     def __repr__(self):
         """Return a string representation of the BasisSet."""
         init_message = (
-            f"{self.__class__.__name__} has {len(self.group_traces_)} unique groups."
             f"{self.__class__.__name__} has {len(self.group_traces_)} unique groups."
         )
         if self.doi and self.ref:
@@ -52,7 +50,6 @@ class BasisSet(object):
 
         Args:
             group (Group): The chemical group to add.
-            group (Group): The chemical group to add.
             doi (str, optional): doi reference for the group. Defaults to None.
             smarts (str, optional): SMARTS pattern for the group. Defaults to None.
             priority (int, optional): Priority of the group. Defaults to None.
@@ -67,7 +64,6 @@ class BasisSet(object):
             query (dict): A dictionary of attributes and their values to match.
 
         Returns:
-            list: A list of groups that match the query.
             list: A list of groups that match the query.
         """
         matched_groups = []
@@ -86,11 +82,7 @@ class BasisSet(object):
             yield trace.group
 
     def visualize_library(self):
-        """Visualize the library using RDKit.
-
-        Note:
-            This method is not yet implemented.
-        """
+        """Visualize the library using RDKit."""
         mols = []
         for group in self.get_groups():
             mol = rdkit.Chem.MolFromSmarts(group.pattern)
@@ -126,6 +118,62 @@ class BasisSet(object):
             int: The number of groups.
         """
         return len(self.group_traces_)
+    
+    def fragment_smiles(self, smiles, onFail: str = "error", **kwargs):
+        """Fragment a smiles string based on the groups in self.group_traces.
+
+        Parameters
+        ----------
+        smiles : str
+            The Daylight SMILES string for the molecule to fragment.
+        onFail : str, default "error"
+            Method for handling failing fragmentation approaches.
+            - "error": raise an exception if fragmentation returns no matchin groups
+            - "itemize": all missing atoms are treated as atomistic Groups with the name
+                "DEFAULT#N", where N is the atomic number of the atom.
+            - "condense": A group is returned that is the single Group with no edges for the 
+                entire molecule. Useful if the Library does not have specific definitions for
+                small molecules such as methane `CH4`, water `H2O`, or formamide `NC=O`.
+
+        Notes
+        -----
+        See Grouper.fragmentation.fragment method for more details on **kwargs.
+
+        Returns
+        -------
+        groupGList : List[Grouper.GroupGraph]
+            The list of all fragmented group graphs generated using Grouper.fragmentation.fragment
+            to perform fragmentation.
+        """
+        nodes = list(self.get_groups())
+        groupGList = fragment(smiles, nodes, **kwargs)
+        if len(groupGList) > 0:
+            return groupGList
+        if onFail == "error":
+            raise GrouperFragmentationError(f"Failed to fully fragment {smiles=} with Library {self.__class__.__name__}.")
+        elif onFail == "itemize":
+            # add some common elements at end of list to match
+            nodes.append(Group("DEFAULT#6", "[#6]", [0,0,0,0], "SMARTS"))
+            nodes.append(Group("DEFAULT#7", "[#7]", [0,0,0], "SMARTS"))
+            nodes.append(Group("DEFAULT#8", "[#8]", [0,0], "SMARTS"))
+            nodes.append(Group("DEFAULT#9", "[#9]", [0], "SMARTS"))
+            nodes.append(Group("DEFAULT#16", "[#16]", [0,0], "SMARTS"))
+            nodes.append(Group("DEFAULT#17", "[#17]", [0], "SMARTS"))
+            nodes.append(Group("DEFAULT#35", "[#35]", [0], "SMARTS"))
+            nodes.append(Group("DEFAULT", "[*]", [0,0,0,0], "SMARTS")) # wildcard
+
+            groupGList = fragment(smiles, nodes, **kwargs)
+            if len(groupGList) == 0:
+                raise GrouperFragmentationError(f"Fragmentation with {onFail=} still failed to match all atoms in system.")
+            return groupGList
+        elif onFail == "condense":
+            groupG = GroupGraph()
+            groupG.add_node(smiles, smiles, [], "SMILES")
+            return [groupG]
+        else:
+            ValueError(f"Improper argument {onFail=} for fragmentation. Please select one of 'error', 'itemize', or 'condense'.")
+        
+        
 
 
 class Joback(BasisSet):
@@ -153,8 +201,8 @@ class Joback(BasisSet):
             GroupExtension(Group('ring-CH2-', '[CX4H2;R]', [0,0], 'SMARTS'), self.doi, 'Cring', None),
             GroupExtension(Group('ring>CH-', '[CX4H;R]', [0,0,0], 'SMARTS'), self.doi, 'Cring', None),
             GroupExtension(Group('ring>C<', '[CX4H0;R]', [0,0,0,0], 'SMARTS'), self.doi, 'Cring', None),
-            GroupExtension(Group('ring=CH-', '[CX3H1&R,cX3H1&R]', [0,0], 'SMARTS'), self.doi, 'Cring', None),
-            GroupExtension(Group('ring=C<', '[$([#6X3H0;R]);!$([#6X3H0;R]=[#8])]', [0,0,0], 'SMARTS'), self.doi, 'Cring', None),
+            GroupExtension(Group('ring=CH-', '[#6;$([CX3H1&R,cX3H1&R])]', [0,0], 'SMARTS'), self.doi, 'Cring', None),
+            GroupExtension(Group('ring=C<', '[#6;$([#6X3H0;R]);!$([#6X3H0;R]=[#8])]', [0,0,0], 'SMARTS'), self.doi, 'Cring', None),
             GroupExtension(Group('-F', '[F;X1]', [0], 'SMARTS'), self.doi, 'F', None),
             GroupExtension(Group('-Cl', '[Cl;X1]', [0], 'SMARTS'), self.doi, 'Cl', None),
             GroupExtension(Group('-Br', '[Br;X1]', [0], 'SMARTS'), self.doi, 'Br', None),
@@ -163,7 +211,7 @@ class Joback(BasisSet):
             GroupExtension(Group('-OH (phenol)', '[O;H1;$(O-!@c)]', [0], 'SMARTS'), self.doi, 'O', None),
             GroupExtension(Group('-O- (non-ring)', '[OX2H0;!R;!$([OX2H0]-[#6]=[#8])]', [0], 'SMARTS'), self.doi, 'O', None),
             GroupExtension(Group('-O- (ring)', '[#8X2H0;R;!$([#8X2H0]~[#6]=[#8])]', [0,0], 'SMARTS'), self.doi, 'Oring', None),
-            GroupExtension(Group('>C=O (non-ring)', '[$([CX3H0](=[OX1]));!$([CX3](=[OX1])-[OX2]);!R]=O', [0,0], 'SMARTS'), self.doi, 'C=O', None),
+            GroupExtension(Group('>C=O (non-ring)', '[C;$([CX3H0](=[OX1]));!$([CX3](=[OX1])-[OX2]);!R]=O', [0,0], 'SMARTS'), self.doi, 'C=O', None),
             GroupExtension(Group('>C=O (ring)', '[$([#6X3H0](=[OX1]));!$([#6X3](=[#8X1])~[#8X2]);R]=O', [0,0], 'SMARTS'), self.doi, 'C=O', None),
             GroupExtension(Group('O=CH- (aldehyde)', '[CH;D2](=O)', [0], 'SMARTS'), self.doi, 'C=O', None),
             GroupExtension(Group('-COOH (acid)', '[OX2H]-[C]=O', [1], 'SMARTS'), self.doi, 'C(=O)O', None),
@@ -177,7 +225,7 @@ class Joback(BasisSet):
             GroupExtension(Group('-N= (ring)', '[#7X2H0;R]', [0,0], 'SMARTS'), self.doi, 'Nring', None),
             GroupExtension(Group('=NH', '[#7X2H1]', [0], 'SMARTS'), self.doi, 'N', None),
             GroupExtension(Group('-CN', '[#6X2]#[#7X1H0]', [0], 'SMARTS'), self.doi, 'CN', None),
-            GroupExtension(Group('-NO2', '[$([#7X3,#7X3+][!#8])](=[O])[O-]', [0], 'SMARTS'), self.doi, 'N(=O)O', None),
+            GroupExtension(Group('-NO2', '[#7X3+](=[O])[O-]', [0], 'SMARTS'), self.doi, 'N(=O)O', None),
             GroupExtension(Group('-SH', '[SX2H]', [0], 'SMARTS'), self.doi, 'S', None),
             GroupExtension(Group('-S- (non-ring)', '[#16X2H0;!R]', [0,0], 'SMARTS'), self.doi, 'S', None),
             GroupExtension(Group('-S- (ring)', '[#16X2H0;R]', [0,0], 'SMARTS'), self.doi, 'Sring', None),
