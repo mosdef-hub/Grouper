@@ -7,6 +7,7 @@ from typing import List, Literal, Union
 from rdkit import Chem
 
 from Grouper import Group, GroupGraph, exhaustive_fragment
+from Grouper._Grouper import GrouperParseException
 
 
 def fragment(
@@ -17,7 +18,7 @@ def fragment(
     incompleteGraphHandler: Literal["remove", "keep", "raise error"] = "remove",
     matchHubs: bool = False,
 ) -> list:
-    """Fragmenter a smiles definied molecule based on a list of nodes.
+    """Fragmente a smiles defined molecule based on a list of nodes.
 
     Parameters
     ----------
@@ -82,9 +83,13 @@ def fragment(
     list of Grouper.GroupGraph
         A list of GroupGraphs that represent the possible fragmentations of the molecule.
     """
-    # some preliminary type checking and error handling
+    # Some preliminary type checking and error handling
     # Handle both GroupExtension and Groups
     mol = Chem.MolFromSmiles(smiles)  # convert to RDKit mol
+    if not mol and not returnHandler == "exhautive":
+        raise GrouperParseException(
+            f"Fragmentation of {smiles} is not readable by RDKit.MolFromSmiles."
+        )
     if not smiles or not nodeDefs:  #
         return []
     if returnHandler == "exhaustive":  # call cpp fragmenter for exhaustive matching

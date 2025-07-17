@@ -176,6 +176,7 @@ std::pair<std::unordered_set<GroupGraph>, size_t> exhaustiveGenerate(
     std::string config_path = ""
 ) {
 
+
     // Error handling
     if (n_nodes < 1) {
         throw std::invalid_argument("Number of nodes must be greater than 0...");

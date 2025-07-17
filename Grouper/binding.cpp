@@ -31,7 +31,7 @@ PYBIND11_MODULE(_Grouper, m) {
     py::class_<GroupGraph::Group>(m, "Group")
         .def(py::init<>())
         .def(py::init<const std::string&, const std::string&, const std::vector<int>&, std::string>(),
-            py::arg("ntype"), py::arg("pattern"), py::arg("hubs"), py::arg("pattern_type") = "SMILES")
+            py::arg("ntype"), py::arg("pattern"), py::arg("hubs")=py::list(), py::arg("pattern_type") = "SMILES")
         .def_readwrite("type", &GroupGraph::Group::ntype)
         .def_readwrite("pattern", &GroupGraph::Group::pattern)
         .def_readwrite("ports", &GroupGraph::Group::ports)

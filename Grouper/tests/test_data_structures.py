@@ -181,6 +181,18 @@ class TestGroupGraph(BaseTest):
             (0, 0, 1, 1),
         }
 
+    def test_add_no_port_group(self):
+        graph = GroupGraph()
+        group = Group(ntype="solo", pattern="c1ccccc1", pattern_type="SMARTS")
+        graph.add_node(group)
+        group = Group(ntype="solo", pattern="c1ccccc1", hubs=[], pattern_type="SMARTS")
+        graph.add_node(group)
+        graph.add_node(group.type, group.pattern, [], group.pattern_type)
+        assert len(graph.nodes) == 3
+        msg = re.escape(r"Source port does not exist")
+        with pytest.raises(ValueError, match=msg):
+            graph.add_edge((0,0), (1,0))
+
     def test_add_edge(self):
         graph = GroupGraph()
         graph.add_node("type1", "C", [0, 0])
