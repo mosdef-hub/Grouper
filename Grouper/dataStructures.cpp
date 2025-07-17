@@ -7,6 +7,7 @@
 #include <queue>
 #include <stack>
 #include <nlohmann/json.hpp>
+#include <memory>
 
 #include "dataStructures.hpp"
 
@@ -90,7 +91,35 @@ void initializeNautyStructures(int n) {
 
 // Function to create a rdkit mol whether smarts or smiles
 std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmarts) {
-    return std::unique_ptr<RDKit::ROMol>(isSmarts ? RDKit::SmartsToMol(pattern) : RDKit::SmilesToMol(pattern));
+    std::unique_ptr<RDKit::ROMol> rdkitMol;
+
+    // Create a molecule based on whether it's SMILES or SMARTS
+    if (isSmarts) {
+        rdkitMol.reset(RDKit::SmartsToMol(pattern));
+    } else {
+        rdkitMol.reset(RDKit::SmilesToMol(pattern));
+    }
+
+    if (!rdkitMol) {
+        return nullptr; // Return nullptr if molecule creation failed
+    }
+
+    RDKit::RWMol processedMol;
+
+    // Process atoms and add to the new molecule
+    for (const auto& atom : rdkitMol->atoms()) {
+        RDKit::Atom* new_atom = new RDKit::Atom(atom->getAtomicNum()); // Dynamically allocate new atom
+        new_atom->setFormalCharge(atom->getFormalCharge()); // Keep charge for valency
+        processedMol.addAtom(new_atom); // Add the new atom
+    }
+
+    // Add bonds to processed molecule
+    for (const auto& bond : rdkitMol->bonds()) {
+        processedMol.addBond(bond->getBeginAtomIdx(), bond->getEndAtomIdx(), bond->getBondType());
+    }
+
+    // Return a new ROMol constructed from processedMol
+    return std::make_unique<RDKit::ROMol>(processedMol);
 }
 
 // Function to convert rdkit ROMol to AtomGraph
@@ -2136,4 +2165,3 @@ std::vector<AtomGraph::NodeIDType> AtomGraph::nodeOrbits() const {
 
     return orbits;
 }
-

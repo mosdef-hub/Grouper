@@ -265,8 +265,6 @@ class TestLibrariesFragmentations(BaseTest):
         -----
         "C(O)CCC(=O)O" is an example of one that fails when fragmented by JOBACK
         """
-        if True: # skip for now
-            return
         LIBRARY = LIBRARYGROUPS[0]
         GROUPS = LIBRARYGROUPS[1]
         gGList = fragment(
@@ -276,6 +274,9 @@ class TestLibrariesFragmentations(BaseTest):
             incompleteGraphHandler="remove",
             nodeDefsSorter="size",
         )
+        if not test_molecules[MOLSMILES][LIBRARY]["GROUPS"]:
+            assert len(gGList) == 0 
+            return # These groups fail to match
         firstgG = gGList[0]
         assert firstgG.to_smiles() == MOLSMILES
 
@@ -332,7 +333,7 @@ class TestLibrariesFragmentations(BaseTest):
 
         smiles = "CC(C)C"
         with pytest.raises(GrouperFragmentationError):
-            groupG = library.fragment_smiles(smiles, onFail="error")[0]
+            library.fragment_smiles(smiles, onFail="error")[0]
     
     def test_library_successful_fragmentation(self):
         library = Libraries["base"]()
