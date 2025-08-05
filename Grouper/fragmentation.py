@@ -86,7 +86,7 @@ def fragment(
     # Some preliminary type checking and error handling
     # Handle both GroupExtension and Groups
     mol = Chem.MolFromSmiles(smiles)  # convert to RDKit mol
-    if not mol and not returnHandler == "exhautive":
+    if not mol and not returnHandler == "exhaustive":
         raise GrouperParseException(
             f"Fragmentation of {smiles} is not readable by RDKit.MolFromSmiles."
         )
@@ -131,14 +131,14 @@ def fragment(
             )
     # sort by least number of nodes
     matchesList.sort(key=lambda x: len(x.all_group_indices))
-    allGroupGraphList = [
-        _group_graph_from_match(
+    allGroupGraphAndMatchStateList = []
+    for possible_fragmentation in matchesList:
+        groupG = _group_graph_from_match(
             possible_fragmentation, nodeDefs, incompleteGraphHandler
         )
-        for possible_fragmentation in matchesList
-    ]
-    allGroupGraphList = [groupG for groupG in allGroupGraphList if groupG is not None]
-    return allGroupGraphList
+        if groupG is not None:
+            allGroupGraphAndMatchStateList.append((groupG, possible_fragmentation))
+    return allGroupGraphAndMatchStateList
 
 
 class MatchState:
