@@ -164,9 +164,7 @@ void insertGraph(PGconn* conn, const GroupGraph& graph, const std::string& table
     PQclear(insertRes);
 }
 
-thread_local size_t isomorphism_checks = 0;
-
-std::pair<std::unordered_set<GroupGraph>, size_t> exhaustiveGenerate(
+std::unordered_set<GroupGraph> exhaustiveGenerate(
     int n_nodes,
     std::unordered_set<GroupGraph::Group> node_defs,
     int num_procs = -1,
@@ -305,16 +303,13 @@ std::pair<std::unordered_set<GroupGraph>, size_t> exhaustiveGenerate(
         std::cout << "Graphs saved to database." << std::endl;
         return {};
     } else {
-        size_t total_isomorphism_checks = 0;
         size_t previous_n_colorings = 0;
         std::unordered_set<std::string> canon_basis;
-        std::unordered_map<std::string, std::unordered_set<std::string>> vcolg_line_to_unique_smiles;
         int max_threads = num_procs;
         std::vector<std::unordered_set<GroupGraph>> all_local_bases(max_threads);
 
     #pragma omp parallel
     {
-            isomorphism_checks = 0; // Reset for each thread
             int tid = omp_get_thread_num();
             std::unordered_set<GroupGraph>& local_basis = all_local_bases[tid];
             int n = 20; // Max number of nodes (adjustable)
@@ -338,10 +333,6 @@ std::pair<std::unordered_set<GroupGraph>, size_t> exhaustiveGenerate(
                         update_progress(n_finished, total_lines);
                     }
                 }
-            }
-            #pragma omp critical
-            {
-                total_isomorphism_checks += isomorphism_checks;
             }
         }
 
@@ -371,26 +362,14 @@ std::pair<std::unordered_set<GroupGraph>, size_t> exhaustiveGenerate(
                 positiveConstraints, negativeConstraints,
                 g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
             );
-            for (const auto& graph : local_basis) {
-                vcolg_line_to_unique_smiles[lines[i]].insert(graph.toSmiles());
-            }
         }
 
-        std::cout << "\nUnique graphs per vcolg line:" << std::endl;
-        for (const auto& pair : vcolg_line_to_unique_smiles) {
-            std::cout << "  Line: \"" << pair.first << "\", Unique Graphs: " << pair.second.size();
-            for (const auto& smi : pair.second) {
-                std::cout << " " << smi;
-            }
-            std::cout << std::endl;
-        }
-
-        return {global_basis, total_isomorphism_checks};
+        return global_basis;
     }
 }
 
 // This is the randomGenerate that utilizes the nauty library
-std::pair<std::unordered_set<GroupGraph>, size_t> randomGenerate(
+std::unordered_set<GroupGraph> randomGenerate(
     int n_nodes,
     const std::unordered_set<GroupGraph::Group>& node_defs,
     int num_graphs = 100,
@@ -536,12 +515,10 @@ std::pair<std::unordered_set<GroupGraph>, size_t> randomGenerate(
     }
 
     bool reachedMaxAttempts = true;
-    size_t total_isomorphism_checks = 0;
 
     omp_set_num_threads(num_procs);
     #pragma omp parallel
     {
-        isomorphism_checks = 0; // Reset for each thread
         std::unordered_set<GroupGraph> local_basis;
         // std::random_device rd;
         std::mt19937 gen(std::random_device{}());
@@ -554,7 +531,6 @@ std::pair<std::unordered_set<GroupGraph>, size_t> randomGenerate(
             }
             GroupGraph candidate_graph;
             auto [vcolg_line_idx, colors, edge_list] = possible_node_colored_graphs[dist_graph(gen)];
-            // printf("trying to generate graph from vcolg line %d: %s\n", vcolg_line_idx, lines[vcolg_line_idx].c_str());
             for (int color : colors) {
                 GroupGraph::Group group = color_to_group[color];
                 candidate_graph.addNode(group.ntype, group.pattern, group.hubs, group.patternType);
@@ -606,15 +582,11 @@ std::pair<std::unordered_set<GroupGraph>, size_t> randomGenerate(
                 }
             }
         }
-        #pragma omp critical
-        {
-            total_isomorphism_checks += isomorphism_checks;
-        }
     }
 
     if (reachedMaxAttempts) {
         std::cout << "Warning: Maximum number of attempts reached without generating desired number of graphs..." << std::endl;
     }
 
-    return {global_basis, total_isomorphism_checks};
+    return global_basis;
 }

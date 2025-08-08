@@ -7,9 +7,7 @@
 #include <utility>
 #include "dataStructures.hpp"
 
-extern thread_local size_t isomorphism_checks;
-
-std::pair<std::unordered_set<GroupGraph>, size_t> exhaustiveGenerate(
+std::unordered_set<GroupGraph> exhaustiveGenerate(
     int n_nodes,
     std::unordered_set<GroupGraph::Group> node_defs,
     int num_procs,
@@ -19,7 +17,7 @@ std::pair<std::unordered_set<GroupGraph>, size_t> exhaustiveGenerate(
     std::string config_path
 );
 
-std::pair<std::unordered_set<GroupGraph>, size_t> randomGenerate(
+std::unordered_set<GroupGraph> randomGenerate(
     int n_nodes,
     const std::unordered_set<GroupGraph::Group>& node_defs,
     int num_graphs,
