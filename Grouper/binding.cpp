@@ -69,6 +69,7 @@ PYBIND11_MODULE(_Grouper, m) {
             py::arg("strict") = true
         )
         .def("n_free_ports", &GroupGraph::numFreePorts)
+        .def("is_port_free", &GroupGraph::isPortFree, py::arg("node_id"), py::arg("port"))
         .def("clear_edges", &GroupGraph::clearEdges)
         .def("compute_orbits",
             static_cast<std::pair<std::vector<int>, std::vector<int>> (GroupGraph::*)(
@@ -145,7 +146,7 @@ PYBIND11_MODULE(_Grouper, m) {
                                     const std::unordered_map<std::string, int>& positive_constraints,
                                     const std::unordered_set<std::string>& negative_constraints,
                                     const std::string& config_path) {
-        std::unordered_set<GroupGraph> result = exhaustiveGenerate(n_nodes, node_defs, num_procs, vcolg_output_file, positive_constraints, negative_constraints, config_path);
+        auto result = exhaustiveGenerate(n_nodes, node_defs, num_procs, vcolg_output_file, positive_constraints, negative_constraints, config_path);
         return convert_unordered_set(result);
     },
         py::arg("n_nodes"),
@@ -162,7 +163,7 @@ PYBIND11_MODULE(_Grouper, m) {
                                 int num_procs,
                                 const std::unordered_map<std::string, int>& positive_constraints,
                                 const std::unordered_set<std::string>& negative_constraints) {
-        std::unordered_set<GroupGraph> result = randomGenerate(n_nodes, node_defs, num_graphs, num_procs, positive_constraints, negative_constraints);
+        auto result = randomGenerate(n_nodes, node_defs, num_graphs, num_procs, positive_constraints, negative_constraints);
         return convert_unordered_set(result);
     },
         py::arg("n_nodes"),

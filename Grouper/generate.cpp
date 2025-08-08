@@ -12,6 +12,7 @@
 #include <vector>
 #include <filesystem>
 #include <random>
+#include <algorithm>
 
 #include <libpq-fe.h>
 #include <omp.h>
@@ -21,6 +22,7 @@
 
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
+#include "generate.hpp"
 
 #define MAX_EDGES 100
 
@@ -144,7 +146,27 @@ bool check_max_bond_not_exceeded_tmp(
 
 
 
-std::unordered_set<GroupGraph> exhaustiveGenerate(
+void insertGraph(PGconn* conn, const GroupGraph& graph, const std::string& table_name) {
+    std::string smiles = graph.toSmiles();
+    std::string graph_data = graph.serialize();
+    int n_nodes = graph.nodes.size();
+
+    const char* paramValues[3];
+    paramValues[0] = smiles.c_str();
+    paramValues[1] = graph_data.c_str();
+    paramValues[2] = std::to_string(n_nodes).c_str();
+
+    std::string insert_query = "INSERT INTO " + table_name + " (smiles, graph_data, n_nodes) VALUES ($1, $2, $3) ON CONFLICT (smiles) DO NOTHING";
+    PGresult* insertRes = PQexecParams(conn, insert_query.c_str(), 3, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (PQresultStatus(insertRes) != PGRES_COMMAND_OK && PQresultStatus(insertRes) != PGRES_TUPLES_OK) {
+    }
+    PQclear(insertRes);
+}
+
+thread_local size_t isomorphism_checks = 0;
+
+std::pair<std::unordered_set<GroupGraph>, size_t> exhaustiveGenerate(
     int n_nodes,
     std::unordered_set<GroupGraph::Group> node_defs,
     int num_procs = -1,
@@ -211,256 +233,164 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     }
 
     std::unordered_set<GroupGraph> global_basis;
-    // std::unordered_set<std::vector<setword>, hash_vector> canon_basis;
-    std::unordered_set<std::string> canon_basis;
-
-    // Prepare per-thread local_basis sets
-    int max_threads = num_procs;
-    std::vector<std::unordered_set<GroupGraph>> all_local_bases(max_threads);
-
     omp_set_num_threads(num_procs);      // Set the number of threads to match
     int n_finished = 0;
     std::cout<< "Using "<<num_procs << " processors" << std::endl;
 
-    #pragma omp parallel
-    {
-        int tid = omp_get_thread_num();
-        // Thread-local nauty structures using std::vector
-        int n = 20; // Max number of nodes (adjustable)
-        int m = SETWORDSNEEDED(n);
-        std::vector<setword> g(m * n, 0);
-        std::vector<int> lab(n, 0), ptn(n, 0), orbits(n, 0);
-        DEFAULTOPTIONS_GRAPH(options);
-        statsblk stats;
-
-        // Thread-local basis set (now in all_local_bases)
-        std::unordered_set<GroupGraph>& local_basis = all_local_bases[tid];
-
-        #pragma omp for schedule(dynamic) nowait
-        for (int i = 0; i < total_lines; ++i) {
-            process_nauty_output(
-                lines[i],
-                node_defs,
-                &local_basis,
-                positiveConstraints,
-                negativeConstraints,
-                g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
-            );
-
-            // Only update progress every 100 lines to reduce contention
-            if ((++n_finished % 100) == 0 || n_finished == total_lines) {
-            #pragma omp critical
-            {
-                update_progress(n_finished, total_lines);
-                }
-            }
-            }
-        }
-
-    // Merge all thread-local bases into the global set serially
-    for (const auto& local_basis : all_local_bases) {
-            for (const auto& graph : local_basis) {
-                if (canon_basis.find(graph.toSmiles()) == canon_basis.end()) {
-                    canon_basis.insert(graph.toSmiles());
-                    global_basis.insert(graph);
-                }
-        }
-    }
-    std::cout << std::endl;
-
-
     if (!config_path.empty()) {
-
         std::unordered_map<std::string, std::string> configParams = parseConfig(config_path);
-
-        std::string table_name = configParams["table_name"]; // Get the table name from config
-
+        std::string table_name = configParams["table_name"];
         std::string conninfo = "dbname=" + configParams["dbname"] +
                        " user=" + configParams["user"] +
                        " password=" + configParams["password"] +
                        " hostaddr=" + configParams["hostaddr"] +
                        " port=" + configParams["port"];
 
-        PGconn* conn = PQconnectdb(conninfo.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-                std::cerr << "Connection to database failed: " << PQerrorMessage(conn) << std::endl;
-                PQfinish(conn);
-            }
+        PGconn* main_conn = PQconnectdb(conninfo.c_str());
+        if (PQstatus(main_conn) != CONNECTION_OK) {
+            std::cerr << "Connection to database failed: " << PQerrorMessage(main_conn) << std::endl;
+            PQfinish(main_conn);
+            throw std::runtime_error("Database connection failed.");
+        }
+        std::string create_table_query =
+            "CREATE TABLE IF NOT EXISTS " + table_name + " (" +
+            "smiles TEXT PRIMARY KEY, " +
+            "graph_data TEXT, " +
+            "n_nodes INT" +
+            ");";
+        executeQuery(main_conn, create_table_query);
+        PQfinish(main_conn);
 
-        try {
-                // Sanity check: Check if connection is in a valid state
-                if (PQstatus(conn) != CONNECTION_OK) {
-                    std::cerr << "Database connection is not in a valid state: " << PQerrorMessage(conn) << std::endl;
-                    PQfinish(conn);
+        #pragma omp parallel
+        {
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                #pragma omp critical
+                {
+                    std::cerr << "Thread " << omp_get_thread_num() << " failed to connect to DB: " << PQerrorMessage(conn) << std::endl;
                 }
+            } else {
+                std::unordered_set<GroupGraph> local_basis;
+                int n = 20; // Max number of nodes (adjustable)
+                int m = SETWORDSNEEDED(n);
+                std::vector<setword> g(m * n, 0);
+                std::vector<int> lab(n, 0), ptn(n, 0), orbits(n, 0);
+                DEFAULTOPTIONS_GRAPH(options);
+                statsblk stats;
 
-                // Sanity check: Check if the table exists and create it if it doesn't
-                std::string create_table_query =
-                    "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                    "smiles TEXT PRIMARY KEY, "
-                    "graph_data TEXT, "
-                    "n_nodes INT"
-                    ");";
+                #pragma omp for schedule(dynamic) nowait
+                for (int i = 0; i < total_lines; ++i) {
+                    local_basis.clear();
+                    process_nauty_output(
+                        lines[i], node_defs, &local_basis,
+                        positiveConstraints, negativeConstraints,
+                        g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
+                    );
 
-                executeQuery(conn, create_table_query);
-
-                // Prepare SQL statement for insertion
-                std::string insert_query = "INSERT INTO " + table_name +" (smiles, graph_data, n_nodes) VALUES ($1, $2, $3)";
-
-                // Start a transaction block
-                PGresult* res = PQexec(conn, "BEGIN");
-                if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-                    std::cerr << "BEGIN command failed: " << PQerrorMessage(conn) << std::endl;
-                    PQclear(res);
-                    PQfinish(conn);
-                }
-                PQclear(res);
-
-                // Loop through the global_basis set and insert each GroupGraph into the database
-                for (const auto& graph : global_basis) {
-                    std::string smiles = graph.toSmiles();
-                    std::string graph_data = graph.serialize();
-                    int n_nodes = graph.nodes.size();
-
-                    // Prepare parameters for the insert query
-                    const char* paramValues[3];
-                    paramValues[0] = smiles.c_str();
-                    paramValues[1] = graph_data.c_str();
-                    paramValues[2] = std::to_string(n_nodes).c_str();
-
-                    // Execute the insert query
-                    PGresult* insertRes = PQexecParams(conn, insert_query.c_str(), 3, nullptr, paramValues, nullptr, nullptr, 0);
-                    if (PQresultStatus(insertRes) != PGRES_COMMAND_OK) {
-                        std::cerr << "Insert command failed for SMILES: " << smiles << ", Error: " << PQerrorMessage(conn) << std::endl;
-                        PQclear(insertRes);
-                        // Optionally, you could choose to rollback the transaction here if any insert fails
-                        continue;  // Skip to the next graph if insertion fails
+                    for (const auto& graph : local_basis) {
+                        insertGraph(conn, graph, table_name);
                     }
-                    PQclear(insertRes);
-                }
 
-                // Commit the transaction
-                res = PQexec(conn, "COMMIT");
-                if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-                    std::cerr << "COMMIT command failed: " << PQerrorMessage(conn) << std::endl;
-                    PQclear(res);
-                    PQfinish(conn);
+                    if ((++n_finished % 1) == 0 || n_finished == total_lines) {
+                        #pragma omp critical
+                        {
+                            update_progress(n_finished, total_lines);
+                        }
+                    }
                 }
-                PQclear(res);
-
-        } catch (const std::exception& e) {
-                std::cerr << "Database error: " << e.what() << std::endl;
                 PQfinish(conn);
             }
+        }
+        std::cout << std::endl;
+        std::cout << "Graphs saved to database." << std::endl;
+        return {};
+    } else {
+        size_t total_isomorphism_checks = 0;
+        size_t previous_n_colorings = 0;
+        std::unordered_set<std::string> canon_basis;
+        std::unordered_map<std::string, std::unordered_set<std::string>> vcolg_line_to_unique_smiles;
+        int max_threads = num_procs;
+        std::vector<std::unordered_set<GroupGraph>> all_local_bases(max_threads);
 
-            PQfinish(conn);
-            std::cout << "Connection closed." << std::endl;
+    #pragma omp parallel
+    {
+            isomorphism_checks = 0; // Reset for each thread
+            int tid = omp_get_thread_num();
+            std::unordered_set<GroupGraph>& local_basis = all_local_bases[tid];
+            int n = 20; // Max number of nodes (adjustable)
+            int m = SETWORDSNEEDED(n);
+            std::vector<setword> g(m * n, 0);
+            std::vector<int> lab(n, 0), ptn(n, 0), orbits(n, 0);
+            DEFAULTOPTIONS_GRAPH(options);
+            statsblk stats;
+
+            #pragma omp for schedule(dynamic) nowait
+            for (int i = 0; i < total_lines; ++i) {
+                process_nauty_output(
+                    lines[i], node_defs, &local_basis,
+                    positiveConstraints, negativeConstraints,
+                    g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
+                );
+
+                if ((++n_finished % 1) == 0 || n_finished == total_lines) {
+                    #pragma omp critical
+                    {
+                        update_progress(n_finished, total_lines);
+                    }
+                }
+            }
+            #pragma omp critical
+            {
+                total_isomorphism_checks += isomorphism_checks;
+            }
+        }
+
+        for (const auto& local_basis : all_local_bases) {
+            for (const auto& graph : local_basis) {
+                std::string smiles = graph.toSmiles();
+                if (canon_basis.find(smiles) == canon_basis.end()) {
+                    canon_basis.insert(smiles);
+                    global_basis.insert(graph);
+                }
+            }
+        }
+        std::cout << std::endl;
+        std::cout<< "Number of unique graphs: " << global_basis.size() << std::endl;
+
+        // This part is not parallelized, but it should be fast enough
+        for (int i = 0; i < total_lines; ++i) {
+            std::unordered_set<GroupGraph> local_basis;
+            int n = 20; // Max number of nodes (adjustable)
+            int m = SETWORDSNEEDED(n);
+            std::vector<setword> g(m * n, 0);
+            std::vector<int> lab(n, 0), ptn(n, 0), orbits(n, 0);
+            DEFAULTOPTIONS_GRAPH(options);
+            statsblk stats;
+            process_nauty_output(
+                lines[i], node_defs, &local_basis,
+                positiveConstraints, negativeConstraints,
+                g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
+            );
+            for (const auto& graph : local_basis) {
+                vcolg_line_to_unique_smiles[lines[i]].insert(graph.toSmiles());
+            }
+        }
+
+        std::cout << "\nUnique graphs per vcolg line:" << std::endl;
+        for (const auto& pair : vcolg_line_to_unique_smiles) {
+            std::cout << "  Line: \"" << pair.first << "\", Unique Graphs: " << pair.second.size();
+            for (const auto& smi : pair.second) {
+                std::cout << " " << smi;
+            }
+            std::cout << std::endl;
+        }
+
+        return {global_basis, total_isomorphism_checks};
     }
-
-    std::cout<< "Number of unique graphs: " << global_basis.size() << std::endl;
-
-    return global_basis;
 }
 
-
-
-// std::unordered_set<GroupGraph> randomGenerate(
-//     int n_nodes,
-//     const std::unordered_set<GroupGraph::Group>& node_defs,
-//     int num_graphs = 100,
-//     int num_procs = -1,
-//     const std::unordered_map<std::string, int>& positiveConstraints = {},
-//     const std::unordered_set<std::string>& negativeConstraints = {}
-// ) {
-//     // Error handling
-//     if (n_nodes < 1) {
-//         throw std::invalid_argument("Number of nodes must be greater than 0...");
-//     }
-//     if (node_defs.empty()) {
-//         throw std::invalid_argument("Group definitions must not be empty...");
-//     }
-//     if (num_graphs < 1) {
-//         throw std::invalid_argument("Number of graphs must be greater than 0...");
-//     }
-//     for (const auto& constraint : positiveConstraints) {
-//         if (constraint.second < 0) {
-//             throw std::invalid_argument("Positive constraint value must be greater than or equal to 0...");
-//         }
-//     }
-
-//     std::unordered_set<GroupGraph> global_basis;
-//     std::unordered_set<std::vector<setword>, hash_vector> canon_basis;
-
-//     std::random_device rd;
-//     std::mt19937 gen(rd());
-
-//     omp_set_num_threads(num_procs);
-//     std::cout << "Using " << num_procs << " processors" << std::endl;
-
-//     // Step 1: Precompute all possible attachments for each group
-//     std::unordered_map<GroupGraph::Group,std::unordered_map<int, std::vector<std::vector<int>>> group_attachments;
-//     for(const auto& node : node_defs) {
-//         for (int i=1; i<=n_nodes; i++) {
-//             group_attachments[node][i] = node.getPossibleAttachments(i);
-//         }
-//     }
-
-//     #pragma omp parallel
-//     {
-//         std::unordered_set<GroupGraph> local_basis;
-//         std::unordered_set<std::vector<setword>, hash_vector> local_canon_basis;
-//         std::vector<GroupGraph::Group> node_list(node_defs.begin(), node_defs.end());
-
-//         #pragma omp for schedule(dynamic) nowait
-//         for (int i = 0; i < num_graphs; ++i) {
-//             GroupGraph candidate_graph;
-//             std::vector<std::pair<int, int>> node_ports; // {node_index, port_index}
-//             std::vector<int> node_indices; // Ensures every node gets connected at least once
-
-//             // Step 2: Randomly select groups
-//             for (int j = 0; j < n_nodes; ++j) {
-//                 std::uniform_int_distribution<> dist_group(0, node_list.size() - 1);
-//                 const auto& selected_group = node_list[dist_group(gen)];
-//                 candidate_graph.addNode(selected_group.ntype, selected_group.pattern, selected_group.hubs, selected_group.isSmarts);
-//             }
-
-//             printf("Current graph: %s\n", candidate_graph.printGraph().c_str());
-
-//             // Step 3: Randomly select attachments
-
-
-//             // Step 4: Add edges
-//             for (const auto& edge : edges) {
-//                 candidate_graph.addEdge(node_ports[edge.first], node_ports[edge.second]);
-//             }
-
-//             // Step 5: Compute canonical form
-//             std::vector<setword> canong = candidate_graph.canonize();
-
-//             // Step 6: Store unique graphs
-//             if (local_canon_basis.insert(canong).second) {
-//                 local_basis.insert(candidate_graph);
-//             }
-//         }
-
-//         #pragma omp critical
-//         {
-//             for (const auto& graph : local_basis) {
-//                 if (canon_basis.insert(graph.canonize()).second) {
-//                     global_basis.insert(graph);
-//                 }
-//             }
-//         }
-//     }
-
-//     std::cout << "\nGenerated: " << global_basis.size() << " unique graphs" << std::endl;
-//     return global_basis;
-// }
-
-
-
 // This is the randomGenerate that utilizes the nauty library
-std::unordered_set<GroupGraph> randomGenerate(
+std::pair<std::unordered_set<GroupGraph>, size_t> randomGenerate(
     int n_nodes,
     const std::unordered_set<GroupGraph::Group>& node_defs,
     int num_graphs = 100,
@@ -468,7 +398,6 @@ std::unordered_set<GroupGraph> randomGenerate(
     const std::unordered_map<std::string, int>& positiveConstraints = {},
     const std::unordered_set<std::string>& negativeConstraints = {}
 ) {
-    // Error handling
     if (n_nodes < 1) {
         throw std::invalid_argument("Number of nodes must be greater than 0...");
     }
@@ -487,7 +416,7 @@ std::unordered_set<GroupGraph> randomGenerate(
         num_procs = omp_get_max_threads();
     }
 
-    std::string geng_command = "geng " + std::to_string(n_nodes) + " -ctf > geng_out.txt";
+    std::string geng_command = "geng " + std::to_string(n_nodes) + " -c > geng_out.txt";
     std::string vcolg_command = "vcolg geng_out.txt -T -m" + std::to_string(node_defs.size()) + " > vcolg_out.txt";
     system(geng_command.c_str());
     system(vcolg_command.c_str());
@@ -509,11 +438,11 @@ std::unordered_set<GroupGraph> randomGenerate(
         throw std::runtime_error("No valid graphs found...");
     }
 
-    std::vector<std::pair<std::vector<int>, std::vector<std::pair<int, int>>>> possible_node_colored_graphs;
+    std::vector<std::tuple<int, std::vector<int>, std::vector<std::pair<int, int>>>> possible_node_colored_graphs;
 
     std::unordered_set<GroupGraph> global_basis;
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::unordered_set<std::string> global_smiles_basis;
+    // std::random_device rd;
 
     // Create necessary maps
     std::unordered_map<int, std::string> int_to_node_type;
@@ -545,18 +474,45 @@ std::unordered_set<GroupGraph> randomGenerate(
         i++;
     }
 
-    // Process lines
-    for (const auto& l : lines) {
+    // Process lines and filter out incompatible graphs
+    std::vector<std::tuple<int, std::vector<int>, std::vector<std::pair<int, int>>>> valid_node_colored_graphs;
+    for (int line_idx = 0; line_idx < lines.size(); ++line_idx) {
+        const auto& l = lines[line_idx];
         auto [n_vertices, colors, edge_list] = parse_nauty_graph_line_tmp(l, node_defs);
         if (!check_max_bond_not_exceeded_tmp(edge_list, colors, node_types, int_to_node_type)) continue;
-        possible_node_colored_graphs.push_back(std::make_pair(colors, edge_list));
+
+        bool is_valid_graph = true;
+        std::unordered_map<int, int> node_degrees;
+        for (const auto& [src, dst] : edge_list) {
+            node_degrees[src]++;
+            node_degrees[dst]++;
+        }
+
+        for (int i = 0; i < n_vertices; ++i) {
+            int color = colors[i];
+            int degree = node_degrees[i];
+            if (color_to_group.at(color).hubs.size() < degree) {
+                is_valid_graph = false;
+                break;
+            }
+        }
+
+        if (is_valid_graph) {
+            valid_node_colored_graphs.push_back(std::make_tuple(line_idx, colors, edge_list));
+        }
     }
-    std::uniform_int_distribution<> dist_graph(0, possible_node_colored_graphs.size() - 1);
+    possible_node_colored_graphs = valid_node_colored_graphs;
+
+    if (possible_node_colored_graphs.empty()) {
+        throw std::runtime_error("No valid node-colored graphs found after filtering based on hub counts.");
+    }
+
+    std::uniform_int_distribution<> dist_graph(0, int(possible_node_colored_graphs.size()) - 1);
 
 
     // Find maximum degree of any node in the node colored graphs
     std::unordered_map<int, int> max_degree; // color -> max_degree
-    for (const auto& [colors, edge_list] : possible_node_colored_graphs) {
+    for (const auto& [line_idx, colors, edge_list] : possible_node_colored_graphs) {
         std::unordered_map<int, int> index_to_degree;
         for (const auto& [src, dst]: edge_list) {
             index_to_degree[src]++;
@@ -580,20 +536,25 @@ std::unordered_set<GroupGraph> randomGenerate(
     }
 
     bool reachedMaxAttempts = true;
+    size_t total_isomorphism_checks = 0;
 
     omp_set_num_threads(num_procs);
     #pragma omp parallel
     {
+        isomorphism_checks = 0; // Reset for each thread
         std::unordered_set<GroupGraph> local_basis;
+        // std::random_device rd;
+        std::mt19937 gen(std::random_device{}());
+        std::uniform_int_distribution<> dist_graph(0, possible_node_colored_graphs.size() - 1);
 
         #pragma omp for schedule(dynamic)
-        for (int attempt = 0; attempt < num_graphs * 100; ++attempt) {  // Prevent infinite loop
-            if (int(global_basis.size()) >= num_graphs) {
-                reachedMaxAttempts = false;
-                continue;  // Exit loop if enough graphs have been generated
+        for (int attempt = 0; attempt < num_graphs * 1000; ++attempt) {
+            if (global_basis.size() >= num_graphs) { // Check if another thread has already reached the target
+                continue; // Continue to next iteration, but don't generate new graphs
             }
             GroupGraph candidate_graph;
-            auto [colors, edge_list] = possible_node_colored_graphs[dist_graph(gen)];
+            auto [vcolg_line_idx, colors, edge_list] = possible_node_colored_graphs[dist_graph(gen)];
+            // printf("trying to generate graph from vcolg line %d: %s\n", vcolg_line_idx, lines[vcolg_line_idx].c_str());
             for (int color : colors) {
                 GroupGraph::Group group = color_to_group[color];
                 candidate_graph.addNode(group.ntype, group.pattern, group.hubs, group.patternType);
@@ -608,10 +569,19 @@ std::unordered_set<GroupGraph> randomGenerate(
             for (int color : colors) {
                 int node_degree = node_degrees[c];
                 std::vector<std::vector<int>> possible_attachments = group_attachments[color_to_group[color]][node_degree];
+                if (possible_attachments.empty()) {
+                    continue; // Skip this graph if no valid attachments for this degree
+                }
                 std::uniform_int_distribution<> dist_attachment(0, possible_attachments.size() - 1);
                 choosen_attachments.push_back(possible_attachments[dist_attachment(gen)]);
                 c++;
             }
+
+            // Shuffle attachments for each node once to ensure random port allocation
+            for (auto& attachments : choosen_attachments) {
+                std::shuffle(attachments.begin(), attachments.end(), gen);
+            }
+
             std::unordered_map<int, int> current_degree;
             for (int index = 0; index < n_nodes; index++) {
                 current_degree[index] = 0;
@@ -624,14 +594,21 @@ std::unordered_set<GroupGraph> randomGenerate(
                 current_degree[src]++;
                 current_degree[dst]++;
             }
-            std::vector<setword> canong = candidate_graph.canonize();
-            if (local_basis.insert(candidate_graph).second) {
-                #pragma omp critical
-                {
-                    global_basis.insert(candidate_graph);
+            std::string smiles = candidate_graph.toSmiles();
+            #pragma omp critical
+            {
+                if (global_smiles_basis.insert(smiles).second) { // If SMILES is unique
+                    global_basis.insert(candidate_graph); // Add graph to the result set
                     update_progress(global_basis.size(), num_graphs);
+                    if (int(global_basis.size()) >= num_graphs) {
+                        reachedMaxAttempts = false; // Target reached, so max attempts not reached
+                    }
                 }
             }
+        }
+        #pragma omp critical
+        {
+            total_isomorphism_checks += isomorphism_checks;
         }
     }
 
@@ -639,5 +616,5 @@ std::unordered_set<GroupGraph> randomGenerate(
         std::cout << "Warning: Maximum number of attempts reached without generating desired number of graphs..." << std::endl;
     }
 
-    return global_basis;
+    return {global_basis, total_isomorphism_checks};
 }

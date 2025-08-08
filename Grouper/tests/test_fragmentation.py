@@ -647,7 +647,7 @@ class TestFragmentationOptions(BaseTest):
         question = fragment("CCC(C)NCCNC", node_defs, returnHandler="exhaustive")
 
         assert solution in question
-        assert len(question) == 1
+        assert len(question) == 2
 
         # Test 3.5 returnHandler "exhaustive" multiple solutions
         node_defs = set()

@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "dataStructures.hpp"
+#include "generate.hpp"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -882,6 +883,7 @@ std::string GroupGraph::printGraph() const {
 }
 
 std::string GroupGraph::toSmiles() const {
+    isomorphism_checks++;
     using AtomIndexMap = std::unordered_map<int, int>;
 
     // Allocate molecular graph using smart pointer
@@ -1251,6 +1253,7 @@ void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
 }
 
 std::vector<setword> GroupGraph::canonize() const {
+    isomorphism_checks++;
     int n, m;
     graph* adj = nullptr; // Initialize pointer
 
@@ -1467,10 +1470,21 @@ std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>
             // If all query nodes are mapped, validate hubs
             if (currentMapping.size() == query.nodes.size()) {
                 // Check if the hubs specified match the query node hubs
-                for (const auto& [id, count] : queryNeededFreeValency) {
-                    NodeIDType graphNodeid = currentMapping[id];
+                std::unordered_set<NodeIDType> mappedGraphNodes;
+                for(const auto& pair : currentMapping) {
+                    mappedGraphNodes.insert(pair.second);
+                }
 
-                    if(this->getFreeValency(graphNodeid) != count) { // Check if number of bonds for query node matches the number of hubs
+                for (const auto& [queryNodeId, count] : queryNeededFreeValency) {
+                    NodeIDType graphNodeId = currentMapping[queryNodeId];
+                    int external_bonds = 0;
+                    for (const auto& edge : this->edges) {
+                        if (std::get<0>(edge) == graphNodeId && mappedGraphNodes.find(std::get<1>(edge)) == mappedGraphNodes.end()) {
+                            external_bonds++;
+                        }
+                    }
+
+                    if (external_bonds != count) {
                         return;
                     }
                 }
