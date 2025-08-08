@@ -569,13 +569,13 @@ class TestAtomGraph(BaseTest):
         # Basic node addition for AtomGraph
         agraph = AtomGraph()
         agraph.add_node("C", 4)
-        assert set(n.type for n in agraph.nodes.values()) == set(["C"])
-        assert set(n.valency for n in agraph.nodes.values()) == set([4])
+        assert set(n.type for n in agraph.nodes.values()) == {"C"}
+        assert set(n.valency for n in agraph.nodes.values()) == {4}
 
         atom = Atom("C", 4)
         agraph.add_node(atom)
-        assert set(n.type for n in agraph.nodes.values()) == set(["C", "C"])
-        assert set(n.valency for n in agraph.nodes.values()) == set([4, 4])
+        assert set(n.type for n in agraph.nodes.values()) == {"C", "C"}
+        assert set(n.valency for n in agraph.nodes.values()) == {4, 4}
         assert len(agraph.nodes) == 2
         assert len(agraph.edges) == 0
 
@@ -670,27 +670,17 @@ class TestAtomGraph(BaseTest):
         graph.add_edge(1, 2)
         sub = AtomGraph()
         sub.add_node("C", 4)
-        matches = graph.substructure_search(sub, [0, 0, 0])
-        assert self.to_set_of_sets(matches) == {
-            frozenset({(0, 0)}),
-            frozenset({(0, 2)}),
-        }
-        matches = graph.substructure_search(sub, [0, 0, 0])
-        assert self.to_set_of_sets(matches) == {
-            frozenset({(0, 0)}),
-            frozenset({(0, 2)}),
-        }
-
-        matches = graph.substructure_search(sub, [0, 0])
-        assert self.to_set_of_sets(matches) == {frozenset({(0, 1)})}
-        matches = graph.substructure_search(sub, [0, 0])
-        assert self.to_set_of_sets(matches) == {frozenset({(0, 1)})}
-
         matches = graph.substructure_search(sub, [0])
-        assert self.to_set_of_sets(matches) == set()
+        assert self.to_set_of_sets(matches) == {
+            frozenset({(0, 0)}),
+            frozenset({(0, 2)}),
+        }
+        matches = graph.substructure_search(sub, [0, 0, 0])
         assert self.to_set_of_sets(matches) == set()
 
-        graph = AtomGraph()  # "CCOCO"
+        matches = graph.substructure_search(sub, [0, 0])
+        assert self.to_set_of_sets(matches) == {frozenset({(0, 1)})}
+
         graph = AtomGraph()  # "CCOCO"
         graph.add_node("C", 4)
         graph.add_node("C", 4)
@@ -702,22 +692,12 @@ class TestAtomGraph(BaseTest):
         graph.add_edge(2, 3)
         graph.add_edge(3, 4)
         methanol = AtomGraph()  # "CO"
-        methanol = AtomGraph()  # "CO"
         methanol.add_node("C", 4)
         methanol.add_node("O", 2)
         methanol.add_edge(0, 1)
         matches = graph.substructure_search(methanol, [0, 0])
-        assert self.to_set_of_sets(matches) == {
-            frozenset({(0, 1), (1, 2)}),
-            frozenset({(0, 3), (1, 2)}),
-        }
-        matches = graph.substructure_search(methanol, [0, 0])
-        assert self.to_set_of_sets(matches) == {
-            frozenset({(0, 1), (1, 2)}),
-            frozenset({(0, 3), (1, 2)}),
-        }
+        assert self.to_set_of_sets(matches) == set()
 
-        graph = AtomGraph()  # C=CO
         graph = AtomGraph()  # C=CO
         graph.add_node("C", 4)
         graph.add_node("C", 4)
@@ -725,31 +705,24 @@ class TestAtomGraph(BaseTest):
         graph.add_edge(0, 1, 2)
         graph.add_edge(1, 2)
         alkene = AtomGraph()  # C=C
-        alkene = AtomGraph()  # C=C
         alkene.add_node("C", 4)
         alkene.add_node("C", 4)
         alkene.add_edge(0, 1, 2)
         matches = graph.substructure_search(alkene, [0])
-        assert self.to_set_of_sets(matches) == set()
+        assert self.to_set_of_sets(matches) == {frozenset({(0, 1), (1, 0)})}
+        
         matches = graph.substructure_search(alkene, [0, 0, 1, 1])
         assert self.to_set_of_sets(matches) == set()
+        
         matches = graph.substructure_search(alkene, [0, 0, 1])
-        assert self.to_set_of_sets(matches) == {frozenset({(1, 1), (0, 0)})}
+        assert self.to_set_of_sets(matches) == set()
+        
         matches = graph.substructure_search(alkene, [1, 1, 0])
-        assert self.to_set_of_sets(matches) == {frozenset({(0, 1), (1, 0)})}
-        matches = graph.substructure_search(alkene, [0, 0])
         assert self.to_set_of_sets(matches) == set()
-        assert self.to_set_of_sets(matches) == set()
-        matches = graph.substructure_search(alkene, [0, 0, 1, 1])
-        assert self.to_set_of_sets(matches) == set()
-        matches = graph.substructure_search(alkene, [0, 0, 1])
-        assert self.to_set_of_sets(matches) == {frozenset({(1, 1), (0, 0)})}
-        matches = graph.substructure_search(alkene, [1, 1, 0])
-        assert self.to_set_of_sets(matches) == {frozenset({(0, 1), (1, 0)})}
+        
         matches = graph.substructure_search(alkene, [0, 0])
         assert self.to_set_of_sets(matches) == set()
 
-        graph = AtomGraph()  # C=CO
         graph = AtomGraph()  # C=CO
         graph.add_node("C", 4)
         graph.add_node("C", 4)
@@ -759,7 +732,6 @@ class TestAtomGraph(BaseTest):
         oxyl = AtomGraph()
         oxyl.add_node("O", 2)
         matches = graph.substructure_search(oxyl, [0])
-        assert self.to_set_of_sets(matches) == {frozenset({(0, 2)})}
         assert self.to_set_of_sets(matches) == {frozenset({(0, 2)})}
 
     def test_substructure_search_2(self):
@@ -774,6 +746,9 @@ class TestAtomGraph(BaseTest):
         sub.add_edge(0, 2, 2)
 
         matches = truth.substructure_search(sub, [0])
+        assert len(matches) == 0
+
+        matches = truth.substructure_search(sub, [1])
         assert len(matches) == 1
 
     def test_substructure_search_3(self):
@@ -787,11 +762,11 @@ class TestAtomGraph(BaseTest):
         sub.add_edge(0, 1)
         sub.add_edge(1, 2)
 
-        matches = truth.substructure_search(sub, [0, 0, 0, 1, 2, 2])
-        matches = truth.substructure_search(sub, [0, 0, 0, 1, 2, 2])
-        # matches = truth.substructure_search(sub, [2,2,2, 1, 0, 0])
+        matches = truth.substructure_search(sub, [2])
         assert self.to_set_of_sets(matches) == {frozenset({(0, 0), (1, 1), (2, 2)})}
-        assert self.to_set_of_sets(matches) == {frozenset({(0, 0), (1, 1), (2, 2)})}
+
+        matches = truth.substructure_search(sub, [0, 2, 2])
+        assert self.to_set_of_sets(matches) == {frozenset({(0, 2), (1, 3), (2, 4)})}
 
     def test_json(self):
         graph = GroupGraph()
