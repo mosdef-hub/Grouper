@@ -43,7 +43,6 @@ if __name__ == "__main__":
         node_defs, 
         args.n_graphs,
         num_procs=args.n_cpus,
-        nauty_path="/raid6/homes/kierannp/projects/nauty2_8_9",
         positive_constraints=positive_constraints,
         negative_constraints=negative_constraints,
     )
@@ -51,40 +50,6 @@ if __name__ == "__main__":
     print(f"Time taken for generation: {end - start}")
 
     print(f"Total graphs: {len(result)}")
-
-
-    # save image of each molecule  
-    mols = []
-    for i, graph in enumerate(result):
-        mol = Chem.MolFromSmiles(graph.to_smiles())
-        mols.append(mol)
-    Chem.Draw.MolsToGridImage(mols, molsPerRow=5, subImgSize=(200,200)).save(f"{parent}/random_molecules_{args.n}.png")
-
-    # Function to convert matplotlib figure to PIL Image
-    def fig_to_img(fig):
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight')
-        buf.seek(0)
-        return Image.open(buf)
-    
-    # save grid image of each graph
-    figures  = []
-    for graph in result:
-        fig = visualize(graph)
-        figures.append(fig_to_img(fig))
-        plt.close(fig)
-
-    # Arrange the figures in a grid 5 per row
-    fig_width, fig_height = figures[0].size  # Assume all figures have the same size
-    composite = Image.new('RGB', (fig_width * 5, fig_height * ((len(result) // 5) + 1)))  # Create blank canvas
-
-    for i, figure in enumerate(figures):
-        x = (i % 5) * fig_width
-        y = (i // 5) * fig_height
-        composite.paste(figure, (x, y))
-
-    # Show or save the composite image
-    composite.save(f'random_graphs_{args.n}.png')
 
 
     # # Save to pickle
