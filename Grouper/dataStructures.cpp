@@ -731,11 +731,10 @@ void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int st
     }
 }
 
-std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
+std::tuple<std::vector<int>, std::vector<int>, std::vector<std::vector<int>>> GroupGraph::computeOrbits(
     const std::vector<std::pair<int, int>>& edge_list,
     const std::vector<int>& node_colors,
     graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats
-    // int* num_edges, int nauty_edges[][2], int edge_orbits[]
 ) const {
     int n = nodes.size();
     int m = SETWORDSNEEDED(n);
@@ -786,13 +785,19 @@ std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
     for (int i = 0; i < edge_data.num_edges; ++i) edge_orbits_vec[i] = edge_data.edge_orbits[i];
 
 
+    // Compute hub orbits for each node
+    std::vector<std::vector<int>> hub_orbits_vec(n);
+    for (const auto& [id, node] : nodes) {
+        hub_orbits_vec[id] = node.hubOrbits();
+    }
+
     // Clear thread-local pointer
     edge_data_ptr = nullptr;
 
-    return {node_orbits, edge_orbits_vec};
+    return {node_orbits, edge_orbits_vec, hub_orbits_vec};
 }
 
-std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
+std::tuple<std::vector<int>, std::vector<int>, std::vector<std::vector<int>>> GroupGraph::computeOrbits(
     const std::vector<std::pair<int, int>>& edge_list,
     const std::vector<int>& node_colors
 ) const {
@@ -852,10 +857,16 @@ std::pair< std::vector<int>, std::vector<int> > GroupGraph::computeOrbits(
     for (int i = 0; i < edge_data.num_edges; ++i) edge_orbits_vec[i] = edge_data.edge_orbits[i];
 
 
+    // Compute hub orbits for each node
+    std::vector<std::vector<int>> hub_orbits_vec(n);
+    for (const auto& [id, node] : nodes) {
+        hub_orbits_vec[id] = node.hubOrbits();
+    }
+
     // Clear thread-local pointer
     edge_data_ptr = nullptr;
 
-    return {node_orbits, edge_orbits_vec};
+    return {node_orbits, edge_orbits_vec, hub_orbits_vec};
 }
 
 // Conversion methods

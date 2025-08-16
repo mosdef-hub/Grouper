@@ -172,12 +172,12 @@ public:
         bool verbose = false
     );
     int numFreePorts(NodeIDType nid) const;
-    std::pair<std::vector<int>, std::vector<int>> computeOrbits( // Returns node orbits and edge orbits for use in multiprocessing
+    std::tuple<std::vector<int>, std::vector<int>, std::vector<std::vector<int>>> computeOrbits( // Returns node, edge, and hub orbits for use in multiprocessing
         const std::vector<std::pair<int, int>>& edge_list,
         const std::vector<int>& node_colors,
         graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats
     ) const;
-    std::pair<std::vector<int>, std::vector<int>> computeOrbits( // Returns node orbits and edge orbits for use in serial
+    std::tuple<std::vector<int>, std::vector<int>, std::vector<std::vector<int>>> computeOrbits( // Returns node, edge, and hub orbits for use in serial
         const std::vector<std::pair<int, int>>& edge_list,
         const std::vector<int>& node_colors
     ) const;

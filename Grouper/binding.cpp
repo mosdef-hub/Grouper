@@ -38,7 +38,6 @@ PYBIND11_MODULE(_Grouper, m) {
         .def_readwrite("ports", &GroupGraph::Group::ports)
         .def_readwrite("hubs", &GroupGraph::Group::hubs)
         .def_readwrite("pattern_type", &GroupGraph::Group::patternType)
-        .def("compute_hub_orbits", &GroupGraph::Group::hubOrbits)
         .def("possible_attachments", &GroupGraph::Group::getPossibleAttachments)
         .def("__eq__", &GroupGraph::Group::operator==)
         .def("__ne__", &GroupGraph::Group::operator!=)
@@ -72,7 +71,7 @@ PYBIND11_MODULE(_Grouper, m) {
         .def("is_port_free", &GroupGraph::isPortFree, py::arg("node_id"), py::arg("port"))
         .def("clear_edges", &GroupGraph::clearEdges)
         .def("compute_orbits",
-            static_cast<std::pair<std::vector<int>, std::vector<int>> (GroupGraph::*)(
+            static_cast<std::tuple<std::vector<int>, std::vector<int>, std::vector<std::vector<int>>> (GroupGraph::*)(
                 const std::vector<std::pair<int, int>>&,
                 const std::vector<int>&
             ) const>(&GroupGraph::computeOrbits),
