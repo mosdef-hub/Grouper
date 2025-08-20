@@ -1,4 +1,4 @@
-name: test-env
+name: test-grouper39
 channels:
   - conda-forge
   - pyg
@@ -26,7 +26,5 @@ dependencies:
   - nlohmann_json
   - python-igraph
   - dash
-  - pip:
-    - grakel
-    - dash-cytoscape
-
+  - dash_cytoscape
+  - pip
