@@ -27,4 +27,5 @@ dependencies:
   - python-igraph
   - dash
   - dash_cytoscape
+  - sklearn
   - pip
