@@ -1,4 +1,4 @@
-name: test-grouper39
+name: grouper-dev
 channels:
   - conda-forge
   - pyg
