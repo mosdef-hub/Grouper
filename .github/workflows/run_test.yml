@@ -41,7 +41,7 @@ jobs:
       run: micromamba activate grouper-dev
   
     - name: List libraries in grouper-dev
-      run: ls /home/runner/micromamba/envs/grouper-dev/lib | grep omp
+      run: ls ${MAMBA_ROOT_PREFIX}/envs/grouper-dev/lib | grep omp
 
     - name: Install package
       run: micromamba run -n grouper-dev pip install -e .
