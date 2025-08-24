@@ -15,3 +15,16 @@ wheel.expand-macos-universal-tags = true
 
 [tool.setuptools]
 packages = ["Grouper"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=Grouper --cov-report=xml:coverage.xml"
+
+[tool.coverage.run]
+source = ["Grouper"] # Adjust based on your project structure
+branch = true # Include branch coverage
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]

@@ -46,5 +46,12 @@ jobs:
     - name: Install package
       run: micromamba run -n grouper-dev pip install -e .
 
-    - name: Run tests with pytest
-      run: micromamba run -n grouper-dev pytest Grouper/tests
+    - name: Test (OS -> ${{ matrix.os }} / Python -> ${{ matrix.python-version }})
+      run: micromamba run -n grouper-dev python -m pytest -v --cov-append --cov-config=pyproject.toml --color yes --pyargs Grouper
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        verbose: true
+        files: ./coverage.xml

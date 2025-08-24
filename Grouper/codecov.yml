@@ -1,0 +1,9 @@
+ignore:
+  - "Grouper/tests"
+  - "Grouper/images"
+  - "Grouper/packages"
+  - "Grouper/submission_scripts"
+  - "Grouper/.github/ISSUE_TEMPLATE"
+  - "Grouper/.github/PULL_REQUEST_TEMPLATE.md"
+  - "run_random_generate.py"
+  - "run_exhaustive_generate.py"
