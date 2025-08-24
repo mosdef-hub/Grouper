@@ -17,14 +17,14 @@ repos:
       args: [--line-length=80, --fix]
     # Run the formatter.
     - id: ruff-format
-      exclude: 'setup.py|Grouper/tests/.*|Grouper/libraries/Libraries.py'
+      exclude: 'Grouper/tests/.*|Grouper/libraries/Libraries.py'
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v5.0.0
   hooks:
     - id: check-yaml
     - id: end-of-file-fixer
     - id: trailing-whitespace
-      exclude: 'setup.py|Grouper/tests/.*|Grouper/libraries/Libraries.py'
+      exclude: 'Grouper/tests/.*|Grouper/libraries/Libraries.py'
 
 - repo: https://github.com/pycqa/isort
   rev: 5.13.2
@@ -32,4 +32,4 @@ repos:
     - id: isort
       name: isort (python)
       args: [--profile=black, --line-length=80]
-      exclude: 'setup.py|Grouper/tests/.*|Grouper/libraries/Libraries.py'
+      exclude: 'Grouper/tests/.*|Grouper/libraries/Libraries.py'

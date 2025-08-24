@@ -1,12 +1,10 @@
 
-<a name="readme-top"></a>
+## Grouper: Molecular Group Graph Library
 
-[![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
-[![CI](https://github.com/kierannp/Grouper/actions/workflows/CI.yaml/badge.svg)](https://github.com/kierannp/Grouper/actions/workflows/CI.yaml)
+![](https://anaconda.org/conda-forge/Grouper/badges/license.svg)
+[![](https://anaconda.org/conda-forge/Grouper/badges/version.svg)](https://anaconda.org/conda-forge/Grouper)
+[![CI](https://github.com/mosdef-hub/Grouper/actions/workflows/CI.yaml/badge.svg)](https://github.com/mosdef-hub/Grouper/actions/workflows/run_test.yaml)
+[![codecov](https://codecov.io/gh/mosdef-hub/Grouper/branch/master/graph/badge.svg?token=rqPGwmXDzu)](undefined)
 
 
 
@@ -74,9 +72,9 @@ The fundamental data structure behind this package is based on a port graph, loo
 ```sh
 git clone https://github.com/mosdef-hub/Grouper
 cd Grouper
-conda create -f environment.yml
+conda create -f environment.yml # or mamba/micromamba
 conda activate grouper-dev
-pip install -e . 
+pip install -e .
 python -m pytest Grouper/tests
 ```
 
@@ -103,7 +101,7 @@ gG.add_edge(src = (1,1), dst = (2,0))
 gG.add_edge(src = (2,1), dst = (0,1))
 
 """
-Will make 
+Will make
       N
      / \
     N - N
@@ -135,8 +133,8 @@ node_defs.add(Group('benzene', 'c1ccccc1', [0,1,2,3,4,5]))
 
 # Call method to enumerate possibilities
 exhausted_space = exhaustive_generate(
-    n_nodes = 4, 
-    node_defs = node_defs, 
+    n_nodes = 4,
+    node_defs = node_defs,
     input_file_path = '',
     nauty_path = '/path/to/nauty_X_X_X',
     num_procs = -1, # -1 utilizes all availible CPUs
@@ -160,7 +158,7 @@ nxG = convert_to_nx(gG)
 max_ports = max(len(n.hubs) for n in node_defs)
 
 data = nxG.to_PyG_Data(node_descriptor_generator, max_ports)
-data.y = torch.tensor([rdkit.Chem.Descriptors.MolLogP(rdkit.Chem.MolFromSmiles(d))]) # here we utilize rdkit to estimate logP, but obviously can be generated another way 
+data.y = torch.tensor([rdkit.Chem.Descriptors.MolLogP(rdkit.Chem.MolFromSmiles(d))]) # here we utilize rdkit to estimate logP, but obviously can be generated another way
 ```
 
 
