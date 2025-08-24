@@ -47,7 +47,7 @@ jobs:
       run: micromamba run -n grouper-dev pip install -e .
 
     - name: Test (OS -> ${{ matrix.os }} / Python -> ${{ matrix.python-version }})
-      run: micromamba run -n grouper-dev python -m pytest -v --cov=Grouper --cov-report=xml --cov-append --cov-config=setup.cfg --color yes --pyargs Grouper
+      run: micromamba run -n grouper-dev python -m pytest -v --cov-append --cov-config=pyproject.toml --color yes --pyargs Grouper
 
     - name: Upload Coverage Report
       uses: codecov/codecov-action@v5
