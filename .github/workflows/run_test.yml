@@ -43,7 +43,7 @@ jobs:
       run: ls /home/runner/micromamba/envs/grouper-dev/lib | grep omp
 
     - name: Install package
-      run: micromamba run -n grouper-dev pip install .
+      run: micromamba run -n grouper-dev pip install -e .
 
     - name: Run tests with pytest
       run: micromamba run -n grouper-dev pytest Grouper/tests

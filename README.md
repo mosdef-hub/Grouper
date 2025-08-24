@@ -13,7 +13,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/kierannp/Grouper">
+  <a href="https://github.com/mosdef-hub/Grouper">
     <img src="images/grouper.jpeg" alt="Logo" width="700" height="300">
   </a>
 
@@ -22,14 +22,14 @@
   <p align="center">
     A software package for creating and manipulating graphs of molecular groups.
     <br />
-    <a href="https://github.com/kierannp/Grouper"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/mosdef-hub/Grouper"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/kierannp/Grouper">View Demo</a>
+    <a href="https://github.com/mosdef-hub/Grouper">View Demo</a>
     ·
-    <a href="https://github.com/kierannp/Grouper/issues">Report Bug</a>
+    <a href="https://github.com/mosdef-hub/Grouper/issues">Report Bug</a>
     ·
-    <a href="https://github.com/kierannp/Grouper/issues">Request Feature</a>
+    <a href="https://github.com/mosdef-hub/Grouper/issues">Request Feature</a>
   </p>
 </div>
 
@@ -71,20 +71,13 @@ The fundamental data structure behind this package is based on a port graph, loo
 
 ### Installation
 
-1. Clone the repo
 ```sh
-conda create -n Grouper python=3.9
-conda activate Grouper
-conda install librdkit-dev librdkit rdkit-dev rdkit-postgresql boost cmake rdkit eigen pybind11 openmp
-conda install -c conda-forge nauty nlohmann_json
-
-git clone https://github.com/kierannp/Grouper
+git clone https://github.com/mosdef-hub/Grouper
 cd Grouper
-```
-2. Install with `pip`
-```python
-python setup.py build_ext --inplace
-python setup.py install
+conda create -f environment.yml
+conda activate grouper-dev
+pip install -e . 
+python -m pytest Grouper/tests
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
