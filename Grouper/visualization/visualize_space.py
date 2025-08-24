@@ -3,7 +3,7 @@ from typing import Dict
 
 import matplotlib.pyplot as plt
 import networkx as nx
-from grakel.kernels import Kernel
+# from grakel.kernels import Kernel
 from networkx import Graph
 from numpy.typing import ArrayLike
 from rdkit import Chem
@@ -18,7 +18,7 @@ from Grouper import GroupGraph
 
 def chemical_space_network(
     space_set: t.Set[GroupGraph],
-    kernel: Kernel,
+    kernel,
     cutoff: float,
     known_values: dict = None,
     options: dict = None,
