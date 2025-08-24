@@ -14,11 +14,12 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     name: Grouper Tests (python)
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
+        os: [macOS-latest, ubuntu-latest]
         python-version: [3.9, 3.12]
 
     defaults:
@@ -27,7 +28,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Install environment
       uses: mamba-org/setup-micromamba@v2
