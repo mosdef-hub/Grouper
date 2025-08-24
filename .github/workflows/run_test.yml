@@ -37,24 +37,13 @@ jobs:
           python=${{ matrix.python-version }}
 
     - name: Activate env
-      run: micromamba activate test-env
-
-    - name: Source Install nauty
-      run: |
-        curl -L https://pallini.di.uniroma1.it/nauty2_8_9.tar.gz >> nauty2_8_9.tar.gz
-        tar xvzf nauty2_8_9.tar.gz
-        cd nauty2_8_9
-        bash ./configure --prefix=$CONDA_PREFIX/
-        make
-
-    - name: List nauty headers
-      run: ls /home/runner/micromamba/envs/test-env/include/nauty
+      run: micromamba activate grouper-dev
   
-    - name: List libraries in test-env
-      run: ls /home/runner/micromamba/envs/test-env/lib | grep omp
+    - name: List libraries in grouper-dev
+      run: ls /home/runner/micromamba/envs/grouper-dev/lib | grep omp
 
     - name: Install package
-      run: micromamba run -n test-env python setup.py build_ext --inplace;micromamba run -n test-env pip install .
+      run: micromamba run -n grouper-dev python setup.py build_ext --inplace;micromamba run -n grouper-dev pip install .
 
     - name: Run tests with pytest
-      run: micromamba run -n test-env pytest Grouper/tests
+      run: micromamba run -n grouper-dev pytest Grouper/tests

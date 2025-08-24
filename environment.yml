@@ -1,4 +1,4 @@
-name: test-env
+name: grouper-dev
 channels:
   - conda-forge
   - pyg
@@ -26,7 +26,6 @@ dependencies:
   - nlohmann_json
   - python-igraph
   - dash
-  - pip:
-    - grakel
-    - dash-cytoscape
-
+  - dash_cytoscape
+  - scikit-learn
+  - pip
