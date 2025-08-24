@@ -7,7 +7,6 @@ notebooks
 foo
 .benchmarks
 # Data files
-*.txt
 *.pkl
 
 foo.ipynb

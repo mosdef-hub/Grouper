@@ -14,11 +14,12 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     name: Grouper Tests (python)
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
+        os: [macOS-latest, ubuntu-latest]
         python-version: [3.9, 3.12]
 
     defaults:
@@ -27,7 +28,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Install environment
       uses: mamba-org/setup-micromamba@v2
@@ -40,10 +41,10 @@ jobs:
       run: micromamba activate grouper-dev
   
     - name: List libraries in grouper-dev
-      run: ls /home/runner/micromamba/envs/grouper-dev/lib | grep omp
+      run: ls ${MAMBA_ROOT_PREFIX}/envs/grouper-dev/lib | grep omp
 
     - name: Install package
-      run: micromamba run -n grouper-dev python setup.py build_ext --inplace;micromamba run -n grouper-dev pip install .
+      run: micromamba run -n grouper-dev pip install -e .
 
     - name: Run tests with pytest
       run: micromamba run -n grouper-dev pytest Grouper/tests
