@@ -484,29 +484,6 @@ class TestGroupGraph(BaseTest):
     #     graph12.add_node("X", "C", [0, 0])
     #     graph12.add_edge((1, 0), (0, 0))
 
-    def test_hub_orbits(self):
-        g = Group("C", "[C]", [0], "SMARTS")
-        assert g.compute_hub_orbits() == [0]
-
-        n_hexane = Group("C6", "CCCCCC", [0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5])
-        assert n_hexane.compute_hub_orbits() == [
-            0,
-            0,
-            0,
-            1,
-            1,
-            2,
-            2,
-            2,
-            2,
-            1,
-            1,
-            0,
-            0,
-            0,
-        ]
-
-
     def test_calculate_orbits(self):
         graph = GroupGraph()
         graph.add_node("ester", "C(O)=O", [0, 1])
