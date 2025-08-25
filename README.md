@@ -4,7 +4,7 @@
 ![](https://anaconda.org/conda-forge/Grouper/badges/license.svg)
 [![](https://anaconda.org/conda-forge/Grouper/badges/version.svg)](https://anaconda.org/conda-forge/Grouper)
 [![CI](https://github.com/mosdef-hub/Grouper/actions/workflows/CI.yaml/badge.svg)](https://github.com/mosdef-hub/Grouper/actions/workflows/run_test.yaml)
-[![codecov](https://codecov.io/gh/mosdef-hub/Grouper/branch/master/graph/badge.svg?token=rqPGwmXDzu)](undefined)
+[![codecov](https://codecov.io/github/mosdef-hub/grouper/graph/badge.svg?token=gbWBumkZgJ)](https://codecov.io/github/mosdef-hub/grouper)
 
 
 

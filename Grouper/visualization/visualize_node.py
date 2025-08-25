@@ -64,7 +64,7 @@ def visualize_group_extension(
         group_extension.group.pattern, sanitize=sanitize_smiles
     )
     if not smarts_subgraph:
-        raise ValueError(f"Could not parse SMARTS: {group_extension.group.patttern}")
+        raise ValueError(f"Could not parse SMARTS: {group_extension.group.pattern}")
     match_atoms = list(mol.GetSubstructMatch(smarts_subgraph))
     if not match_atoms:
         raise ValueError(
