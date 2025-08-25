@@ -16,11 +16,5 @@ coverage:
         informational: false
         only_pulls: false
 ignore:
-  - "Grouper/examples"
   - "Grouper/tests"
-  - "Grouper/.github/
   - "Grouper/__init__.py"
-  - "Grouper/packages"
-  - "Grouper/submission_scripts"
-  - "Grouper/images"
-  - "Grouper/dist"
