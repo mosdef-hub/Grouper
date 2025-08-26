@@ -72,10 +72,11 @@ class TestGroupGraph(BaseTest):
         ),
     )
     def test_visualize_group_errors(self, smarts, smiles, hubs):
-        # smartsList = ["[C](-[C])(-[C])(-[C])", "[NX3](-[C])(-[O-])(-[O-])", "[CX3]([C])(-[H])(-[H])","c1ccccc1", "c1(-[O](-[C]))ccccc1", "[C]", "bad_smarts"]
-        # smilesList = ["CCCC", "N(=O)(O)", "[C]([H])([C])", "N", "C=O", "bad_smiles", "C"]
-        # hubsList = [[0], [0], [0], [0,0], [0,0,1], [], []]
         with pytest.raises((ValueError, AttributeError)) as e:
             nt = GroupExtension(Group("desc", smiles, hubs, "SMARTS"), "", smarts, None)
             visualize_group_extension(nt)
-            print(e, smarts, smiles, hubs)
+    
+    def test_fail_parse_group_smarts(self):
+        with pytest.raises(ValueError, match=r"Could not parse SMARTS\: CN\[IC\]") as e:
+            nt = GroupExtension(Group("desc", "CN[IC]", [0], "SMARTS"), "doi", "CCCC", None)
+            visualize_group_extension(nt)
