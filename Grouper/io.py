@@ -76,7 +76,6 @@ def import_(module):
             message = (
                 "The code at {filename}:{line_number} requires the " f"{module} package"
             )
-            ImportError(f"No module named {module}")
 
         (
             frame,

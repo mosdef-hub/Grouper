@@ -142,7 +142,7 @@ def fragment(
             allGroupGraphAndMatchStateList.append((groupG, possible_fragmentation))
         elif groupG is not None:
             allGroupGraph.append(groupG)
-            
+
     if returnMatchStates:
         return allGroupGraphAndMatchStateList
     else:

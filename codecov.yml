@@ -2,15 +2,15 @@ coverage:
   status:
     project:
       default:   # default is the status check's name, not default settings
-        target: auto 
+        target: auto
         threshold: 5
-        base: auto 
-        flags: 
+        base: auto
+        flags:
           - unit
-        paths: 
+        paths:
           - "Grouper"
        # advanced settings
-        branches: 
+        branches:
           - main
         if_ci_failed: error #success, failure, error, ignore
         informational: false

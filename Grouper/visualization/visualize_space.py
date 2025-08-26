@@ -1,8 +1,11 @@
 import typing as t
+from collections import Counter
 from typing import Dict
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
+
 # from grakel.kernels import Kernel
 from networkx import Graph
 from numpy.typing import ArrayLike
@@ -10,8 +13,6 @@ from rdkit import Chem
 from rdkit.Chem import rdmolops
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-import numpy as np
-from collections import Counter
 
 from Grouper import GroupGraph
 
@@ -114,6 +115,7 @@ def plot_feature_similarity(
 ) -> plt.Figure:
     pass
 
+
 def calculate_centrality(space_network: Graph) -> Dict[str, Dict]:
     """Compute various centrality measures."""
     return {
@@ -124,12 +126,16 @@ def calculate_centrality(space_network: Graph) -> Dict[str, Dict]:
     }
 
 
-def visualize_chemical_space(kernel_matrix: ArrayLike, method: str = "PCA") -> plt.Figure:
+def visualize_chemical_space(
+    kernel_matrix: ArrayLike, method: str = "PCA"
+) -> plt.Figure:
     """Project the chemical space into a 2D representation using PCA or t-SNE."""
     if method == "PCA":
         reduced = PCA(n_components=2).fit_transform(kernel_matrix)
     elif method == "tSNE":
-        reduced = TSNE(n_components=2, perplexity=30, metric="precomputed").fit_transform(1 - kernel_matrix)
+        reduced = TSNE(
+            n_components=2, perplexity=30, metric="precomputed"
+        ).fit_transform(1 - kernel_matrix)
     else:
         raise ValueError("Unsupported dimensionality reduction method")
 
@@ -144,9 +150,15 @@ def calculate_diversity_index(kernel_matrix: ArrayLike) -> float:
     return np.mean(1 - kernel_matrix[np.triu_indices_from(kernel_matrix, k=1)])
 
 
-def find_shortest_paths(space_network: Graph, source: str, target: str) -> t.List[t.List[str]]:
+def find_shortest_paths(
+    space_network: Graph, source: str, target: str
+) -> t.List[t.List[str]]:
     """Find shortest paths between two molecules in the chemical space."""
-    return list(nx.all_shortest_paths(space_network, source=source, target=target, weight="weight"))
+    return list(
+        nx.all_shortest_paths(
+            space_network, source=source, target=target, weight="weight"
+        )
+    )
 
 
 def calculate_substructure_frequencies(space_set: t.Set[GroupGraph]) -> Dict[str, int]:
@@ -157,9 +169,13 @@ def calculate_substructure_frequencies(space_set: t.Set[GroupGraph]) -> Dict[str
             substructure_counts[g.nodes[i].type] += 1
     return substructure_counts
 
-def visualize_substructure_correlation(space_set: t.Set[GroupGraph], graph_property: ArrayLike, options: dict = None) -> plt.Figure:
+
+def visualize_substructure_correlation(
+    space_set: t.Set[GroupGraph], graph_property: ArrayLike, options: dict = None
+) -> plt.Figure:
     """Visualize the correlation between substructures in the chemical space."""
     from scipy.stats import pearsonr
+
     def to_ordered_vector(g, order):
         node_hist = g.to_vector()
         ordered_vector = []
@@ -169,7 +185,7 @@ def visualize_substructure_correlation(space_set: t.Set[GroupGraph], graph_prope
             else:
                 ordered_vector.append(node_hist[o])
         return ordered_vector
-    
+
     nodes_types = set()
     for g in space_set:
         for i in g.nodes.keys():
@@ -193,4 +209,3 @@ def visualize_substructure_correlation(space_set: t.Set[GroupGraph], graph_prope
     ax.set_xticklabels(order, rotation=45)
     ax.set_title("Substructure Correlation")
     return fig
-

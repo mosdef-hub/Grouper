@@ -1,4 +1,4 @@
-from Grouper import GroupGraph, Group, fragment, AtomGraph
+from Grouper import Group, fragment
 from Grouper.tests.base_test import BaseTest
 
 # from pysmiles import write_smiles
