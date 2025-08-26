@@ -2,10 +2,12 @@ from copy import deepcopy
 from typing import Any, Callable, Dict, List, Sequence, Tuple
 
 import networkx as nx
-import torch_geometric
-from Grouper import GroupGraph
-import torch
 import numpy as np
+import torch
+import torch_geometric
+
+from Grouper import GroupGraph
+
 
 def run_performance_eval(
     nauty_path: str = "/Users/kieran/projects/molGrouper/packages/nauty2_8_8",
@@ -62,7 +64,7 @@ def plot_performance(performance, max_nodes):
 
     # Use a single colormap
     cmap = plt.get_cmap("inferno")
-    norm = plt.Normalize()
+    plt.Normalize()
 
     # Iterate through the performance data to plot
     for i, combo in enumerate(performance):
@@ -87,6 +89,7 @@ def plot_performance(performance, max_nodes):
 
     plt.savefig("performance.png")
 
+
 def convert_edges_to_nodetype(G):
     new_G = deepcopy(G)
     for edge in new_G.edges():
@@ -106,7 +109,10 @@ def convert_edges_to_nodetype(G):
 
     return new_G
 
-class nxGroupGraph(nx.DiGraph): # needs to be a DiGraph so the edges are directed for the PyG Data
+
+class nxGroupGraph(
+    nx.DiGraph
+):  # needs to be a DiGraph so the edges are directed for the PyG Data
     """A graph with ports as parts of nodes that can be connected to other ports."""
 
     def __init__(self, node_types: Dict[str, List] = None):
@@ -269,8 +275,10 @@ class nxGroupGraph(nx.DiGraph): # needs to be a DiGraph so the edges are directe
         if self.has_edge(node_port_1[0], node_port_2[0]):
             self.edges[node_port_1[0], node_port_2[0]]["ports"].append(edge_ports)
         else:
-            super(nxGroupGraph, self).add_edge(node_port_1[0], node_port_2[0], ports=[edge_ports])
-        
+            super(nxGroupGraph, self).add_edge(
+                node_port_1[0], node_port_2[0], ports=[edge_ports]
+            )
+
         # remove ports from portsList
 
     def make_undirected(self):
@@ -328,7 +336,9 @@ class nxGroupGraph(nx.DiGraph): # needs to be a DiGraph so the edges are directe
         import torch
         from torch_geometric.data import Data
 
-        one_hot_vector = lambda index, num_classes: torch.eye(num_classes)[index]
+        def one_hot_vector(index, num_classes):
+            return torch.eye(num_classes)[index]
+
         max_ports = (
             max(len(v) for v in self.node_types.values())
             if max_ports == 0
@@ -350,7 +360,7 @@ class nxGroupGraph(nx.DiGraph): # needs to be a DiGraph so the edges are directe
             # edge_index[1, i] = list(self.nodes).index(e[1])
             edge_index[0, i] = e[0]
             edge_index[1, i] = e[1]
-        
+
         # Create the edge features
         edge_features = torch.zeros(len(self.edges), max_ports * 2)
 
@@ -398,6 +408,7 @@ def convert_to_nx(G: GroupGraph) -> nxGroupGraph:
         dst = (edge[2], edge[3])
         nxG.add_edge(src, dst)
     return nxG
+
 
 def data_to_gg_edge(data, max_ports):
     edges = []

@@ -22,8 +22,6 @@ class TestGeneralFragmentations(BaseTest):
         query2 = "[O]"
         query3 = "[C]"
         queries = [query1, query2, query3]
-        solution = 2
-
         question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == 2, question
 
@@ -32,8 +30,6 @@ class TestGeneralFragmentations(BaseTest):
         query1 = "[O]C"
         query2 = "[C]"
         queries = [query1, query2]
-        solution = 2
-
         question = fragment(smiles, queries, returnHandler="ideal")
         assert len(question) == 2, question
 
