@@ -1,11 +1,12 @@
 import networkx as nx
 import pytest
 
-from Grouper import Group
+from Grouper import Group, GroupGraph
 from Grouper.libraries.Libraries import GroupExtension
 from Grouper.tests.base_test import BaseTest
 from Grouper.utils import convert_to_nx
 from Grouper.visualization import visualize, visualize_group_extension
+from Grouper.visualization.visualize_graph import nx_visualize
 
 
 class TestGroupGraph(BaseTest):
@@ -72,11 +73,34 @@ class TestGroupGraph(BaseTest):
         ),
     )
     def test_visualize_group_errors(self, smarts, smiles, hubs):
-        with pytest.raises((ValueError, AttributeError)) as e:
+        with pytest.raises((ValueError, AttributeError)):
             nt = GroupExtension(Group("desc", smiles, hubs, "SMARTS"), "", smarts, None)
             visualize_group_extension(nt)
     
     def test_fail_parse_group_smarts(self):
-        with pytest.raises(ValueError, match=r"Could not parse SMARTS\: CN\[IC\]") as e:
+        with pytest.raises(ValueError, match=r"Could not parse SMARTS\: CN\[IC\]"):
             nt = GroupExtension(Group("desc", "CN[IC]", [0], "SMARTS"), "doi", "CCCC", None)
             visualize_group_extension(nt)
+
+    def test_nx_visualize(self):
+        import matplotlib.pyplot as plt
+        from Grouper.utils import convert_to_nx
+        gG = GroupGraph()
+        gG.add_node("node1", "CCC", [0,1,2])
+        gG.add_node("node2", "OC", [0])
+        gG.add_edge((0,0), (1,0), 2)
+        nxGraph = convert_to_nx(gG)
+        nxGraph = nxGraph.to_undirected()
+        ax, fig = nx_visualize(nxGraph)
+        assert isinstance(fig, plt.Figure)
+        assert isinstance(ax, plt.Axes)
+
+    def test_cytoscape_visualize(self):
+        from Grouper.visualization.visualize_graph import visualize_cytoscape
+        from dash import Dash
+
+        gG = GroupGraph()
+        gG.add_node("node1", "CCC", [0,1,2])
+        gG.add_node("node2", "OC", [0])
+        gG.add_edge((0,0), (1,0), 2)
+        assert isinstance(visualize_cytoscape(gG), Dash)
