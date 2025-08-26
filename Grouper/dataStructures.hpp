@@ -156,7 +156,7 @@ public:
     GroupGraph(const GroupGraph& other);
     GroupGraph& operator=(const GroupGraph& other);
     bool operator==(const GroupGraph& other) const;
-    
+
     // Modifing methods
     void addNode(
         std::string ntype,

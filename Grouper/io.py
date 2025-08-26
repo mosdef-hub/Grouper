@@ -1,14 +1,11 @@
-"""Module for working with external libraries.
+"""Module for working with external libraries."""
 
-"""
 import importlib
 import inspect
 import os
 import sys
 import textwrap
 from unittest import SkipTest
-
-import importlib_resources as resources
 
 
 class DelayImportError(ImportError, SkipTest):
@@ -18,9 +15,7 @@ class DelayImportError(ImportError, SkipTest):
 
 
 MESSAGES = dict()
-MESSAGES[
-    "mbuild"
-] = """
+MESSAGES["mbuild"] = """
 The code at {filename}:{line_number} requires the "mbuild" package
 
 mbuild can be installed with conda using:
@@ -28,9 +23,7 @@ mbuild can be installed with conda using:
 # conda install -c conda-forge mbuild
 """
 
-MESSAGES[
-    "torch"
-] = """
+MESSAGES["torch"] = """
 The code at {filename}:{line_number} requires the "torch" package
 
 torch can be installed using:
@@ -38,9 +31,7 @@ torch can be installed using:
 # conda install torchvision -c pytorch
 """
 
-MESSAGES[
-    "rdkit"
-] = """
+MESSAGES["rdkit"] = """
 The code at {filename}:{line_number} requires the "rdkit" package
 
 rdkit can be installed with conda using:
@@ -78,15 +69,13 @@ def import_(module):
     """
     try:
         return importlib.import_module(module)
-    except ImportError as e:
+    except ImportError:
         try:
             message = MESSAGES[module]
         except KeyError:
             message = (
-                "The code at {filename}:{line_number} requires the "
-                f"{module} package"
+                "The code at {filename}:{line_number} requires the " f"{module} package"
             )
-            e = ImportError(f"No module named {module}")
 
         (
             frame,
@@ -97,9 +86,7 @@ def import_(module):
             index,
         ) = inspect.getouterframes(inspect.currentframe())[1]
 
-        m = message.format(
-            filename=os.path.basename(filename), line_number=line_number
-        )
+        m = message.format(filename=os.path.basename(filename), line_number=line_number)
         m = textwrap.dedent(m)
 
         bar = (

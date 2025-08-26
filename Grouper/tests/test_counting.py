@@ -1,7 +1,5 @@
-import pytest
-from rdkit import Chem
 
-from Grouper import Atom, AtomGraph, Group, GroupGraph, exhaustive_generate
+from Grouper import AtomGraph, Group, GroupGraph, exhaustive_generate
 from Grouper.tests.base_test import BaseTest
 from Grouper.counting import NodeColoredGraph
 import numpy as np
@@ -39,7 +37,7 @@ class TestCounting(BaseTest):
             raise ValueError("Number of nodes in node_defs does not match the number of nodes in the nauty_output_file...")
 
         return n_vertices, colors, edge_list
-    
+
     def test_graph_init(self):
         pass
     def test_graph_visualization(self):
@@ -55,7 +53,7 @@ class TestCounting(BaseTest):
         n_types = 2
         n_nodes = len(node_colors)
         types = sympy.symbols(f"t1:{n_types+1}")
-        p_g = sympy.factor(
+        sympy.factor(
             cycle_index_polynomial.subs(
                 [
                     (
@@ -72,16 +70,7 @@ class TestCounting(BaseTest):
         assert n_unique_graphs == 13, f"Expected 13 substitutional isomers for benzene, got {n_unique_graphs}"
 
     def test_atom_graph_count(self):
-        n_nodes = 3
         n_atoms = 2
-
-        # os.system(f"geng -c {n_nodes} > geng_output.txt")
-        # with open("geng_output.txt", "r") as f:
-        #     lines = f.readlines()
-        # os.system("rm geng_output.txt")
-        # []
-        # for line in lines:
-
         graphs = [b"BW", b"Bw"] # these are the only graphs with 3 nodes: the triangle and the line
         total_unique_graphs = 0
         for g in graphs:
@@ -96,7 +85,7 @@ class TestCounting(BaseTest):
                 cycle_index_polynomial, n_atoms
             )
             total_unique_graphs += n_unique_graphs
-        
+
         assert total_unique_graphs == 10, f"Expected 10 unique graphs, got {total_unique_graphs}"
         print("Total unique graphs:", total_unique_graphs)
         G = nx.from_graph6_bytes(graphs[1])
@@ -119,9 +108,9 @@ class TestCounting(BaseTest):
                 for (src,dst) in edge_list:
                     aG.add_edge(src, dst)
                 return True
-            except Exception as e:
+            except Exception:
                 return False
-            
+
         all_atoms = {
             Group("oxygen", "O", [0, 0]),
             Group("carbon", "C", [0, 0, 0, 0]),
@@ -209,7 +198,7 @@ class TestCounting(BaseTest):
                                 src_port, dst_port = ports[i]
                                 gG.add_edge( (src, src_port), (dst, dst_port))
                             pattern_inventory.add(gG.to_smiles())
-                        except Exception as e:
+                        except Exception:
                             continue
 
             exhausted_space = exhaustive_generate(

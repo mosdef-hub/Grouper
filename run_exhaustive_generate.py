@@ -1,19 +1,10 @@
-from Grouper import Group, exhaustive_generate, GroupGraph
-from Grouper.visualization import visualize
-from Grouper.utils import convert_to_nx
-import time
-from rdkit import Chem
-from rdkit.Chem import Draw
 import argparse
-import pickle
 import pathlib
-import matplotlib.pyplot as plt
-from PIL import Image
-import numpy as np
-import io
+import time
+
+from Grouper import Group, exhaustive_generate
 
 if __name__ == "__main__":
-
     node_defs = set()
 
     node_defs.add(Group("t2", "N", [0, 0, 0]))
@@ -21,18 +12,25 @@ if __name__ == "__main__":
     node_defs.add(Group("ester", "C(=O)O", [0, 2]))
     node_defs.add(Group("extra1", "O", [0, 0]))
 
-
     # positive_constraints = {"hydroxyl" : 1, "tertiary_amine" : 1}
     # negative_constraints = {'NN', 'NO', 'NCN', 'NCO', 'OCO'}
     positive_constraints = {}
     negative_constraints = set()
 
-
     # parse arguments
-    parser = argparse.ArgumentParser(description='Exhaustively generate set of molecular graphs')
-    parser.add_argument('--n', type=int, default=3, help='Number of nodes in the graph')
-    parser.add_argument('--n_cpus', type=int, default=8, help='Number of cpus to use for multiprocessing')
-    parser.add_argument('--config_path', type=str, default="", help='Path to config file')
+    parser = argparse.ArgumentParser(
+        description="Exhaustively generate set of molecular graphs"
+    )
+    parser.add_argument("--n", type=int, default=3, help="Number of nodes in the graph")
+    parser.add_argument(
+        "--n_cpus",
+        type=int,
+        default=8,
+        help="Number of cpus to use for multiprocessing",
+    )
+    parser.add_argument(
+        "--config_path", type=str, default="", help="Path to config file"
+    )
     args = parser.parse_args()
 
     parent = str(pathlib.Path(__file__).parent.absolute())
@@ -56,4 +54,3 @@ if __name__ == "__main__":
     end = time.time()
     print(f"Time taken for generation: {end - start}")
     print(f"Total graphs: {len(result)}")
-

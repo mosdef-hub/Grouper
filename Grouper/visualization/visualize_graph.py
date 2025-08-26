@@ -157,7 +157,7 @@ def nx_visualize(group_graph, layout=nx.spring_layout, **kwargs):
 
     n_nodes = group_graph.number_of_nodes()
     dimensions = int(np.sqrt(n_nodes)) * 2 + 1 + largest_label // 3
-    plt.figure(figsize=(dimensions, dimensions))
+    fig = plt.figure(figsize=(dimensions, dimensions))
 
     # edge_colors = range(len(group_graph.edges())) # TODO: Add colors based on node edges
     node_types = set(dict(group_graph.nodes.data("type")).values())
@@ -181,13 +181,14 @@ def nx_visualize(group_graph, layout=nx.spring_layout, **kwargs):
         "font_weight": "bold",
         "edgecolors": "black",
     }
-    fig = nx.draw(group_graph, pos, **options)
+    ax = fig.gca()
+    nx.draw(group_graph, pos=pos, ax=ax, **options)
     x_values, y_values = zip(*pos.values())
     x_margin = (max(x_values) - min(x_values)) * 0.1 + 0.1
     y_margin = (max(y_values) - min(y_values)) * 0.1 + 0.1
     plt.xlim(min(x_values) - x_margin, max(x_values) + x_margin)
     plt.ylim(min(y_values) - y_margin, max(y_values) + y_margin)
-    return fig
+    return ax, ax.get_figure()
 
 
 def spring_layout(group_graph, iterations=50, k=1.0):
@@ -501,6 +502,10 @@ def visualize_cytoscape(
 
         return updated_elements
 
+    try:
+        __IPYTHON__
+    except NameError:  # don't run if not in jupyter
+        return app
     app.run(debug=debug)
     return app
 

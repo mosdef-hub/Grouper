@@ -39,7 +39,7 @@ jobs:
 
     - name: Activate env
       run: micromamba activate grouper-dev
-  
+
     - name: List libraries in grouper-dev
       run: ls ${MAMBA_ROOT_PREFIX}/envs/grouper-dev/lib | grep omp
 

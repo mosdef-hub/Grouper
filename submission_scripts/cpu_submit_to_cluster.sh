@@ -26,4 +26,3 @@ python setup.py install
 echo "--> Compiled genGrouper"
 
 python run_exhaustive_generate.py --n 7 --n_cpus 30 --config_path /raid6/homes/kierannp/projects/genGrouper/dfconfig.cfg
-

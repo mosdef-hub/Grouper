@@ -1,22 +1,17 @@
-from Grouper import GroupGraph, AtomGraph
-from Grouper.io import has_mbuild, has_torch
+from Grouper import GroupGraph
 from Grouper.utils import (
     convert_to_nx, 
-    convert_edges_to_nodetype, 
-    nxGroupGraph,
     data_to_gg_edge
 )
 from Grouper.tests.base_test import BaseTest
 import networkx as nx
 import pytest
-import numpy as np
 import torch
 import rdkit.Chem
 from rdkit.Chem import Descriptors
 from math import isnan
 import torch_geometric
 import torch_geometric.data
-import torch
 
 
 def node_descriptor_generator(node_smiles):

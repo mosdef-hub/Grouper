@@ -2,15 +2,13 @@
 
 
 import itertools
-import numpy as np
+
 import igraph
 import matplotlib.pyplot as plt
-import rdkit
-import rdkit.Chem
-import rdkit.Chem.AllChem
+import numpy as np
+import sympy
 import sympy as sp
 from sympy.combinatorics.perm_groups import PermutationGroup
-import sympy
 
 
 class GraphBase:
@@ -47,9 +45,8 @@ class GraphBase:
         group_size = len(permutation_group) + 1  # add identity
         cycle_index = np.sum(monomials) + sp.symbols("s_1") ** nnodes
         return cycle_index / group_size  # need divided size of group
-    
-    def apply_enumeration_theorem(self, cycle_index, ntypes):
 
+    def apply_enumeration_theorem(self, cycle_index, ntypes):
         n_nodes = self.graph.vcount()
         # replace s_i with the sum of the powers of 1 for each variable and factorize
         num_orbits = sp.factor(
@@ -64,12 +61,12 @@ class GraphBase:
 
     def generate_inventory(self, pattern_types, cycle_index=None, nnodes=None):
         """
-        Prints the pattern inventory using the cycle index polynomial 
+        Prints the pattern inventory using the cycle index polynomial
         for the specified number of atom types (ntypes), with optional atom type substitutions.
-        
+
         Params:
             ntypes (int): Number of atom types.
-            atom_types (dict, optional): A dictionary mapping atom type symbols to their names, 
+            atom_types (dict, optional): A dictionary mapping atom type symbols to their names,
                                             e.g., {"t1": "C", "t2": "O"}.
         """
 
@@ -80,7 +77,9 @@ class GraphBase:
             nnodes = self.graph.vcount()
         # Get the cycle index polynomial
         if cycle_index is None:
-            cycle_index = self.get_cycle_index(PermutationGroup(np.array(self.graph.get_automorphisms_vf2())))
+            cycle_index = self.get_cycle_index(
+                PermutationGroup(np.array(self.graph.get_automorphisms_vf2()))
+            )
         # define symbolic variables for d1 to d10
         types = sp.symbols(f"t1:{ntypes+1}")
         # replace s_i with the sum of the powers of the d variables and factorize
@@ -102,11 +101,11 @@ class GraphBase:
         ]
         p_g_substituted = p_g.subs(substitutions)
         return p_g_substituted
-    
+
     def filter_inventory(self, inventory, edge_types, colors, edge_list):
         connections = []
         for e in edge_list:
-            connection = (colors[e[0]],colors[e[1]])
+            connection = (colors[e[0]], colors[e[1]])
             connections.append(connection)
 
         expanded_inventory = sympy.expand(inventory)
@@ -117,13 +116,15 @@ class GraphBase:
             valid = True
             for factor in factors:
                 connection_type = edge_types[str(factor)]
-                if connection_type not in connections or connection_type[::-1] not in connections:
+                if (
+                    connection_type not in connections
+                    or connection_type[::-1] not in connections
+                ):
                     valid = False
                     break
             if valid:
                 filtered_inventory.append(expression)
         return filtered_inventory
-            
 
     def plot(self):
         # Quick viz plotting
@@ -134,7 +135,8 @@ class GraphBase:
         ax.set_title(self.graph_name)
         plt.axis("off")
         return fig, ax
-    
+
+
 class NodeColoredGraph(GraphBase):
     def __init__(self, edge_list, node_colors):
         super().__init__()
@@ -154,18 +156,17 @@ class NodeColoredGraph(GraphBase):
             g.add_edges([(u, v)])
 
         # Assign node colors
-        color_dict = {node: color for node, color in zip(range(len(self.node_colors)), self.node_colors)}
+        color_dict = {
+            node: color
+            for node, color in zip(range(len(self.node_colors)), self.node_colors)
+        }
         g.vs["color"] = [color_dict[i] for i in range(g.vcount())]
 
         self.graph = g
 
 
-
-
-
-
 # Use cases:
-    # count possible atom graphs given a number of nodes
-    # count possible group graphs given a number of nodes
+# count possible atom graphs given a number of nodes
+# count possible group graphs given a number of nodes
 
 # generate all graphs

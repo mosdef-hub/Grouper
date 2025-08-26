@@ -25,4 +25,3 @@ cd build
 cmake ..
 make
 ./lineProcessor
-

@@ -23,9 +23,9 @@ dependencies:
   - pytorch
   - pytest-benchmark
   - pytest
-  - pytest-cov 
-  - coverage 
-  - codecov 
+  - pytest-cov
+  - coverage
+  - codecov
   - nlohmann_json
   - python-igraph
   - dash

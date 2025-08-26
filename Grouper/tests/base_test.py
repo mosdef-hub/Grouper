@@ -1,9 +1,7 @@
 import pytest
-from copy import deepcopy
 
-from Grouper import GroupGraph, Group
+from Grouper import GroupGraph
 # from group_selfies import Group
-import networkx as nx
 
 class BaseTest:
     @pytest.fixture(autouse=True)
@@ -77,5 +75,3 @@ class BaseTest:
     #         copy_graph, branchy_graph, rename=("1", "2")
     #     )
     #     return union
-
-

@@ -4,8 +4,8 @@ from Grouper._Grouper import (
     AtomGraph,
     Group,
     GroupGraph,
-    exhaustive_generate,
     exhaustive_fragment,
+    exhaustive_generate,
     random_generate,
 )
 

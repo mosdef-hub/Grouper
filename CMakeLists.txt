@@ -70,7 +70,7 @@ target_link_directories(_Grouper PRIVATE ${LIBRARY_DIRS})
 target_link_libraries(_Grouper PRIVATE ${LIBRARIES})
 
 # Compiler flags
-target_compile_options(_Grouper PRIVATE 
+target_compile_options(_Grouper PRIVATE
     -fPIC
     ${PLATFORM_COMPILE_FLAGS}
 )

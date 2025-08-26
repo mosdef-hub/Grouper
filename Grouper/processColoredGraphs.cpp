@@ -110,7 +110,7 @@ bool lex_compare(const std::vector<int>& a, const std::vector<int>& b) {
 
 //*****************************************************************************
 // Given a coloring and a permutation (on edge indices), produce the permuted coloring.
-std::vector<int> apply_permutation(const std::vector<int>& coloring, 
+std::vector<int> apply_permutation(const std::vector<int>& coloring,
                                    const std::vector<int>& perm) {
     assert(coloring.size() == perm.size());
     std::vector<int> permuted(coloring.size());
@@ -352,7 +352,7 @@ bool full_maximality_test(const std::vector<int>& coloring, const EdgeGroup& gro
 //*****************************************************************************
 // Recursive backtracking search for edge colorings.
 // (This routine is analogous to vcolg's 'scan' procedure.)
-// 'allowed_colors' is a vector where allowed_colors[i] holds the list of allowed 
+// 'allowed_colors' is a vector where allowed_colors[i] holds the list of allowed
 // colors for edge i (assuming we fix the ordering of edges as given in edge_list).
 // When a full assignment is reached, the routine uses the full group-based maximality test.
 void scan_edge_coloring_full(int index,
@@ -371,7 +371,7 @@ void scan_edge_coloring_full(int index,
     // Try each allowed color for the edge at 'index'
     for (int color : allowed_colors[index]) {
         current_coloring[index] = color;
-        scan_edge_coloring_full(index + 1, num_edges, allowed_colors, group, 
+        scan_edge_coloring_full(index + 1, num_edges, allowed_colors, group,
                                 current_coloring, coloring_callback);
     }
     // Backtrack: mark current position as uncolored.
@@ -495,7 +495,7 @@ EdgeGroup obtainEdgeAutomorphismGenerators(
 
     // Run nauty on the vertex graph.
     densenauty(g, lab, ptn, orbits, options, stats, m, n, workspace);
-    
+
     // At this point, vertex_aut_generators has been filled via the callback.
     // For debugging or checking, you can examine vertex_aut_generators.size().
 
@@ -506,10 +506,10 @@ EdgeGroup obtainEdgeAutomorphismGenerators(
         std::vector<int> edgePerm = induceEdgePermutation(edge_list, vertexGen);
         edgeGroup.perms.push_back(edgePerm);
     }
-    
+
     // Clear the temporary storage for future calls.
     vertex_aut_generators.clear();
-    
+
     return edgeGroup;
 }
 
@@ -528,7 +528,7 @@ void processColoring(
     gG.clearEdges();
     size_t edge_index = 0;
     bool all_edges_added = true;
-    
+
     for (const auto& edge : edge_list) {
         // Ensure canonical order for undirected edge:
         int s = edge.first;
@@ -549,9 +549,9 @@ void processColoring(
             break;
         }
     }
-    
+
     if (!all_edges_added) return;
-    
+
     std::string smiles = gG.toSmiles();
     if (canon_set.insert(smiles).second) {
         graph_basis->insert(gG);
@@ -669,14 +669,14 @@ void process_nauty_output(
     for (const auto& [src, dst] : edge_list) {
         const auto& src_reps = node_port_representatives.at(src);
         const auto& dst_reps = node_port_representatives.at(dst);
-    
+
         std::vector<int> src_ports = flatten_ports(src_reps);
         std::vector<int> dst_ports = flatten_ports(dst_reps);
-    
+
         std::vector<int> e_colors;
         std::vector<std::pair<int, int>> port_pairs;
         int color_index = 0;
-    
+
         for (int i : src_ports) {
             for (int j : dst_ports) {
                 e_colors.push_back(color_index++);
@@ -689,7 +689,7 @@ void process_nauty_output(
 
     // Generate edge automorphism group
     EdgeGroup edgeGroup = obtainEdgeAutomorphismGenerators(
-        edge_list, colors, 
+        edge_list, colors,
         g, lab, ptn, orbits, options, stats // Pass nauty structures
     );
     // logMemoryUsage("After obtainEdgeAutomorphismGenerators");
