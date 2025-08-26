@@ -503,7 +503,7 @@ def visualize_cytoscape(
         return updated_elements
 
     try:
-        _in_ipython_session = __IPYTHON__
+        __IPYTHON__
     except NameError:  # don't run if not in jupyter
         return app
     app.run(debug=debug)
