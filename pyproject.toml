@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core>=0.3.3", "pybind11"]
+requires = ["scikit-build-core>=0.11.0", "pybind11"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -32,6 +32,8 @@ dynamic = ["version"]
 [tool.scikit-build]
 cmake.minimum-version = "3.15"
 wheel.expand-macos-universal-tags = true
+build-dir = "build/{wheel_tag}" # Install the package in editable mode
+editable.mode = "redirect"
 
 [tool.setuptools]
 packages = ["Grouper"]
