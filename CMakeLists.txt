@@ -17,7 +17,12 @@ endif()
 
 # Platform-specific settings
 if(APPLE)
-    set(CMAKE_OSX_ARCHITECTURES "arm64")
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+        message(STATUS "Configuring for Apple Silicon (arm64)")
+        set(CMAKE_OSX_ARCHITECTURES "arm64")
+    elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+        set(CMAKE_OSX_ARCHITECTURES "x86_64")
+    endif()
     set(PLATFORM_COMPILE_FLAGS "-Xpreprocessor" "-fopenmp")
 elseif(UNIX AND NOT APPLE)
     set(PLATFORM_COMPILE_FLAGS "-D_Thread_local=thread_local")
