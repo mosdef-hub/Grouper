@@ -81,7 +81,7 @@ class GraphBase:
                 PermutationGroup(np.array(self.graph.get_automorphisms_vf2()))
             )
         # define symbolic variables for d1 to d10
-        types = sp.symbols(f"t1:{ntypes+1}")
+        types = sp.symbols(f"t1:{ntypes + 1}")
         # replace s_i with the sum of the powers of the d variables and factorize
         p_g = sp.factor(
             cycle_index.subs(
@@ -96,7 +96,10 @@ class GraphBase:
         )
         # Substitute atom type symbols from the dictionary into the polynomial
         substitutions = [
-            (sp.symbols(f"t{i+1}"), sp.symbols(pattern_types.get(f"t{i+1}", f"t{i+1}")))
+            (
+                sp.symbols(f"t{i + 1}"),
+                sp.symbols(pattern_types.get(f"t{i + 1}", f"t{i + 1}")),
+            )
             for i in range(ntypes)
         ]
         p_g_substituted = p_g.subs(substitutions)
