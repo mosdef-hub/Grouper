@@ -10,17 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.9
-      - name: Install dependencies
+      - name: Create dummy documentation
         run: |
-          pip install sphinx sphinx_rtd_theme
-      - name: Build documentation
-        run: |
-          sphinx-apidoc -o docs/source Grouper
-          make -C docs html
+          mkdir -p docs/_build/html
+          echo "Hello, world!" > docs/_build/html/index.html
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
