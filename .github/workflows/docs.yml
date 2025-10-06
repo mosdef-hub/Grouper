@@ -10,10 +10,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Build documentation
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+      - name: Install dependencies
         run: |
           pip install sphinx sphinx_rtd_theme
-          sphinx-apidoc -o docs/source Grouper
+          pip install -e .
+      - name: Build documentation
+        run: |
+          mkdir -p docs
+          sphinx-apidoc -o docs Grouper
           make -C docs html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
