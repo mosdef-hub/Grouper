@@ -10,12 +10,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Create dummy documentation
+      - name: Build documentation
         run: |
-          mkdir -p docs/_build/html
-          echo "Hello, world!" > docs/_build/html/index.html
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+          pip install sphinx sphinx_rtd_theme
+          sphinx-apidoc -o docs/source Grouper
+          make -C docs html
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/_build/html
+          path: docs/_build/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
