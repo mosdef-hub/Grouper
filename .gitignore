@@ -1,4 +1,6 @@
 .benchmarks
+docs/Grouper*.rst
+docs/modules.rst
 *.err
 *.out
 y
