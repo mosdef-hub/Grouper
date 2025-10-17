@@ -61,13 +61,14 @@ class GraphBase:
 
     def generate_inventory(self, pattern_types, cycle_index=None, nnodes=None):
         """
-        Prints the pattern inventory using the cycle index polynomial
-        for the specified number of atom types (ntypes), with optional atom type substitutions.
+        Prints the pattern inventory using the cycle index polynomial for the specified number of atom types (ntypes), with optional atom type substitutions.
 
-        Params:
-            ntypes (int): Number of atom types.
-            atom_types (dict, optional): A dictionary mapping atom type symbols to their names,
-                                            e.g., {"t1": "C", "t2": "O"}.
+        Parameters
+        ----------
+        ntypes : int
+            Number of atom types.
+        atom_types : dict, optional
+            A dictionary mapping atom type symbols to their names, e.g., {"t1": "C", "t2": "O"}.
         """
 
         # Get the number of atom types

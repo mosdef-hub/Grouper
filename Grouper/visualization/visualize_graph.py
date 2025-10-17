@@ -20,12 +20,12 @@ import Grouper
 
 
 def visualize(group_graph, pos=None):
-    """
-    Visualize a graph with optional custom positioning for nodes.
+    """Visualize a graph with optional custom positioning for nodes.
 
-    Parameters:
-    - group_graph: A NetworkX graph object to be visualized.
-    - pos: A dictionary specifying positions for nodes (optional).
+    Parameters
+    ----------
+    group_graph: A NetworkX graph object to be visualized.
+    pos: A dictionary specifying positions for nodes (optional).
            If None, a default layout will be used.
     """
     if pos is None:

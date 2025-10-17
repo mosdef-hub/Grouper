@@ -120,7 +120,8 @@ class BasisSet(object):
         return len(self.group_traces_)
     
     def fragment_smiles(self, smiles, onFail: str = "error", **kwargs):
-        """Fragment a smiles string based on the groups in self.group_traces.
+        """
+        Fragment a SMILES string based on the groups in self.group_traces.
 
         Parameters
         ----------
@@ -128,22 +129,18 @@ class BasisSet(object):
             The Daylight SMILES string for the molecule to fragment.
         onFail : str, default "error"
             Method for handling failing fragmentation approaches.
-            - "error": raise an exception if fragmentation returns no matchin groups
-            - "itemize": all missing atoms are treated as atomistic Groups with the name
-                "DEFAULT#N", where N is the atomic number of the atom.
-            - "condense": A group is returned that is the single Group with no edges for the 
-                entire molecule. Useful if the Library does not have specific definitions for
-                small molecules such as methane `CH4`, water `H2O`, or formamide `NC=O`.
+            - "error": Raise an exception if fragmentation returns no matching groups.
+            - "itemize": All missing atoms are treated as atomistic Groups with the name "DEFAULT#N", where N is the atomic number of the atom.
+            - "condense": A group is returned that is the single Group with no edges for the entire molecule. Useful if the Library does not have specific definitions for small molecules such as methane (CH4), water (H2O), or formamide (NC=O).
 
         Notes
         -----
-        See Grouper.fragmentation.fragment method for more details on **kwargs.
+        See Grouper.fragmentation.fragment method for more details on kwargs.
 
         Returns
         -------
         groupGList : List[Grouper.GroupGraph]
-            The list of all fragmented group graphs generated using Grouper.fragmentation.fragment
-            to perform fragmentation.
+            The list of all fragmented group graphs generated using Grouper.fragmentation.fragment to perform fragmentation.
         """
         nodes = list(self.get_groups())
         groupGList = fragment(smiles, nodes, **kwargs)
