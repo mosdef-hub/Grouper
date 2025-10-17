@@ -37,6 +37,7 @@ dependencies:
   - eigen
   - nauty
   - nlohmann_json
+  - openmp
 
   # Testing
   - pytest
