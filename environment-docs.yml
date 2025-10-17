@@ -1,0 +1,55 @@
+name: grouper-docs
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  # Build & doc tools
+  - doxygen
+  - cmake
+  - scikit-build-core
+  - pybind11
+  - sphinx
+  - sphinx-rtd-theme
+  - breathe
+  - exhale
+
+  # Scientific and visualization packages
+  - numpy=1.26
+  - scipy=1.16.1
+  - matplotlib
+  - seaborn
+  - networkx
+  - rdkit
+  - librdkit-dev
+  - librdkit
+  - rdkit-dev
+  - rdkit-postgresql
+  - python-igraph
+  - sympy
+  - dash
+  - dash_cytoscape
+  - tqdm
+  - scikit-learn
+
+  # C++/build deps
+  - boost
+  - eigen
+  - nauty
+  - nlohmann_json
+
+  # Testing
+  - pytest
+  - pytest-cov
+
+  # Utilities
+  - pkg-config
+  - libxml2
+  - libxslt
+
+  - pip:
+      - torch
+      - torchvision
+      - torch_geometric
+      - -r docs/requirements.txt
+      - -e .

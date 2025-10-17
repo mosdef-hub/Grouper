@@ -1,0 +1,8 @@
+# Python packages required to build the documentation
+sphinx
+sphinx-rtd-theme
+breathe
+exhale
+sphinx-autodoc-typehints
+sphinxcontrib-programoutput
+sphinx-copybutton
