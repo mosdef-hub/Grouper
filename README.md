@@ -6,6 +6,7 @@
 [![CI](https://github.com/mosdef-hub/Grouper/actions/workflows/CI.yaml/badge.svg)](https://github.com/mosdef-hub/Grouper/actions/workflows/run_test.yaml)
 [![codecov](https://codecov.io/github/mosdef-hub/grouper/graph/badge.svg?token=gbWBumkZgJ)](https://codecov.io/github/mosdef-hub/grouper)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/mosdef-hub/Grouper/main.svg)](https://results.pre-commit.ci/latest/github/mosdef-hub/Grouper/main)
+[![Documentation Status](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://mosdef-hub.github.io/Grouper/)
 
 
 

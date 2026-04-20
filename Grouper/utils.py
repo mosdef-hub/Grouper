@@ -17,8 +17,30 @@ def run_performance_eval(
     n_cpus: int = 30,
     verbose: bool = False,
 ):
-    """
-    Run performance evaluation of the Grouper generation featrure with growing sized graphs.
+    """Run performance evaluation of the Grouper generation feature with growing sized graphs.
+
+    This function benchmarks the `exhaustive_generate` function with different combinations
+    of node definitions and graph sizes.
+
+    Parameters
+    ----------
+    nauty_path : str, optional
+        Path to the nauty package, by default "/Users/kieran/projects/molGrouper/packages/nauty2_8_8"
+    node_defs : list, optional
+        A list of node definitions to use for generation, by default None
+    n_runs : int, optional
+        Number of runs for each combination, by default 3
+    max_nodes : int, optional
+        Maximum number of nodes in the generated graphs, by default 6
+    n_cpus : int, optional
+        Number of CPUs to use for generation, by default 30
+    verbose : bool, optional
+        Whether to print verbose output, by default False
+
+    Returns
+    -------
+    dict
+        A dictionary containing the performance results.
     """
     import itertools
     import random
@@ -56,6 +78,15 @@ def run_performance_eval(
 
 
 def plot_performance(performance, max_nodes):
+    """Plot the performance results from `run_performance_eval`.
+
+    Parameters
+    ----------
+    performance : dict
+        The performance results from `run_performance_eval`.
+    max_nodes : int
+        The maximum number of nodes used in the performance evaluation.
+    """
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -91,6 +122,18 @@ def plot_performance(performance, max_nodes):
 
 
 def convert_edges_to_nodetype(G):
+    """Convert the edge representation in a graph to use node types instead of node IDs.
+
+    Parameters
+    ----------
+    G : nx.DiGraph
+        The input graph.
+
+    Returns
+    -------
+    nx.DiGraph
+        A new graph with the converted edge representation.
+    """
     new_G = deepcopy(G)
     for edge in new_G.edges():
         for i in range(len(new_G.edges[edge]["ports"])):
@@ -119,12 +162,17 @@ class nxGroupGraph(
         """
         Initialize a GroupGraph.
 
-        Parameters:
-        - node_types (dict): Dictionary of node types and their corresponding ports.
+        Parameters
+        ----------
+        node_types : dict, optional
+            Dictionary of node types and their corresponding ports, by default None
 
-        Raises:
-        - TypeError: If node_types is not a dictionary.
-        - ValueError: If keys in node_types are not of the same type or values are not lists.
+        Raises
+        ------
+        TypeError
+            If node_types is not a dictionary.
+        ValueError
+            If keys in node_types are not of the same type or values are not lists.
         """
         super(nxGroupGraph, self).__init__()
         if node_types is None:
@@ -148,8 +196,10 @@ class nxGroupGraph(
         """
         Return a string representation of the GroupGraph.
 
-        Returns:
-        - str: String representation of nodes and edges.
+        Returns
+        -------
+        str
+            String representation of nodes and edges.
         """
         return f"Nodes: {['{} ({}) {}'.format(d[0], d[1]['type'], d[1]['ports']) for d in self.nodes.data()]}\nEdges: {','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))}\n"
 
@@ -157,8 +207,10 @@ class nxGroupGraph(
         """
         Return a representation of the GroupGraph.
 
-        Returns:
-        - str: Representation of the GroupGraph.
+        Returns
+        -------
+        str
+            Representation of the GroupGraph.
         """
         return f"GroupGraph({','.join(str(tuple(*e[-1])) for e in self.edges.data('ports'))})"
 
@@ -166,11 +218,15 @@ class nxGroupGraph(
         """
         Check if two GroupGraph objects are equal.
 
-        Parameters:
-        - other: Another GroupGraph object.
+        Parameters
+        ----------
+        other
+            Another GroupGraph object.
 
-        Returns:
-        - bool: True if equal, False otherwise.
+        Returns
+        -------
+        bool
+            True if equal, False otherwise.
         """
         # return self.nodes(data=True) == other.nodes(data=True) and self.edges(data=True) == other.edges(data=True)
         return nx.utils.misc.graphs_equal(self, other)
@@ -179,11 +235,15 @@ class nxGroupGraph(
         """
         Check if two GroupGraph objects are not equal.
 
-        Parameters:
-        - other: Another GroupGraph object.
+        Parameters
+        ----------
+        other
+            Another GroupGraph object.
 
-        Returns:
-        - bool: True if not equal, False otherwise.
+        Returns
+        -------
+        bool
+            True if not equal, False otherwise.
         """
         return not self.__eq__(other)
 
@@ -191,8 +251,10 @@ class nxGroupGraph(
         """
         Check if the GroupGraph is non-empty.
 
-        Returns:
-        - bool: True if non-empty, False otherwise.
+        Returns
+        -------
+        bool
+            True if non-empty, False otherwise.
         """
         return len(self.nodes) > 0 and len(self.edges) > 0
 
@@ -202,12 +264,21 @@ class nxGroupGraph(
         """
         Add a node to the GroupGraph.
 
-        Parameters:
-        - nodeID: Identifier for the node.
-        - node_type: Type of the node.
+        Parameters
+        ----------
+        nodeID
+            Identifier for the node.
+        node_type : str
+            Type of the node.
+        smarts : str
+            SMARTS string for the node.
+        hubs : Sequence[int]
+            A sequence of integers representing the hubs.
 
-        Raises:
-        - Exception: If the node is already present in the Graph.
+        Raises
+        ------
+        AttributeError
+            If the node is already present in the Graph.
         """
         # Sanity check to see if the node is already present in Graph
         if nodeID in self.nodes:
@@ -224,12 +295,17 @@ class nxGroupGraph(
         """
         Add an edge between two nodes in the GroupGraph.
 
-        Parameters:
-        - node_port_1: Tuple of node and port on the first node.
-        - node_port_2: Tuple of node and port on the second node.
+        Parameters
+        ----------
+        node_port_1 : Tuple[Any, Any]
+            Tuple of node and port on the first node.
+        node_port_2 : Tuple[Any, Any]
+            Tuple of node and port on the second node.
 
-        Raises:
-        - Exception: If a node has no free ports or if nodes or ports are not present in the Graph.
+        Raises
+        ------
+        AttributeError
+            If a node has no free ports or if nodes or ports are not present in the Graph.
         """
         if self.n_free_ports(node_port_1[0]) <= 0:
             raise AttributeError(f"Node: {node_port_1[0]} has no free ports!")
@@ -298,11 +374,15 @@ class nxGroupGraph(
         """
         Get the number of free ports on a node.
 
-        Parameters:
-        - nodeID: Identifier for the node.
+        Parameters
+        ----------
+        nodeID
+            Identifier for the node.
 
-        Returns:
-        - int: Number of free ports.
+        Returns
+        -------
+        int
+            Number of free ports.
         """
         # num ports - num edges - num edges with node as target
         occupied_ports = 0
@@ -327,11 +407,17 @@ class nxGroupGraph(
         """
         Convert the GroupGraph to a PyG Data representation.
 
-        Parameters:
-        - node_descriptor_generater (Callable[[str], Sequence[float]]): Callable to generate node descriptors. Takes in a SMARTS string and returns a sequence of floats.
+        Parameters
+        ----------
+        node_descriptor_generator : Callable[[str], Sequence[float]]
+            Callable to generate node descriptors. Takes in a SMARTS string and returns a sequence of floats.
+        max_ports : int, optional
+            The maximum number of ports on a node, by default 0
 
-        Returns:
-        - torch_geometric.data.Data: PyG Data representation.
+        Returns
+        -------
+        torch_geometric.data.Data
+            PyG Data representation.
         """
         import torch
         from torch_geometric.data import Data
@@ -390,11 +476,15 @@ def convert_to_nx(G: GroupGraph) -> nxGroupGraph:
     """
     Convert a GroupGraph to a networkx graph.
 
-    Parameters:
-    - G (GroupGraph): The GroupGraph to convert.
+    Parameters
+    ----------
+    G : GroupGraph
+        The GroupGraph to convert.
 
-    Returns:
-    - nxGroupGraph: The networkx representation of the GroupGraph.
+    Returns
+    -------
+    nxGroupGraph
+        The networkx representation of the GroupGraph.
     """
     if not isinstance(G, GroupGraph):
         raise TypeError("G must be a GroupGraph")
@@ -411,6 +501,20 @@ def convert_to_nx(G: GroupGraph) -> nxGroupGraph:
 
 
 def data_to_gg_edge(data, max_ports):
+    """Convert PyG data to GroupGraph edges.
+
+    Parameters
+    ----------
+    data : torch_geometric.data.Data
+        The PyG data object.
+    max_ports : int
+        The maximum number of ports on a node.
+
+    Returns
+    -------
+    list
+        A list of edges for a GroupGraph.
+    """
     edges = []
     for i, src_dst_one_hot_ports in enumerate(data.edge_attr):
         one_hot_ports = torch.split(src_dst_one_hot_ports, max_ports)

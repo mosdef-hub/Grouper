@@ -19,65 +19,53 @@ def fragment(
     matchHubs: bool = False,
     returnMatchStates: bool = False,
 ) -> list:
-    """Fragmente a smiles defined molecule based on a list of nodes.
+    """
+    Fragment a SMILES-defined molecule based on a list of nodes.
 
     Parameters
     ----------
-    smiles : string
-        A full molecule smiles string
-    nodeDefs : list of Grouper.Group> or list of Grouper.GroupExtension
+    smiles : str
+        A full molecule SMILES string.
+    nodeDefs : list of Grouper.Group or Grouper.GroupExtension
         A set of Groups or GroupExtensions to use for fragmenting molecules.
-    returnHandler : string, default "ideal"
+    returnHandler : str, default "ideal"
         How to handle multiple matches. Options are: "ideal", "quick", "exhaustive"
-        - "ideal": return a list of matches that are ideal "i.e. the shortes possible matches using the given order of nodeDefs.
-            The list that is returned are sorted on the shortest `GroupGraph.Groups`.
-        - "quick": return the match that is found first, discarding the rest along the way. This can lead to the possibility of missing a
-            possible match as the acceptable match might get discarded along the way.
-        - "exhaustive": return all possible matches, which accounts for possible symmetry matches. Is much slower but more robust than the
-            other two returnHandlers.
-    nodeDefsSorter : string, default "size"
-        How to sort the nodeDefs. Options are: "size", "priority"
-        - "size": sort by size of the group, where size is defined first as the number
-        of heavy atoms, then the total molecular weight of the group.
-        - "priority": sort by priority of the group, where priority is defined by the groupExtension.priority
-        attribute. This can be set by the user. If two groups have the same priority, their index in nodeDefs is used.
-        - "list": sort by the order of the groups in the list.
-    incompleteGraphHandler : string, default "remove"
+        - "ideal": Return a list of matches that are ideal, i.e., the shortest possible matches using the given order of nodeDefs. The returned list is sorted on the shortest `GroupGraph.Groups`.
+        - "quick": Return the match that is found first, discarding the rest along the way. This can lead to missing a possible match as an acceptable match might get discarded.
+        - "exhaustive": Return all possible matches, which accounts for possible symmetry matches. Is much slower but more robust than the other two returnHandlers.
+    nodeDefsSorter : str, default "size"
+        How to sort the nodeDefs. Options are: "size", "priority", "list"
+        - "size": Sort by size of the group, defined first as the number of heavy atoms, then the total molecular weight of the group.
+        - "priority": Sort by priority of the group, defined by the groupExtension.priority attribute. If two groups have the same priority, their index in nodeDefs is used.
+        - "list": Sort by the order of the groups in the list.
+    incompleteGraphHandler : str, default "remove"
         How to handle incomplete graphs. Options are: "remove", "keep", "raise error"
-        - "remove": remove incomplete graphs, aka graphs that are not fully connected or fragmented.
-        - "keep": keep incomplete graphs
-        - "raise error": raise an error if no complete graphs are found
+        - "remove": Remove incomplete graphs, i.e., graphs that are not fully connected or fragmented.
+        - "keep": Keep incomplete graphs.
+        - "raise error": Raise an error if no complete graphs are found.
     matchHubs : bool, default False
-        Whether or not to parse the hubs into the SMARTS string of the Group in nodeDefs is an iterable of Grouper.Groups.
-        By default, only the SMARTS or SMILES string of the Group is used for RDKit substructure matching. To make matches also
-        take into account where hubs have been positioned around the Group, set this to True.
-        Note: This will only work if the Group is an iterable of Grouper.Groups, and the Groups are written as SMARTS.
-        Note: This will not be accounted for if returnHandler is set to "exhaustive", which automatically internally
-            accounts for the hubs connectivity.
-
+        Whether to parse the hubs into the SMARTS string of the Group if nodeDefs is an iterable of Grouper.Groups. By default, only the SMARTS or SMILES string of the Group is used for RDKit substructure matching. To also account for hub positions, set this to True.
+        Note: This only works if nodeDefs is an iterable of Grouper.Groups, and the Groups are written as SMARTS. This is not accounted for if returnHandler is set to "exhaustive", which automatically internally accounts for hub connectivity.
 
     Notes
     -----
-    1. `matchHubs` can result in different matching behavior, since there are not enough
-        hubs to for the middle carbon to form two bonds in the example below.
-    ```python
-    group1 = Grouper.Group("group1", "[C]", [0], True)
-    fragment("CCC", [group1], matchHubs=True) == []
-    gG = Grouper.GroupGraph()
-    gG.add_node("group1", "[C]", [0]*4, True)
-    gG.add_node("group1", "[C]", [0]*4, True)
-    gG.add_node("group1", "[C]", [0]*4, True)
-    gG.add_edge((0,0), (1,0), 1)
-    gG.add_edge((2,0), (1,1), 1)
-    fragment("CCC", [group1], matchHubs=False) == GroupGraph
-    ```
+    1. `matchHubs` can result in different matching behavior, since there may not be enough hubs for the middle carbon to form two bonds in the example below.
 
-    2. returnHandler="exhaustive" can be slow for large matching structures due to accounting for all
-    possible symmetries of the groups supplied in `nodeDefs`.
+        .. code-block:: python
 
-    3. If a list of SMARTS is supplied to `nodeDefs` instead of a list of Groups, then the final graphs
-    will have nodes where every possible hub is added to the Group based on the subatoms valency and connectivity.
-    This is recommended for the most intuitive matching behavior.
+            group1 = Grouper.Group("group1", "[C]", [0], True)
+            fragment("CCC", [group1], matchHubs=True) == []
+            gG = Grouper.GroupGraph()
+            gG.add_node("group1", "[C]", [0]*4, True)
+            gG.add_node("group1", "[C]", [0]*4, True)
+            gG.add_node("group1", "[C]", [0]*4, True)
+            gG.add_edge((0,0), (1,0), 1)
+            gG.add_edge((2,0), (1,1), 1)
+            fragment("CCC", [group1], matchHubs=False) == GroupGraph
+
+    2. Setting returnHandler="exhaustive" can be slow for large matching structures due to accounting for all possible symmetries of the groups supplied in `nodeDefs`.
+
+    3. If a list of SMARTS is supplied to `nodeDefs` instead of a list of Groups, then the final graphs will have nodes where every possible hub is added to the Group based on the subatoms' valency and connectivity. This is recommended for the most intuitive matching behavior.
 
     Returns
     -------
