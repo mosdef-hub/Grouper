@@ -33,10 +33,14 @@ dynamic = ["version"]
 Documentation = "https://mosdef-hub.github.io/Grouper/"
 
 [tool.scikit-build]
-cmake.minimum-version = "3.15"
+cmake.version = ">=3.15"
 wheel.expand-macos-universal-tags = true
 build-dir = "build/{wheel_tag}" # Install the package in editable mode
 editable.mode = "redirect"
+
+[tool.scikit-build.cmake.define]
+CMAKE_CXX_STANDARD = "20"
+CMAKE_CXX_STANDARD_REQUIRED = "ON"
 
 [tool.setuptools]
 packages = ["Grouper"]
