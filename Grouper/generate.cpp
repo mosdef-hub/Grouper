@@ -150,12 +150,16 @@ bool check_max_bond_not_exceeded_tmp(
 void insertGraph(PGconn* conn, const GroupGraph& graph, const std::string& table_name) {
     std::string smiles = graph.toSmiles();
     std::string graph_data = graph.serialize();
-    int n_nodes = graph.nodes.size();
+    // Bind to a named local so the c_str() pointer remains valid through
+    // PQexecParams. The previous std::to_string(n_nodes).c_str() returned
+    // a pointer into a temporary destroyed at the semicolon, so the int
+    // column was being read from freed memory.
+    std::string n_nodes_str = std::to_string(graph.nodes.size());
 
     const char* paramValues[3];
     paramValues[0] = smiles.c_str();
     paramValues[1] = graph_data.c_str();
-    paramValues[2] = std::to_string(n_nodes).c_str();
+    paramValues[2] = n_nodes_str.c_str();
 
     std::string insert_query = "INSERT INTO " + table_name + " (smiles, graph_data, n_nodes) VALUES ($1, $2, $3) ON CONFLICT (smiles) DO NOTHING";
     PGresult* insertRes = PQexecParams(conn, insert_query.c_str(), 3, nullptr, paramValues, nullptr, nullptr, 0);
@@ -270,9 +274,17 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 {
                     std::cerr << "Thread " << omp_get_thread_num() << " failed to connect to DB: " << PQerrorMessage(conn) << std::endl;
                 }
+                // libpq requires PQfinish even on failed connection
+                // objects to release the conn struct's memory.
+                PQfinish(conn);
             } else {
                 std::unordered_set<GroupGraph> local_basis;
-                int n = 20; // Max number of nodes (adjustable)
+                // n is the maximum number of nauty vertices we'll see in
+                // this run — exactly n_nodes, since geng emits graphs of
+                // size n_nodes. The previous hard-coded 20 silently
+                // overflowed the preallocated buffers when callers asked
+                // for n_nodes > 20.
+                const int n = n_nodes;
                 int m = SETWORDSNEEDED(n);
                 std::vector<setword> g(m * n, 0);
                 std::vector<int> lab(n, 0), ptn(n, 0), orbits(n, 0);
@@ -316,7 +328,9 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     {
             int tid = omp_get_thread_num();
             std::unordered_set<GroupGraph>& local_basis = all_local_bases[tid];
-            int n = 20; // Max number of nodes (adjustable)
+            // n is the maximum number of nauty vertices we'll see —
+            // matches geng's output size exactly.
+            const int n = n_nodes;
             int m = SETWORDSNEEDED(n);
             std::vector<setword> g(m * n, 0);
             std::vector<int> lab(n, 0), ptn(n, 0), orbits(n, 0);
