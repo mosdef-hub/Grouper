@@ -8,6 +8,9 @@
 #include <stack>
 #include <nlohmann/json.hpp>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
+#include <unordered_map>
 
 #include "dataStructures.hpp"
 #include "generate.hpp"
@@ -123,6 +126,104 @@ std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmart
     // Return a new ROMol constructed from processedMol
     return std::make_unique<RDKit::ROMol>(processedMol);
 }
+
+// =====================================================================
+// Process-wide cache of parsed group patterns. toSmiles() and
+// toAtomicGraph() are called once per generated graph in the inner loop
+// of exhaustive_generate, and each call used to RDKit-parse every group's
+// pattern from scratch — three times per call inside the original
+// toAtomicGraph. The cache reduces that to one parse per unique
+// (pattern, isSmarts) across the whole process. The cached payload is
+// plain POD (atomic numbers, formal charges, element symbols, bond
+// endpoints + types/orders) so we don't share RDKit ROMol objects across
+// threads, only readable data.
+// =====================================================================
+namespace {
+
+struct GroupMolCacheKey {
+    std::string pattern;
+    bool isSmarts;
+    bool operator==(const GroupMolCacheKey& other) const {
+        return isSmarts == other.isSmarts && pattern == other.pattern;
+    }
+};
+
+struct GroupMolCacheKeyHash {
+    std::size_t operator()(const GroupMolCacheKey& k) const {
+        std::size_t h = std::hash<std::string>{}(k.pattern);
+        h ^= (std::size_t)k.isSmarts * 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        return h;
+    }
+};
+
+struct CachedAtom {
+    int atomicNumber;
+    int formalCharge;
+    std::string symbol;
+};
+
+struct CachedBond {
+    int begin;
+    int end;
+    RDKit::Bond::BondType bondType;
+    double bondOrder;
+};
+
+struct CachedMolData {
+    std::vector<CachedAtom> atoms;
+    std::vector<CachedBond> bonds;
+};
+
+std::unordered_map<GroupMolCacheKey, std::shared_ptr<const CachedMolData>, GroupMolCacheKeyHash>
+    g_groupMolCache;
+std::shared_mutex g_groupMolCacheMutex;
+
+std::shared_ptr<const CachedMolData> getCachedMolData(
+    const std::string& pattern, bool isSmarts
+) {
+    GroupMolCacheKey key{pattern, isSmarts};
+
+    {
+        std::shared_lock<std::shared_mutex> rlock(g_groupMolCacheMutex);
+        auto it = g_groupMolCache.find(key);
+        if (it != g_groupMolCache.end()) return it->second;
+    }
+
+    std::unique_lock<std::shared_mutex> wlock(g_groupMolCacheMutex);
+    // Re-check after acquiring write lock — another thread may have
+    // populated the entry while we waited.
+    auto it = g_groupMolCache.find(key);
+    if (it != g_groupMolCache.end()) return it->second;
+
+    auto mol = createMol(pattern, isSmarts);
+    if (!mol) {
+        throw std::runtime_error("Failed to parse pattern: " + pattern);
+    }
+
+    auto data = std::make_shared<CachedMolData>();
+    data->atoms.reserve(mol->getNumAtoms());
+    for (const auto& atom : mol->atoms()) {
+        data->atoms.push_back({
+            atom->getAtomicNum(),
+            atom->getFormalCharge(),
+            atom->getSymbol()
+        });
+    }
+    data->bonds.reserve(mol->getNumBonds());
+    for (const auto& bond : mol->bonds()) {
+        data->bonds.push_back({
+            static_cast<int>(bond->getBeginAtomIdx()),
+            static_cast<int>(bond->getEndAtomIdx()),
+            bond->getBondType(),
+            bond->getBondTypeAsDouble()
+        });
+    }
+
+    g_groupMolCache.emplace(std::move(key), data);
+    return data;
+}
+
+} // anonymous namespace
 
 // Function to convert rdkit ROMol to AtomGraph
 void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGraph &aG, bool validate=true) {
@@ -896,82 +997,57 @@ std::string GroupGraph::printGraph() const {
 std::string GroupGraph::toSmiles() const {
     using AtomIndexMap = std::unordered_map<int, int>;
 
-    // Allocate molecular graph using smart pointer
     auto molecularGraph = std::make_unique<RDKit::RWMol>();
-
-    std::unordered_map<NodeIDType, std::unique_ptr<RDKit::ROMol>> subGraphs;
     std::unordered_map<NodeIDType, AtomIndexMap> nodePortToAtomIndex;
-    std::unordered_map<NodeIDType, AtomIndexMap> nodeLocalToGlobalAtomIndex;
 
     int globalAtomIndex = 0;
 
-    // === Step 1: Create and store all subgraphs ===
+    // Single pass: for each group, look up its parsed pattern in the
+    // process-wide cache (parsing only happens on first sight of a
+    // (pattern, isSmarts) pair), append atoms to the RWMol, record port
+    // → global-atom mapping, then append intra-group bonds.
     for (const auto& [nodeID, node] : nodes) {
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(node.pattern, node.patternType != "SMILES");
-        if (!subGraph) {
-            throw std::runtime_error("Failed to create molecule for node " + std::to_string(nodeID));
-        }
-        nodePortToAtomIndex[nodeID] = AtomIndexMap();
-        subGraphs[nodeID] = std::move(subGraph);
-    }
+        bool isSmarts = node.patternType != "SMILES";
+        const auto& cached = *getCachedMolData(node.pattern, isSmarts);
 
-    // === Step 2: Add atoms to molecularGraph and track index mapping ===
-    for (const auto& [nodeID, node] : nodes) {
-        RDKit::ROMol* subGraph = subGraphs[nodeID].get();
-        const std::vector<int>& hubs = node.hubs;
-
-        AtomIndexMap& localToGlobal = nodeLocalToGlobalAtomIndex[nodeID];
         AtomIndexMap& portToGlobal = nodePortToAtomIndex[nodeID];
+        const int groupAtomBase = globalAtomIndex;
 
-        int localIndex = 0;
-        for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom, ++localIndex) {
-            // FIXED: Avoid manual memory allocation to prevent memory leaks
-            molecularGraph->addAtom(*atom, true);
-
-            localToGlobal[localIndex] = globalAtomIndex;
-
-            // If this local atom is a hub, associate it with the port
-            for (size_t i = 0; i < hubs.size(); ++i) {
-                if (hubs[i] == localIndex) {
-                    portToGlobal[node.ports[i]] = globalAtomIndex;
-                }
-            }
-
+        for (size_t localIdx = 0; localIdx < cached.atoms.size(); ++localIdx) {
+            const auto& a = cached.atoms[localIdx];
+            RDKit::Atom newAtom(a.atomicNumber);
+            newAtom.setFormalCharge(a.formalCharge);
+            molecularGraph->addAtom(&newAtom, true);
             ++globalAtomIndex;
         }
-    }
 
-    // === Step 3: Add intra-subgraph bonds ===
-    for (const auto& [nodeID, _] : nodes) {
-        RDKit::ROMol* subGraph = subGraphs[nodeID].get();
-        const AtomIndexMap& localToGlobal = nodeLocalToGlobalAtomIndex[nodeID];
+        // Map (this group's port i) → global atom index of the hub atom
+        // it sits on. node.hubs[i] is the local atom index inside the
+        // pattern; node.ports[i] is the externally-visible port id.
+        for (size_t i = 0; i < node.hubs.size(); ++i) {
+            portToGlobal[node.ports[i]] = groupAtomBase + node.hubs[i];
+        }
 
-        for (auto bond = subGraph->beginBonds(); bond != subGraph->endBonds(); ++bond) {
-            int beginLocal = (*bond)->getBeginAtomIdx();
-            int endLocal = (*bond)->getEndAtomIdx();
-            RDKit::Bond::BondType bondType = (*bond)->getBondType();
-
-            int beginGlobal = localToGlobal.at(beginLocal);
-            int endGlobal = localToGlobal.at(endLocal);
-
-            molecularGraph->addBond(beginGlobal, endGlobal, bondType);
+        for (const auto& b : cached.bonds) {
+            molecularGraph->addBond(
+                groupAtomBase + b.begin, groupAtomBase + b.end, b.bondType
+            );
         }
     }
 
-    // === Step 4: Add inter-subgraph (edge) bonds ===
-    std::unordered_map<double, RDKit::Bond::BondType> bondOrderMap;
-    bondOrderMap[1.0] = RDKit::Bond::BondType::SINGLE;
-    bondOrderMap[2.0] = RDKit::Bond::BondType::DOUBLE;
-    bondOrderMap[3.0] = RDKit::Bond::BondType::TRIPLE;
-    bondOrderMap[1.5] = RDKit::Bond::BondType::AROMATIC;
-    for (const auto &[from, fromPort, to, toPort, bondOrder] : edges)
-    {
+    // Inter-subgraph (cross-group) bonds.
+    static const std::unordered_map<double, RDKit::Bond::BondType> bondOrderMap = {
+        {1.0, RDKit::Bond::BondType::SINGLE},
+        {2.0, RDKit::Bond::BondType::DOUBLE},
+        {3.0, RDKit::Bond::BondType::TRIPLE},
+        {1.5, RDKit::Bond::BondType::AROMATIC},
+    };
+    for (const auto &[from, fromPort, to, toPort, bondOrder] : edges) {
         int fromAtom = nodePortToAtomIndex.at(from).at(fromPort);
         int toAtom   = nodePortToAtomIndex.at(to).at(toPort);
-        molecularGraph->addBond(fromAtom, toAtom, bondOrderMap[bondOrder]);
+        molecularGraph->addBond(fromAtom, toAtom, bondOrderMap.at(bondOrder));
     }
 
-    // === Step 5: Convert to SMILES and return ===
     return RDKit::MolToSmiles(*molecularGraph, true, false, -1, true, false);
 }
 
@@ -1012,81 +1088,43 @@ std::unordered_map<std::string, int> GroupGraph::toVector() const {
 }
 
 std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
-    auto atomGraph = std::make_unique<AtomGraph>();
-    const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
-    std::unordered_map<std::string, std::unordered_map<int, int>> nodePortToAtomIndex;
-    int atomCount = 0;
-
-    if (nodes.size() == 0) {
+    if (nodes.empty()) {
         throw std::invalid_argument("No nodes in the graph");
     }
 
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        std::string pattern = entry.second.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        for (size_t i = 0; i < node.ports.size(); ++i) {
-            nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
+    auto atomGraph = std::make_unique<AtomGraph>();
+    const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
+
+    // (group nodeID, port id) -> global atom index in the assembled
+    // AtomGraph. Used to wire up cross-group edges below.
+    std::unordered_map<NodeIDType, std::unordered_map<int, int>> nodePortToAtomIndex;
+
+    int atomBase = 0;
+    for (const auto& [nodeID, node] : nodes) {
+        bool isSmarts = node.patternType != "SMILES";
+        const auto& cached = *getCachedMolData(node.pattern, isSmarts);
+
+        for (const auto& a : cached.atoms) {
+            int maxValence = pt->getDefaultValence(a.atomicNumber) + a.formalCharge;
+            atomGraph->addNode(a.symbol, maxValence);
         }
-        atomCount += subGraph->getNumAtoms();
+        for (const auto& b : cached.bonds) {
+            atomGraph->addEdge(atomBase + b.begin, atomBase + b.end, b.bondOrder);
+        }
+        for (size_t i = 0; i < node.hubs.size(); ++i) {
+            nodePortToAtomIndex[nodeID][node.ports[i]] = atomBase + node.hubs[i];
+        }
+        atomBase += static_cast<int>(cached.atoms.size());
     }
-
-
-
-    int atomId = -1;
-    std::unordered_map<std::string, std::unordered_map<int, int>> nodeSubGraphIndicesToMolecularGraphIndices;
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
-            atomId++;
-            nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
-        }
-    }
-
-    // Start building the atom graph from mappings defined above
-    atomId = -1;
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
-            atomId++;
-            // RDKit::Atom newAtom = **atom;
-            // molecularGraph->addAtom(&newAtom, true);
-            int atomicNumber = (*atom)->getAtomicNum();
-            int maxValence = pt->getDefaultValence(atomicNumber) + (*atom)->getFormalCharge();
-            atomGraph->addNode((*atom)->getSymbol(), maxValence);
-
-        }
-        for (RDKit::ROMol::BondIterator bond = subGraph->beginBonds(); bond != subGraph->endBonds(); ++bond) {
-            // RDKit::Bond newBond = **bond;
-            int atomIdx1 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getBeginAtomIdx()];
-            int atomIdx2 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getEndAtomIdx()];
-            // molecularGraph->addBond(atomIdx1, atomIdx2, newBond.getBondType());
-            double bondOrder = (*bond)->getBondTypeAsDouble();
-            atomGraph->addEdge(atomIdx1, atomIdx2, bondOrder);
-        }
-    }
-
 
     for (const auto& edge : edges) {
-        NodeIDType from = std::get<0>(edge);
-        PortType fromPort = std::get<1>(edge);
-        NodeIDType to = std::get<2>(edge);
-        PortType toPort = std::get<3>(edge);
-        NodeIDType fromAtom = nodePortToAtomIndex[std::to_string(from)][fromPort];
-        NodeIDType toAtom = nodePortToAtomIndex[std::to_string(to)][toPort];
-        double bondOrder = std::get<4>(edge);
-        atomGraph->addEdge(fromAtom, toAtom, bondOrder);
+        auto [from, fromPort, to, toPort, bondOrder] = edge;
+        atomGraph->addEdge(
+            nodePortToAtomIndex.at(from).at(fromPort),
+            nodePortToAtomIndex.at(to).at(toPort),
+            bondOrder
+        );
     }
-
 
     return atomGraph;
 }
