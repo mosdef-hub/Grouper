@@ -729,23 +729,31 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
         return false;
     }
 
-    // Try-insert into used_ports rather than count-then-insert, halving the
-    // hash work on the success path. If the second insert fails we roll back
-    // the first one. The previous explicit `edges.count(edge)` check was
-    // redundant: any duplicate edge is impossible without one of its ports
-    // already appearing in used_ports, so the port checks below cover it.
-    auto fromIns = used_ports.insert({from, fromPort});
-    if (!fromIns.second) {
+    // Bit-test both endpoints against per-node port_used_bits before
+    // committing. If either is already set we bail without mutating
+    // anything, so no rollback is needed. The previous explicit
+    // `edges.count(edge)` check was redundant: any duplicate edge is
+    // impossible without one of its ports already being marked used,
+    // so these bit tests cover it.
+    if (fromPort < 0 || fromPort >= 64 || toPort < 0 || toPort >= 64) {
+        if (strict) throw std::invalid_argument("Port index out of range for bitmask (0..63)");
+        return false;
+    }
+    auto& fromBits = port_used_bits[from];
+    const std::uint64_t fromMask = std::uint64_t{1} << fromPort;
+    if (fromBits & fromMask) {
         if (strict) throw std::invalid_argument("Source port already in use");
         return false;
     }
-    auto toIns = used_ports.insert({to, toPort});
-    if (!toIns.second) {
-        used_ports.erase(fromIns.first);
+    auto& toBits = port_used_bits[to];
+    const std::uint64_t toMask = std::uint64_t{1} << toPort;
+    if (toBits & toMask) {
         if (strict) throw std::invalid_argument("Destination port already in use");
         return false;
     }
 
+    fromBits |= fromMask;
+    toBits |= toMask;
     edges.emplace(from, fromPort, to, toPort, bondOrder);
     return true;
 }
@@ -782,7 +790,7 @@ bool GroupGraph::isPortFree(NodeIDType nodeID, PortType port) const {
 
 void GroupGraph::clearEdges() {
     edges.clear();
-    used_ports.clear();
+    port_used_bits.clear();
 }
 
 void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int stabvertex, int n) {
