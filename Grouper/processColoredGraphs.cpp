@@ -525,7 +525,12 @@ EdgeGroup obtainEdgeAutomorphismGenerators(
 void processColoring(
     const std::vector<int>& coloring,
     const std::vector<std::pair<int, int>>& edge_list,
-    const std::unordered_map<std::pair<int, int>, std::vector<std::pair<int, int>>, hash_pair>& color_to_port_pair,
+    // Indexed by edge position in edge_list (same ordering used to fill
+    // `coloring`), value is the per-edge list of (sPort, tPort) pairs.
+    // Was previously a pair<int,int>-keyed unordered_map; the inner
+    // loop is hot enough that swapping the hash lookup for direct
+    // vector indexing is worth the parameter-type churn.
+    const std::vector<std::vector<std::pair<int, int>>>& color_to_port_pair_by_edge,
     const std::unordered_map<int, std::string>& int_to_node_type,
     const std::unordered_map<std::string, std::vector<int>>& node_types,
     const std::vector<int>& colors,
@@ -534,16 +539,16 @@ void processColoring(
     GroupGraph& gG
 ) {
     gG.clearEdges();
-    size_t edge_index = 0;
     bool all_edges_added = true;
+    const size_t numEdges = edge_list.size();
 
-    for (const auto& edge : edge_list) {
-        // Ensure canonical order for undirected edge:
+    for (size_t edge_index = 0; edge_index < numEdges; ++edge_index) {
+        const auto& edge = edge_list[edge_index];
         int s = edge.first;
         int t = edge.second;
 
-        int color = coloring[edge_index++];
-        std::pair<int,int> colorPort = color_to_port_pair.at(edge)[color];
+        int color = coloring[edge_index];
+        const auto& colorPort = color_to_port_pair_by_edge[edge_index][color];
         int sPort = colorPort.first;
         int tPort = colorPort.second;
         bool added;
@@ -659,7 +664,6 @@ void process_nauty_output(
     // Compute port representatives for each node
     std::unordered_map<int, std::vector<std::vector<int>>> node_port_representatives;
     std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair> possible_edge_colors;
-    std::unordered_map<std::pair<int, int>,std::vector<std::pair<int, int>>,hash_pair> color_to_port_pair;
     GroupGraph::Group tmp_g;
     for (const auto& [node, degree] : node_degree) {
         tmp_g.ntype = int_to_node_type.at(colors[node]);
@@ -676,8 +680,13 @@ void process_nauty_output(
         }
         return std::vector<int>(ports.begin(), ports.end());
     };
-    // Compute possible edge colors
-    for (const auto& [src, dst] : edge_list) {
+    // Compute possible edge colors. Build a parallel vector indexed by
+    // edge position so processColoring (and downstream
+    // generateNonAutomorphicEdgeColorings_Full) can avoid a pair<int,int>
+    // hash lookup per edge per leaf.
+    std::vector<std::vector<std::pair<int, int>>> color_to_port_pair_by_edge(edge_list.size());
+    for (size_t ei = 0; ei < edge_list.size(); ++ei) {
+        const auto& [src, dst] = edge_list[ei];
         const auto& src_reps = node_port_representatives.at(src);
         const auto& dst_reps = node_port_representatives.at(dst);
 
@@ -694,8 +703,8 @@ void process_nauty_output(
                 port_pairs.push_back({i, j});
             }
         }
-        possible_edge_colors[{src, dst}] = e_colors;
-        color_to_port_pair[{src, dst}] = port_pairs;
+        possible_edge_colors[{src, dst}] = std::move(e_colors);
+        color_to_port_pair_by_edge[ei] = std::move(port_pairs);
     }
 
     // Generate edge automorphism group
@@ -711,7 +720,7 @@ void process_nauty_output(
             processColoring(
                 coloring,
                 edge_list,
-                color_to_port_pair,
+                color_to_port_pair_by_edge,
                 int_to_node_type,
                 node_types,
                 colors,
