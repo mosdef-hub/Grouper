@@ -308,7 +308,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         return {};
     } else {
         size_t previous_n_colorings = 0;
-        std::unordered_set<std::string> canon_basis;
+        std::unordered_set<std::vector<setword>, hash_vector> canon_basis;
         int max_threads = num_procs;
         std::vector<std::unordered_set<GroupGraph>> all_local_bases(max_threads);
 
@@ -343,9 +343,8 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
         for (const auto& local_basis : all_local_bases) {
             for (const auto& graph : local_basis) {
-                std::string smiles = graph.toSmiles();
-                if (canon_basis.find(smiles) == canon_basis.end()) {
-                    canon_basis.insert(smiles);
+                auto canon = graph.toAtomicGraph()->canonize();
+                if (canon_basis.insert(std::move(canon)).second) {
                     global_basis.insert(graph);
                 }
             }

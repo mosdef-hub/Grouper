@@ -645,6 +645,120 @@ class TestCanonize(BaseTest):
         )
 
 
+class TestAtomCanonize(BaseTest):
+    """Pin AtomGraph.to_canonical() against to_smiles() at the atom level.
+
+    AtomGraph canonical form is what the dedup inside exhaustive_generate
+    is keyed on (since e6e6f3c). It must induce the same equivalence
+    relation as to_smiles() — the atom-level relation, which is *coarser*
+    than GroupGraph.to_canonical() (multiple group decompositions can
+    flatten to the same molecule).
+    """
+
+    @staticmethod
+    def _key(g):
+        return tuple(g.to_canonical())
+
+    def test_atomgraph_reordered_construction(self):
+        a = AtomGraph()
+        a.add_node("C", 4)
+        a.add_node("O", 2)
+        a.add_edge(0, 1)
+        b = AtomGraph()
+        b.add_node("O", 2)
+        b.add_node("C", 4)
+        b.add_edge(0, 1)
+        assert self._key(a) == self._key(b)
+
+    def test_atomgraph_different_element_differs(self):
+        a = AtomGraph()
+        a.add_node("C", 4)
+        a.add_node("O", 2)
+        a.add_edge(0, 1)
+        b = AtomGraph()
+        b.add_node("C", 4)
+        b.add_node("N", 3)
+        b.add_edge(0, 1)
+        assert self._key(a) != self._key(b)
+
+    def test_atomgraph_different_bond_order_differs(self):
+        a = AtomGraph()
+        a.add_node("C", 4)
+        a.add_node("C", 4)
+        a.add_edge(0, 1, 1)
+        b = AtomGraph()
+        b.add_node("C", 4)
+        b.add_node("C", 4)
+        b.add_edge(0, 1, 2)
+        assert self._key(a) != self._key(b)
+
+    def test_atomgraph_canon_collapses_group_decomposition(self):
+        """The bug we caught the hard way: two GroupGraphs that decompose
+        the same molecule into different groups must canonicalise to the
+        same AtomGraph key, even though they have *different*
+        GroupGraph.to_canonical() keys.
+        """
+        # Same molecule (CCOC(=O)O), built two ways:
+        #   g0: hydroxyl is the linker O, ester contributes the terminal -OH
+        #   g1: ester's port-1 O is the linker, hydroxyl is the terminal -OH
+        g0 = GroupGraph()
+        g0.add_node("methyl", "C", [0, 0, 0])
+        g0.add_node("ester", "C(=O)O", [0, 2])
+        g0.add_node("methyl", "C", [0, 0, 0])
+        g0.add_node("hydroxyl", "O", [0, 0])
+        g0.add_edge((1, 0), (3, 0))
+        g0.add_edge((0, 0), (3, 1))
+        g0.add_edge((0, 1), (2, 0))
+
+        g1 = GroupGraph()
+        g1.add_node("methyl", "C", [0, 0, 0])
+        g1.add_node("hydroxyl", "O", [0, 0])
+        g1.add_node("methyl", "C", [0, 0, 0])
+        g1.add_node("ester", "C(=O)O", [0, 2])
+        g1.add_edge((0, 0), (3, 1))
+        g1.add_edge((0, 1), (2, 0))
+        g1.add_edge((1, 1), (3, 0))
+
+        assert g0.to_smiles() == g1.to_smiles(), "premise: same molecule"
+        assert tuple(g0.to_canonical()) != tuple(g1.to_canonical()), (
+            "premise: GroupGraph distinguishes group decompositions"
+        )
+        # The actual contract:
+        assert self._key(g0.to_atom_graph()) == self._key(g1.to_atom_graph())
+
+    def test_atomgraph_canon_matches_smiles_on_exhaustive_output(self):
+        """End-to-end: exhaustive_generate output must partition identically
+        under to_smiles() and AtomGraph.to_canonical().
+        """
+        from collections import defaultdict
+        from Grouper import exhaustive_generate
+
+        node_defs = {
+            Group("amine", "N", [0, 0, 0]),
+            Group("methyl", "C", [0, 0, 0]),
+            Group("ester", "C(=O)O", [0, 2]),
+            Group("hydroxyl", "O", [0, 0]),
+        }
+        graphs = list(exhaustive_generate(
+            n_nodes=4, node_defs=node_defs, num_procs=1,
+            vcolg_output_file="", positive_constraints={},
+            negative_constraints=set(), config_path="",
+        ))
+        assert len(graphs) > 0
+
+        s2c = defaultdict(set)
+        c2s = defaultdict(set)
+        for g in graphs:
+            s = g.to_smiles()
+            c = self._key(g.to_atom_graph())
+            s2c[s].add(c)
+            c2s[c].add(s)
+        splits = {s: cs for s, cs in s2c.items() if len(cs) > 1}
+        collisions = {c: ss for c, ss in c2s.items() if len(ss) > 1}
+        assert not splits, f"{len(splits)} SMILES split across canon keys"
+        assert not collisions, f"{len(collisions)} canon keys collide across SMILES"
+
+
 class TestAtomGraph(BaseTest):
     def to_set_of_sets(self, matches):
         """Helper function for set comparison."""

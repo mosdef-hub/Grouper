@@ -111,7 +111,7 @@ public:
     std::vector<std::vector<NodeIDType>> nodeAut() const;
     std::vector<NodeIDType> nodeOrbits() const;
     std::vector<setword> toNautyGraph() const;
-    std::vector<setword> canonize();
+    std::vector<setword> canonize() const;
     int getNodeIndex(int node_id) const;
     void fromSmiles(const std::string& smiles);
     void fromSmarts(const std::string& smarts);

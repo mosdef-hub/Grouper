@@ -268,6 +268,11 @@ PYBIND11_MODULE(_Grouper, m) {
     matches = graph.substructure_search(sub)
 )doc")
         .def("free_valency", &AtomGraph::getFreeValency, "Get the free valency of the graph.")
+        .def("to_canonical", &AtomGraph::canonize,
+             "Return a canonical form of the AtomGraph as a list of nauty setwords "
+             "followed by the canonical color sequence. Two AtomGraphs return equal "
+             "lists iff they are isomorphic with atom element types and bond orders "
+             "preserved.")
         .def("__str__", &AtomGraph::printGraph)
         .def("__eq__", &AtomGraph::operator==)
         .def("__hash__", [](const AtomGraph& g) {

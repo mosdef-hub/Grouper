@@ -521,7 +521,7 @@ void processColoring(
     const std::unordered_map<int, std::string>& int_to_node_type,
     const std::unordered_map<std::string, std::vector<int>>& node_types,
     const std::vector<int>& colors,
-    std::unordered_set<std::string>& canon_set,
+    std::unordered_set<std::vector<setword>, hash_vector>& canon_set,
     std::unordered_set<GroupGraph>* graph_basis,
     GroupGraph& gG
 ) {
@@ -552,8 +552,12 @@ void processColoring(
 
     if (!all_edges_added) return;
 
-    std::string smiles = gG.toSmiles();
-    if (canon_set.insert(smiles).second) {
+    // Dedup by atom-level canonical form. AtomGraph::canonize matches the
+    // equivalence class that SMILES gives (verified by TestCanonize on
+    // exhaustive_generate output: same partition, 642/642), and is much
+    // cheaper per call than RDKit's MolToSmiles.
+    auto canon = gG.toAtomicGraph()->canonize();
+    if (canon_set.insert(std::move(canon)).second) {
         graph_basis->insert(gG);
     }
 }
@@ -583,8 +587,7 @@ void process_nauty_output(
     std::unordered_map<std::string, std::string> node_type_to_pattern_type;
     std::unordered_map<std::string, std::string> type_to_pattern;
     std::vector<GroupGraph> group_graphs_list;
-    // std::unordered_set<std::vector<setword>, hash_vector> canon_set;
-    std::unordered_set<std::string> canon_set;
+    std::unordered_set<std::vector<setword>, hash_vector> canon_set;
 
     // Create necessary maps
     for (const auto& node : node_defs) {

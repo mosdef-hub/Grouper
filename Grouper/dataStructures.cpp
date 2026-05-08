@@ -2104,147 +2104,81 @@ int AtomGraph::getNodeIndex(int node_id) const {
     return -1; // Not found
 }
 
-std::vector<setword> AtomGraph::canonize() {
-    // Convert AtomGraph to a Nauty graph representation
-    std::vector<setword> g = this->toNautyGraph();
+std::vector<setword> AtomGraph::canonize() const {
+    if (nodes.empty()) {
+        return {};
+    }
 
-    // Prepare vectors and workspace
-    int n = nodes.size();
-    int m = SETWORDSNEEDED(n);
+    // One nauty vertex per atom; one auxiliary vertex per bond colored
+    // by bond order, so single/double/triple/aromatic bonds canonicalize
+    // distinctly even though densenauty doesn't natively support edge
+    // weights. This is the same trick used in GroupGraph::canonize().
+    const int numAtoms = static_cast<int>(nodes.size());
+    const int numBonds = static_cast<int>(edges.size());
+    const int n = numAtoms + numBonds;
+    const int m = SETWORDSNEEDED(n);
+
+    std::vector<setword> g(static_cast<size_t>(m) * n, 0);
+    EMPTYGRAPH(g.data(), m, n);
+
+    // Walk edges in unordered_set iteration order. The order is
+    // implementation-defined, but we'll feed a colored partition to
+    // nauty so the canonical form is invariant to it anyway.
+    std::vector<double> bondOrders;
+    bondOrders.reserve(numBonds);
+    int bondVertex = numAtoms;
+    for (const auto& [src, dst, order] : edges) {
+        ADDONEEDGE(g.data(), src, bondVertex, m);
+        ADDONEEDGE(g.data(), bondVertex, dst, m);
+        bondOrders.push_back(order);
+        ++bondVertex;
+    }
+
+    // Color each nauty vertex with a string. Atoms get "a:<element>",
+    // bond vertices get "b:<order>". AtomGraph::addNode assigns IDs in
+    // 0..numAtoms-1 by construction (id = nodes.size() at insert time),
+    // so atom i in the partition is nodes.at(i).
+    std::vector<std::string> color_str(n);
+    for (int i = 0; i < numAtoms; ++i) {
+        color_str[i] = "a:" + nodes.at(i).ntype;
+    }
+    for (int i = 0; i < numBonds; ++i) {
+        color_str[numAtoms + i] = "b:" + std::to_string(bondOrders[i]);
+    }
+
+    // Sort vertices by color string so the partition order is a function
+    // of chemistry only — not of insertion order. Without this the
+    // canonical form would shift if the same molecule were built atom-
+    // by-atom in a different sequence.
+    std::vector<std::pair<std::string, int>> color_sorted;
+    color_sorted.reserve(n);
+    for (int i = 0; i < n; ++i) color_sorted.emplace_back(color_str[i], i);
+    std::sort(color_sorted.begin(), color_sorted.end());
+
     std::vector<int> lab(n), ptn(n), orbits(n);
-    std::vector<setword> canong(n * m);
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted[i].second;
+    for (int i = 0; i < n - 1; ++i)
+        ptn[i] = (color_sorted[i].first == color_sorted[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
 
-    // Use dynamic allocation for workspace
-    DYNALLSTAT(setword, workspace, workspace_sz);
-    DYNALLOC2(setword, workspace, workspace_sz, 4*m, n, "malloc workspace");
-
-    // Create edge colors based on bond orders
-    // We can't directly color edges in nauty, but we can use the node coloring
-    // to encode the edge color information
-
-    // First, group nodes by their atom type
-    std::vector<int> node_colors(n);
-    std::map<std::string, int> atom_type_map;
-    int color_index = 0;
-
-    for (int i = 0; i < n; i++) {
-        const auto& atom = nodes.at(i);
-        if (atom_type_map.find(atom.ntype) == atom_type_map.end()) {
-            atom_type_map[atom.ntype] = color_index;
-            color_index++;
-        }
-        node_colors[i] = atom_type_map[atom.ntype];
-    }
-
-    // Set up initial coloring based on atom types
-    for (int i = 0; i < n; i++) {
-        lab[i] = i;  // Identity permutation initially
-        ptn[i] = 1;  // All in one partition initially
-    }
-    ptn[n-1] = 0;    // End the last partition
-
-    // Sort nodes by color to set up the initial partition
-    std::sort(lab.begin(), lab.end(), [&node_colors](int a, int b) {
-        return node_colors[a] < node_colors[b];
-    });
-
-    // Update the partition array to separate different atom types
-    for (int i = 0; i < n-1; i++) {
-        if (node_colors[lab[i]] != node_colors[lab[i+1]]) {
-            ptn[i] = 0;  // End the current partition
-        }
-    }
-
-    // Set up Nauty options for sparse graphs
-    static DEFAULTOPTIONS_SPARSEGRAPH(options);  // Use SPARSEGRAPH options instead of GRAPH
+    DEFAULTOPTIONS_GRAPH(options);
     options.getcanon = TRUE;
     options.defaultptn = FALSE;
-
-    // These options are compatible with sparse graphs
-    options.mininvarlevel = 1;
-    options.maxinvarlevel = 100;
-    options.invararg = 3;
-
     statsblk stats;
 
-    // Run Nauty with edge weights consideration
-    // Create a SparseGraph representation for edge weights
-    sparsegraph sg;
-    SG_INIT(sg);
+    std::vector<setword> canong(static_cast<size_t>(m) * n, 0);
+    densenauty(g.data(), lab.data(), ptn.data(), orbits.data(),
+               &options, &stats, m, n, canong.data());
 
-    // Convert g to sparse format and include edge weights
-    SG_ALLOC(sg, n, edges.size(), "SparseGraph");
-    sg.nv = n;
-    sg.nde = 0;
-
-    std::vector<size_t> sg_v(n+1, 0);  // Use size_t instead of int
-    std::vector<int> sg_d(n, 0);
-    std::vector<int> sg_e;
-    std::vector<int> sg_w;  // Edge weights for bond orders
-
-    // Count degrees first
-    for (const auto& [src, dst, order] : edges) {
-        sg_d[src]++;
-        sg_d[dst]++;
+    // Append the canonical-order color sequence so two graphs with
+    // disjoint element sets do not alias. We hash the color *string*
+    // (not a per-call integer code) so the encoding is globally stable.
+    canong.reserve(canong.size() + n);
+    std::hash<std::string> hasher;
+    for (int i = 0; i < n; ++i) {
+        canong.push_back(static_cast<setword>(hasher(color_str[lab[i]])));
     }
-
-    // Set up vertex offsets
-    sg_v[0] = 0;
-    for (int i = 0; i < n; i++) {
-        sg_v[i+1] = sg_v[i] + sg_d[i];
-        sg_d[i] = 0;  // Reset for use as counter below
-    }
-
-    // Resize edge arrays
-    sg_e.resize(sg_v[n]);
-    sg_w.resize(sg_v[n]);
-
-    // Fill edge arrays
-    for (const auto& [src, dst, order] : edges) {
-        // Add src -> dst edge
-        int pos = sg_v[src] + sg_d[src]++;
-        sg_e[pos] = dst;
-        sg_w[pos] = order;  // Store bond order as edge weight
-
-        // Add dst -> src edge (for undirected graph)
-        pos = sg_v[dst] + sg_d[dst]++;
-        sg_e[pos] = src;
-        sg_w[pos] = order;  // Same bond order
-    }
-
-    // Set sparse graph properties
-    sg.v = sg_v.data();
-    sg.d = sg_d.data();
-    sg.e = sg_e.data();
-    sg.w = sg_w.data();  // Edge weights
-
-    // Initialize the canonical graph
-    int total_edges = 2 * int(edges.size());
-    sparsegraph canon_sg;
-    SG_INIT(canon_sg);
-    SG_ALLOC(canon_sg, n, total_edges, "CanonicalGraph");
-    sg.nv = n;
-    sg.nde = total_edges;
-
-    printf("Nauty: %d vertices, %d edges\n", n, total_edges);
-
-    // Run Nauty with the sparse graph representation
-    sparsenauty(&sg, lab.data(), ptn.data(), orbits.data(), &options, &stats, &canon_sg);
-
-
-    // Get the canonical labeling
-    std::vector<setword> canon_g(n * m);
-    EMPTYGRAPH(canon_g.data(), m, n);
-
-    // Build canonical graph with edge weights
-    for (const auto& [src, dst, order] : edges) {
-        int src_canon = lab[src];
-        int dst_canon = lab[dst];
-        // Add edge to canonical graph
-        ADDONEEDGE(canon_g.data(), src_canon, dst_canon, m);
-    }
-
-    return canon_g;
+    return canong;
 }
 
 std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::nodeAut() const {
