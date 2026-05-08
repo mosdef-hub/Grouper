@@ -700,61 +700,53 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
     NodeIDType to = std::get<0>(toNodePort);
     PortType toPort = std::get<1>(toNodePort);
 
-    // Error handling
     if (from == to) {
-        if (strict) {
-            throw std::invalid_argument("Source and destination nodes are the same");
-        }
-        return false;
-    }
-    if (nodes.find(from) == nodes.end()) {
-        if (strict) {
-            throw std::invalid_argument("Source node does not exist");
-        }
-        return false;
-    }
-    if (nodes.find(to) == nodes.end()) {
-        if (strict) {
-            throw std::invalid_argument("Destination node does not exist");
-        }
-        return false;
-    }
-    if (std::find(nodes[from].ports.begin(), nodes[from].ports.end(), fromPort) == nodes[from].ports.end()) {
-        if (strict) {
-            throw std::invalid_argument("Source port does not exist");
-        }
-        return false;
-    }
-    if (std::find(nodes[to].ports.begin(), nodes[to].ports.end(), toPort) == nodes[to].ports.end()) {
-        if (strict) {
-            throw std::invalid_argument("Destination port does not exist");
-        }
+        if (strict) throw std::invalid_argument("Source and destination nodes are the same");
         return false;
     }
 
-    const std::tuple<NodeIDType, PortType, NodeIDType, PortType, double> edge = std::make_tuple(from, fromPort, to, toPort, bondOrder);
-    if (edges.count(edge) != 0) {
-        if (strict) {
-            throw std::invalid_argument("Edge already exists");
-        }
+    // Cache the nodes.find iterators so we don't hash the keys again
+    // when we read the ports vector below.
+    auto fromIt = nodes.find(from);
+    if (fromIt == nodes.end()) {
+        if (strict) throw std::invalid_argument("Source node does not exist");
         return false;
     }
-    if (used_ports.count({from, fromPort}) > 0) {
-        if (strict) {
-            throw std::invalid_argument("Source port already in use");
-        }
+    auto toIt = nodes.find(to);
+    if (toIt == nodes.end()) {
+        if (strict) throw std::invalid_argument("Destination node does not exist");
         return false;
     }
-    if (used_ports.count({to, toPort}) > 0) {
-        if (strict) {
-            throw std::invalid_argument("Destination port already in use");
-        }
+
+    const auto& fromPorts = fromIt->second.ports;
+    const auto& toPorts = toIt->second.ports;
+    if (std::find(fromPorts.begin(), fromPorts.end(), fromPort) == fromPorts.end()) {
+        if (strict) throw std::invalid_argument("Source port does not exist");
         return false;
     }
-    // Add the edge and mark both ports as used
-    edges.insert(edge);
-    used_ports.insert({from, fromPort});
-    used_ports.insert({to, toPort});
+    if (std::find(toPorts.begin(), toPorts.end(), toPort) == toPorts.end()) {
+        if (strict) throw std::invalid_argument("Destination port does not exist");
+        return false;
+    }
+
+    // Try-insert into used_ports rather than count-then-insert, halving the
+    // hash work on the success path. If the second insert fails we roll back
+    // the first one. The previous explicit `edges.count(edge)` check was
+    // redundant: any duplicate edge is impossible without one of its ports
+    // already appearing in used_ports, so the port checks below cover it.
+    auto fromIns = used_ports.insert({from, fromPort});
+    if (!fromIns.second) {
+        if (strict) throw std::invalid_argument("Source port already in use");
+        return false;
+    }
+    auto toIns = used_ports.insert({to, toPort});
+    if (!toIns.second) {
+        used_ports.erase(fromIns.first);
+        if (strict) throw std::invalid_argument("Destination port already in use");
+        return false;
+    }
+
+    edges.emplace(from, fromPort, to, toPort, bondOrder);
     return true;
 }
 
