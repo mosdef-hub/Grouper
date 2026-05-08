@@ -338,12 +338,20 @@ std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings(
 // The coloring is accepted if and only if none of its images are lexicographically
 // greater than the coloring itself.
 bool full_maximality_test(const std::vector<int>& coloring, const EdgeGroup& group) {
+    // For each generator: walk the permutation in place and bail at the
+    // first position where coloring[i] differs from coloring[perm[i]].
+    // The original wrote the full permuted vector via apply_permutation
+    // (allocating a fresh std::vector per generator) and then ran
+    // lex_compare end-to-end. This version avoids both the allocation
+    // and the duplicated traversal — fused into a single early-out loop.
+    const size_t n = coloring.size();
     for (const auto& perm : group.perms) {
-        std::vector<int> permuted = apply_permutation(coloring, perm);
-        // If the current coloring is lexicographically less than one of its images,
-        // then it is not canonical.
-        if (lex_compare(coloring, permuted)) {
-            return false;
+        for (size_t i = 0; i < n; ++i) {
+            int original = coloring[i];
+            int image = coloring[perm[i]];
+            if (original < image) return false;  // image is lex-greater here
+            if (original > image) break;          // image is lex-lesser; this perm is fine
+            // equal: keep walking
         }
     }
     return true;
