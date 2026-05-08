@@ -343,7 +343,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
         for (const auto& local_basis : all_local_bases) {
             for (const auto& graph : local_basis) {
-                auto canon = graph.toAtomicGraph()->canonize();
+                auto canon = graph.canonizeAtomic();
                 if (canon_basis.insert(std::move(canon)).second) {
                     global_basis.insert(graph);
                 }

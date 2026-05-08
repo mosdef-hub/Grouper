@@ -192,6 +192,10 @@ public:
     std::string serialize() const;
     void deserialize(const std::string& state);
     std::vector<setword> canonize() const;
+    // Fused toAtomicGraph()->canonize(): build the colored atom-level
+    // nauty graph directly without materializing an AtomGraph. Used as
+    // the dedup key in exhaustive_generate's hot path.
+    std::vector<setword> canonizeAtomic() const;
 
 
 private:

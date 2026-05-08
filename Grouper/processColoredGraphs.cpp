@@ -552,11 +552,11 @@ void processColoring(
 
     if (!all_edges_added) return;
 
-    // Dedup by atom-level canonical form. AtomGraph::canonize matches the
-    // equivalence class that SMILES gives (verified by TestCanonize on
-    // exhaustive_generate output: same partition, 642/642), and is much
-    // cheaper per call than RDKit's MolToSmiles.
-    auto canon = gG.toAtomicGraph()->canonize();
+    // Dedup by atom-level canonical form, computed directly from the
+    // GroupGraph without materializing an intermediate AtomGraph. The
+    // key is identical to gG.toAtomicGraph()->canonize() (same colored
+    // nauty encoding) but avoids the AtomGraph allocation per call.
+    auto canon = gG.canonizeAtomic();
     if (canon_set.insert(std::move(canon)).second) {
         graph_basis->insert(gG);
     }

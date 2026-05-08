@@ -1121,6 +1121,117 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
     return atomGraph;
 }
 
+std::vector<setword> GroupGraph::canonizeAtomic() const {
+    // Fused toAtomicGraph()->canonize(). Builds the same colored
+    // atom-level nauty encoding that AtomGraph::canonize produces
+    // (one vertex per atom with element-symbol color, plus one
+    // auxiliary vertex per bond colored by bond order), but directly
+    // from cached group patterns + GroupGraph edges — without
+    // allocating an AtomGraph or running its add{Node,Edge} code per
+    // call. Profile-driven: AtomGraph::canonize was 37% of total
+    // runtime and toAtomicGraph another 7%; fusing them removes the
+    // AtomGraph round-trip while preserving the exact same dedup key.
+    if (nodes.empty()) {
+        return {};
+    }
+
+    struct AtomInfo {
+        std::string symbol;
+    };
+    struct BondInfo {
+        int begin;
+        int end;
+        double order;
+    };
+
+    // Collect atoms (per-group, in `nodes` iteration order) and bonds
+    // (intra-group from cached patterns, then cross-group from edges).
+    std::vector<AtomInfo> atomList;
+    std::vector<BondInfo> bondList;
+    // (group nodeID, port id) -> global atom index, used to wire up
+    // cross-group bonds below.
+    std::unordered_map<NodeIDType, std::unordered_map<int, int>> nodePortToAtom;
+
+    int atomBase = 0;
+    for (const auto& [nodeID, node] : nodes) {
+        bool isSmarts = node.patternType != "SMILES";
+        const auto& cached = *getCachedMolData(node.pattern, isSmarts);
+
+        for (const auto& a : cached.atoms) {
+            atomList.push_back({a.symbol});
+        }
+        for (const auto& b : cached.bonds) {
+            bondList.push_back({atomBase + b.begin, atomBase + b.end, b.bondOrder});
+        }
+        for (size_t i = 0; i < node.hubs.size(); ++i) {
+            nodePortToAtom[nodeID][node.ports[i]] = atomBase + node.hubs[i];
+        }
+        atomBase += static_cast<int>(cached.atoms.size());
+    }
+
+    for (const auto& edge : edges) {
+        auto [from, fromPort, to, toPort, bondOrder] = edge;
+        bondList.push_back({
+            nodePortToAtom.at(from).at(fromPort),
+            nodePortToAtom.at(to).at(toPort),
+            bondOrder
+        });
+    }
+
+    // From here this mirrors AtomGraph::canonize: one nauty vertex per
+    // atom, one per bond (colored by order), color-string partition for
+    // stable order, densenauty + appended canonical color sequence.
+    const int numAtoms = static_cast<int>(atomList.size());
+    const int numBonds = static_cast<int>(bondList.size());
+    const int n = numAtoms + numBonds;
+    const int m = SETWORDSNEEDED(n);
+
+    std::vector<setword> g(static_cast<size_t>(m) * n, 0);
+    EMPTYGRAPH(g.data(), m, n);
+
+    int bondVertex = numAtoms;
+    for (const auto& b : bondList) {
+        ADDONEEDGE(g.data(), b.begin, bondVertex, m);
+        ADDONEEDGE(g.data(), bondVertex, b.end, m);
+        ++bondVertex;
+    }
+
+    std::vector<std::string> color_str(n);
+    for (int i = 0; i < numAtoms; ++i) {
+        color_str[i] = "a:" + atomList[i].symbol;
+    }
+    for (int i = 0; i < numBonds; ++i) {
+        color_str[numAtoms + i] = "b:" + std::to_string(bondList[i].order);
+    }
+
+    std::vector<std::pair<std::string, int>> color_sorted;
+    color_sorted.reserve(n);
+    for (int i = 0; i < n; ++i) color_sorted.emplace_back(color_str[i], i);
+    std::sort(color_sorted.begin(), color_sorted.end());
+
+    std::vector<int> lab(n), ptn(n), orbits(n);
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted[i].second;
+    for (int i = 0; i < n - 1; ++i)
+        ptn[i] = (color_sorted[i].first == color_sorted[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
+
+    DEFAULTOPTIONS_GRAPH(options);
+    options.getcanon = TRUE;
+    options.defaultptn = FALSE;
+    statsblk stats;
+
+    std::vector<setword> canong(static_cast<size_t>(m) * n, 0);
+    densenauty(g.data(), lab.data(), ptn.data(), orbits.data(),
+               &options, &stats, m, n, canong.data());
+
+    canong.reserve(canong.size() + n);
+    std::hash<std::string> hasher;
+    for (int i = 0; i < n; ++i) {
+        canong.push_back(static_cast<setword>(hasher(color_str[lab[i]])));
+    }
+    return canong;
+}
+
 std::string GroupGraph::serialize() const {
     std::ostringstream oss;
 
