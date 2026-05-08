@@ -1263,21 +1263,100 @@ void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
 }
 
 std::vector<setword> GroupGraph::canonize() const {
-    int n, m;
-    graph* adj = nullptr; // Initialize pointer
+    if (nodes.empty()) {
+        return {};
+    }
 
-    toNautyGraph(&n, &m, &adj); // Now `adj` is allocated in toNautyGraph
+    // Encode the GroupGraph as a colored simple graph for nauty. Three vertex
+    // types are interleaved: one nauty vertex per Group, one per (group, port),
+    // and one per edge. A per-vertex color (group ntype, port hub-label, edge
+    // bond order) is fed to nauty via lab/ptn so the canonical form respects
+    // the labels — without that, two graphs differing only in chemistry would
+    // canonicalize to the same value.
+    std::unordered_map<NodeIDType, int> group_to_nauty;
+    std::unordered_map<std::pair<NodeIDType, PortType>, int> port_to_nauty;
+    std::unordered_map<std::tuple<NodeIDType, PortType, NodeIDType, PortType, double>, int> edge_to_nauty;
+
+    int nodeIndex = 0;
+    for (const auto& [nodeID, group] : nodes) group_to_nauty[nodeID] = nodeIndex++;
+    for (const auto& [nodeID, group] : nodes) {
+        for (PortType port : group.ports) {
+            port_to_nauty[{nodeID, port}] = nodeIndex++;
+        }
+    }
+    for (const auto& edge : edges) edge_to_nauty[edge] = nodeIndex++;
+
+    int n = nodeIndex;
+    int m = SETWORDSNEEDED(n);
+
+    std::vector<setword> g(static_cast<size_t>(m) * n, 0);
+    EMPTYGRAPH(g.data(), m, n);
+
+    for (const auto& [nodeID, group] : nodes) {
+        int gnode = group_to_nauty[nodeID];
+        for (PortType port : group.ports) {
+            int pnode = port_to_nauty[{nodeID, port}];
+            ADDONEEDGE(g.data(), gnode, pnode, m);
+        }
+    }
+    for (const auto& edge : edges) {
+        auto [src, srcPort, dst, dstPort, order] = edge;
+        int enode = edge_to_nauty[edge];
+        int p1 = port_to_nauty[{src, srcPort}];
+        int p2 = port_to_nauty[{dst, dstPort}];
+        ADDONEEDGE(g.data(), p1, enode, m);
+        ADDONEEDGE(g.data(), enode, p2, m);
+    }
+
+    // Compute a color *string* for each nauty vertex. Group nodes use the
+    // ntype, port nodes use the hub label, edge nodes use the bond order.
+    std::vector<std::string> color_str(n);
+    for (const auto& [nodeID, group] : nodes) {
+        color_str[group_to_nauty[nodeID]] = "g:" + group.ntype;
+    }
+    for (const auto& [nodeID, group] : nodes) {
+        for (size_t i = 0; i < group.ports.size(); ++i) {
+            int hub_label = (i < group.hubs.size()) ? group.hubs[i] : -1;
+            color_str[port_to_nauty[{nodeID, group.ports[i]}]] =
+                "p:" + std::to_string(hub_label);
+        }
+    }
+    for (const auto& edge : edges) {
+        color_str[edge_to_nauty[edge]] =
+            "e:" + std::to_string(std::get<4>(edge));
+    }
+
+    // Sort vertices by the string color so the partition class order is a
+    // function of chemistry only — not of the insertion order in `nodes`.
+    // This is what makes canonize() reproducible across reorderings.
+    std::vector<std::pair<std::string, int>> color_sorted;
+    color_sorted.reserve(n);
+    for (int i = 0; i < n; ++i) color_sorted.emplace_back(color_str[i], i);
+    std::sort(color_sorted.begin(), color_sorted.end());
 
     std::vector<int> lab(n), ptn(n), orbits(n);
-    std::vector<setword> canong(n);
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted[i].second;
+    for (int i = 0; i < n - 1; ++i)
+        ptn[i] = (color_sorted[i].first == color_sorted[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
+
     DEFAULTOPTIONS_GRAPH(options);
-    statsblk stats;
     options.getcanon = TRUE;
+    options.defaultptn = FALSE;
+    statsblk stats;
 
-    densenauty(adj, lab.data(), ptn.data(), orbits.data(), &options, &stats, m, n, canong.data());
+    std::vector<setword> canong(static_cast<size_t>(m) * n, 0);
+    densenauty(g.data(), lab.data(), ptn.data(), orbits.data(),
+               &options, &stats, m, n, canong.data());
 
-    delete[] adj; // Free allocated memory
-
+    // Append the canonical-order color sequence so the returned key encodes
+    // both topology and labels. We hash the color *string* (not a per-call
+    // integer code) so two graphs with disjoint color sets do not alias.
+    canong.reserve(canong.size() + n);
+    std::hash<std::string> hasher;
+    for (int i = 0; i < n; ++i) {
+        canong.push_back(static_cast<setword>(hasher(color_str[lab[i]])));
+    }
     return canong;
 }
 

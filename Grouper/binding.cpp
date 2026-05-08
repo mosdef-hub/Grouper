@@ -167,7 +167,11 @@ PYBIND11_MODULE(_Grouper, m) {
     graph.add_edge((0, 0), (1, 0))
     json_str = graph.to_json()
 )doc")
-        // .def("to_canonical", &GroupGraph::canonize, "Canonicalize GroupGraph")
+        .def("to_canonical", &GroupGraph::canonize,
+             "Return a canonical form of the GroupGraph as a list of nauty setwords "
+             "followed by the canonical color sequence. Two graphs return equal lists "
+             "iff they are isomorphic with group ntype, port hub label, and bond order "
+             "preserved.")
         .def("from_json", &GroupGraph::deserialize, R"doc(Deserialize a GroupGraph from a JSON string.
 
 .. code-block:: python
