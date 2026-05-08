@@ -5,6 +5,7 @@
 #include <GraphMol/Atom.h>
 #include <GraphMol/Bond.h>
 
+#include <atomic>
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
@@ -232,7 +233,9 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
 
     std::unordered_set<GroupGraph> global_basis;
     omp_set_num_threads(num_procs);      // Set the number of threads to match
-    int n_finished = 0;
+    std::atomic<int> n_finished{0};
+    // Print progress at most ~100 times across the run, regardless of thread count.
+    const int progress_step = std::max(1, total_lines / 100);
     std::cout<< "Using "<<num_procs << " processors" << std::endl;
 
     if (!config_path.empty()) {
@@ -289,10 +292,11 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                         insertGraph(conn, graph, table_name);
                     }
 
-                    if ((++n_finished % 1) == 0 || n_finished == total_lines) {
+                    int finished = ++n_finished;
+                    if (finished % progress_step == 0 || finished == total_lines) {
                         #pragma omp critical
                         {
-                            update_progress(n_finished, total_lines);
+                            update_progress(finished, total_lines);
                         }
                     }
                 }
@@ -327,10 +331,11 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                     g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
                 );
 
-                if ((++n_finished % 1) == 0 || n_finished == total_lines) {
+                int finished = ++n_finished;
+                if (finished % progress_step == 0 || finished == total_lines) {
                     #pragma omp critical
                     {
-                        update_progress(n_finished, total_lines);
+                        update_progress(finished, total_lines);
                     }
                 }
             }
@@ -347,22 +352,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         }
         std::cout << std::endl;
         std::cout<< "Number of unique graphs: " << global_basis.size() << std::endl;
-
-        // This part is not parallelized, but it should be fast enough
-        for (int i = 0; i < total_lines; ++i) {
-            std::unordered_set<GroupGraph> local_basis;
-            int n = 20; // Max number of nodes (adjustable)
-            int m = SETWORDSNEEDED(n);
-            std::vector<setword> g(m * n, 0);
-            std::vector<int> lab(n, 0), ptn(n, 0), orbits(n, 0);
-            DEFAULTOPTIONS_GRAPH(options);
-            statsblk stats;
-            process_nauty_output(
-                lines[i], node_defs, &local_basis,
-                positiveConstraints, negativeConstraints,
-                g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
-            );
-        }
 
         return global_basis;
     }
