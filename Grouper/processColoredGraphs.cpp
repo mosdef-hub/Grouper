@@ -534,6 +534,7 @@ void processColoring(
     const std::unordered_map<int, std::string>& int_to_node_type,
     const std::unordered_map<std::string, std::vector<int>>& node_types,
     const std::vector<int>& colors,
+    const std::unordered_set<std::string>& negativeConstraints,
     std::unordered_set<std::vector<setword>, hash_vector>& canon_set,
     std::unordered_set<GroupGraph>* graph_basis,
     GroupGraph& gG
@@ -571,6 +572,18 @@ void processColoring(
     // nauty encoding) but avoids the AtomGraph allocation per call.
     auto canon = gG.canonizeAtomic();
     if (canon_set.insert(std::move(canon)).second) {
+        // Apply negative constraints — forbidden SMILES substrings.
+        // Compute toSmiles() only when needed (negativeConstraints is
+        // non-empty AND the canon was new), so the common path stays
+        // cheap. The canon stays in canon_set even if we reject here:
+        // any later leaf with the same canon represents the same
+        // molecule by definition, so it would be rejected too.
+        if (!negativeConstraints.empty()) {
+            std::string smiles = gG.toSmiles();
+            for (const auto& forbidden : negativeConstraints) {
+                if (smiles.find(forbidden) != std::string::npos) return;
+            }
+        }
         graph_basis->insert(gG);
     }
 }
@@ -724,6 +737,7 @@ void process_nauty_output(
                 int_to_node_type,
                 node_types,
                 colors,
+                negativeConstraints,
                 canon_set,
                 graph_basis,
                 gG
