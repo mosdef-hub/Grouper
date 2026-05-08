@@ -199,15 +199,48 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     }
 
 
+    // Build geng/vcolg outputs in a per-call temp dir rather than in CWD.
+    // The previous version wrote `geng_out.txt`/`vcolg_out.txt` to the
+    // current working directory, which (a) raced if two
+    // exhaustive_generate calls ran concurrently in the same dir and (b)
+    // littered the user's CWD with intermediate files. Cleaned up via
+    // RAII regardless of how the function exits.
+    namespace fs = std::filesystem;
+    struct TmpDirCleaner {
+        fs::path path;
+        bool owned;
+        ~TmpDirCleaner() {
+            if (owned) {
+                std::error_code ec;
+                fs::remove_all(path, ec);
+            }
+        }
+    };
+    fs::path tmpdir;
+    TmpDirCleaner cleaner{tmpdir, false};
     if (vcolg_output_file.empty()) {
-        // Call nauty
-        std::string geng_command = "geng " + std::to_string(n_nodes) + " -c > geng_out.txt";
-        std::string vcolg_command = "vcolg geng_out.txt -T -m" + std::to_string(node_defs.size()) + " > vcolg_out.txt";
-        system(geng_command.c_str());
-        system(vcolg_command.c_str());
-    }
+        static std::atomic<unsigned long long> call_counter{0};
+        std::random_device rd;
+        unsigned long long call_id = call_counter.fetch_add(1, std::memory_order_relaxed);
+        tmpdir = fs::temp_directory_path() /
+            ("grouper_" + std::to_string(rd()) + "_" + std::to_string(call_id));
+        fs::create_directories(tmpdir);
+        cleaner.path = tmpdir;
+        cleaner.owned = true;
 
-    vcolg_output_file = vcolg_output_file.empty() ? "vcolg_out.txt" : vcolg_output_file;
+        fs::path geng_path = tmpdir / "geng_out.txt";
+        fs::path vcolg_path = tmpdir / "vcolg_out.txt";
+        std::string geng_command = "geng " + std::to_string(n_nodes) + " -c > " + geng_path.string();
+        std::string vcolg_command = "vcolg " + geng_path.string() + " -T -m" +
+                                    std::to_string(node_defs.size()) + " > " + vcolg_path.string();
+        if (std::system(geng_command.c_str()) != 0) {
+            throw std::runtime_error("geng failed (is nauty on PATH? command was: " + geng_command + ")");
+        }
+        if (std::system(vcolg_command.c_str()) != 0) {
+            throw std::runtime_error("vcolg failed (is nauty on PATH? command was: " + vcolg_command + ")");
+        }
+        vcolg_output_file = vcolg_path.string();
+    }
 
     // Read the input file
     std::ifstream input_file(vcolg_output_file);
@@ -397,12 +430,36 @@ std::unordered_set<GroupGraph> randomGenerate(
         num_procs = omp_get_max_threads();
     }
 
-    std::string geng_command = "geng " + std::to_string(n_nodes) + " -c > geng_out.txt";
-    std::string vcolg_command = "vcolg geng_out.txt -T -m" + std::to_string(node_defs.size()) + " > vcolg_out.txt";
-    system(geng_command.c_str());
-    system(vcolg_command.c_str());
+    // Same per-call temp dir treatment as exhaustiveGenerate (see notes
+    // there). Cleaned up via RAII at end of scope.
+    namespace fs = std::filesystem;
+    struct TmpDirCleaner {
+        fs::path path;
+        ~TmpDirCleaner() {
+            std::error_code ec;
+            fs::remove_all(path, ec);
+        }
+    };
+    static std::atomic<unsigned long long> rg_call_counter{0};
+    std::random_device rd_tmp;
+    unsigned long long rg_call_id = rg_call_counter.fetch_add(1, std::memory_order_relaxed);
+    fs::path tmpdir = fs::temp_directory_path() /
+        ("grouper_rg_" + std::to_string(rd_tmp()) + "_" + std::to_string(rg_call_id));
+    fs::create_directories(tmpdir);
+    TmpDirCleaner cleaner{tmpdir};
+    fs::path geng_path = tmpdir / "geng_out.txt";
+    fs::path vcolg_path = tmpdir / "vcolg_out.txt";
+    std::string geng_command = "geng " + std::to_string(n_nodes) + " -c > " + geng_path.string();
+    std::string vcolg_command = "vcolg " + geng_path.string() + " -T -m" +
+                                std::to_string(node_defs.size()) + " > " + vcolg_path.string();
+    if (std::system(geng_command.c_str()) != 0) {
+        throw std::runtime_error("geng failed (is nauty on PATH? command was: " + geng_command + ")");
+    }
+    if (std::system(vcolg_command.c_str()) != 0) {
+        throw std::runtime_error("vcolg failed (is nauty on PATH? command was: " + vcolg_command + ")");
+    }
 
-    std::ifstream input_file("vcolg_out.txt");
+    std::ifstream input_file(vcolg_path.string());
     if (!input_file.is_open()) {
         throw std::runtime_error("Error opening input file...");
     }
