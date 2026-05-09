@@ -325,28 +325,51 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     // so under load it pushes at the *workers'* rate — meaning
     // producer_total tracks consumption, not production, and any
     // bar built on it would only show a meaningful percentage in
-    // the last few % of the run. A separate `geng | vcolg | wc -l`
-    // pass is single-threaded and finishes long before the workers
-    // do, so the cost is small relative to the OMP processing
-    // phase. For the file-input branch we count lines in the file.
-    long long total_lines = 0;
+    // the last few % of the run.
+    //
+    // We run the count concurrently with the main pipeline rather
+    // than gating startup on it: a separate thread invokes
+    // `geng | vcolg | wc -l` while the producer + workers begin
+    // processing. print_progress falls back to a count-only display
+    // until total_lines is set, then switches to the bar. For n=6
+    // the counter thread finishes within ~1s of start, so the bar's
+    // initial blank window is brief; for n=7+ it finishes well
+    // before the workers do, so the bar is meaningful for almost
+    // the entire run. For file-input we count synchronously since
+    // file I/O is fast and avoids the thread machinery.
+    std::atomic<long long> total_lines{0};
+    std::thread counter_thread;
     if (from_pipe) {
-        std::string count_cmd = "geng " + std::to_string(n_nodes) +
-                                " -c 2>/dev/null | vcolg -T -m" +
-                                std::to_string(node_defs.size()) +
-                                " 2>/dev/null | wc -l";
-        FILE* cp = popen(count_cmd.c_str(), "r");
-        if (cp) {
-            if (std::fscanf(cp, "%lld", &total_lines) != 1) total_lines = 0;
+        counter_thread = std::thread([&total_lines, n_nodes, ndefs_size = node_defs.size()]() {
+            std::string count_cmd = "geng " + std::to_string(n_nodes) +
+                                    " -c 2>/dev/null | vcolg -T -m" +
+                                    std::to_string(ndefs_size) +
+                                    " 2>/dev/null | wc -l";
+            FILE* cp = popen(count_cmd.c_str(), "r");
+            if (!cp) return;
+            long long c = 0;
+            if (std::fscanf(cp, "%lld", &c) == 1) {
+                total_lines.store(c, std::memory_order_release);
+            }
             pclose(cp);
-        }
+        });
     } else {
         std::ifstream count_in(vcolg_input_path);
         if (count_in.is_open()) {
             std::string l;
-            while (std::getline(count_in, l)) ++total_lines;
+            long long c = 0;
+            while (std::getline(count_in, l)) ++c;
+            total_lines.store(c, std::memory_order_release);
         }
     }
+    // RAII: ensure the counter thread is reaped on every exit path
+    // (normal return, exception, KeyboardInterrupt). Joining is safe
+    // because the thread's only blocking call is fscanf on the popen
+    // pipe; vcolg exits quickly even on small N.
+    struct CounterJoiner {
+        std::thread& t;
+        ~CounterJoiner() { if (t.joinable()) t.join(); }
+    } counter_joiner{counter_thread};
 
     std::thread producer([&]() {
         try {
@@ -443,22 +466,27 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     const bool stdout_is_tty = ::isatty(::fileno(stdout));
     int last_pct_printed = -1;
     auto print_progress = [&](long long finished) {
-        if (total_lines <= 0) {
-            // Pre-count failed or wasn't run; show count only. In
-            // non-TTY mode skip — without a denominator the count is
-            // not very informative and would spam logs.
+        // Snapshot the atomic once: the counter thread may store the
+        // true total mid-print, and we don't want the bar's pos and
+        // pct calculations to disagree with the displayed denominator.
+        long long total = total_lines.load(std::memory_order_acquire);
+        if (total <= 0) {
+            // Pre-count not done yet (or failed). In TTY mode show a
+            // count-only line so the user sees liveness; in non-TTY
+            // skip entirely — without a denominator the count alone
+            // is not very informative and would spam logs.
             if (stdout_is_tty) {
                 std::cout << "\033[2K\rprocessed " << finished << " lines" << std::flush;
             }
             return;
         }
-        if (finished > total_lines) finished = total_lines;
-        int pct = static_cast<int>((100 * finished) / total_lines);
+        if (finished > total) finished = total;
+        int pct = static_cast<int>((100 * finished) / total);
         if (!stdout_is_tty) {
             int rounded = (pct / 10) * 10;
             if (rounded == 0 || rounded <= last_pct_printed) return;
             last_pct_printed = rounded;
-            std::cout << rounded << "% (" << finished << "/" << total_lines
+            std::cout << rounded << "% (" << finished << "/" << total
                       << ")\n" << std::flush;
             return;
         }
@@ -467,14 +495,14 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         // line, even if a stray write to stdout/stderr (or a shorter
         // previous bar) left residue.
         constexpr int bar_width = 100;
-        int pos = static_cast<int>((bar_width * finished) / total_lines);
+        int pos = static_cast<int>((bar_width * finished) / total);
         std::cout << "\033[2K\r[";
         for (int i = 0; i < bar_width; ++i) {
             if (i < pos) std::cout << "=";
             else if (i == pos) std::cout << ">";
             else std::cout << " ";
         }
-        std::cout << "] " << finished << "/" << total_lines << " (" << pct << "%)" << std::flush;
+        std::cout << "] " << finished << "/" << total << " (" << pct << "%)" << std::flush;
     };
 
     if (!config_path.empty()) {
