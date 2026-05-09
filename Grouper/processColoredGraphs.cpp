@@ -18,6 +18,7 @@
 #include <boost/functional/hash.hpp>
 
 #include "dataStructures.hpp"
+#include "processColoredGraphs.hpp"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -538,8 +539,7 @@ void processColoring(
     // Precomputed atom-level canonical-form setup for this nauty line.
     // Built once before the recursive coloring search, reused per leaf.
     const GroupGraph::AtomicCanonSetup& canon_setup,
-    std::unordered_set<std::vector<setword>, hash_vector>& canon_set,
-    std::unordered_set<GroupGraph>* graph_basis,
+    LocalBasis* graph_basis,
     GroupGraph& gG,
     std::vector<std::pair<int, int>>& chosen_ports_buf
 ) {
@@ -580,20 +580,25 @@ void processColoring(
     // intra-group bonds, color partition, color hashes) is invariant
     // within this nauty line and was already computed in canon_setup.
     auto canon = gG.canonizeAtomicWithSetup(canon_setup, edge_list, chosen_ports_buf);
-    if (canon_set.insert(std::move(canon)).second) {
-        // Apply negative constraints — forbidden SMILES substrings.
-        // Compute toSmiles() only when needed (negativeConstraints is
-        // non-empty AND the canon was new), so the common path stays
-        // cheap. The canon stays in canon_set even if we reject here:
-        // any later leaf with the same canon represents the same
-        // molecule by definition, so it would be rejected too.
-        if (!negativeConstraints.empty()) {
-            std::string smiles = gG.toSmiles();
-            for (const auto& forbidden : negativeConstraints) {
-                if (smiles.find(forbidden) != std::string::npos) return;
-            }
+
+    // Insert directly into the thread's canon-keyed local_basis. Same
+    // canon arriving from a different nauty line collapses into the
+    // existing entry — we don't accumulate duplicate GroupGraph copies
+    // for cross-line repeats. Replaces the previous {per-line canon_set
+    // + per-thread set<GroupGraph>} pair (memory was O(work performed)
+    // before; O(unique outputs) now).
+    if (negativeConstraints.empty()) {
+        graph_basis->try_emplace(std::move(canon), gG);
+    } else {
+        // Forbidden SMILES substrings. Compute toSmiles() only on canons
+        // we haven't seen in this thread yet; once accepted, any later
+        // leaf with the same canon would be rejected the same way.
+        if (graph_basis->find(canon) != graph_basis->end()) return;
+        std::string smiles = gG.toSmiles();
+        for (const auto& forbidden : negativeConstraints) {
+            if (smiles.find(forbidden) != std::string::npos) return;
         }
-        graph_basis->insert(gG);
+        graph_basis->emplace(std::move(canon), gG);
     }
 }
 //*****************************************************************************
@@ -601,7 +606,7 @@ void processColoring(
 void process_nauty_output(
     const std::string& line,
     const std::unordered_set<GroupGraph::Group>& node_defs,
-    std::unordered_set<GroupGraph>* graph_basis,
+    LocalBasis* graph_basis,
     const std::unordered_map<std::string, int> positiveConstraints,
     const std::unordered_set<std::string> negativeConstraints,
     graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats // Pass nauty structures
@@ -622,7 +627,6 @@ void process_nauty_output(
     std::unordered_map<std::string, std::string> node_type_to_pattern_type;
     std::unordered_map<std::string, std::string> type_to_pattern;
     std::vector<GroupGraph> group_graphs_list;
-    std::unordered_set<std::vector<setword>, hash_vector> canon_set;
 
     // Create necessary maps
     for (const auto& node : node_defs) {
@@ -757,7 +761,6 @@ void process_nauty_output(
                 colors,
                 negativeConstraints,
                 canon_setup,
-                canon_set,
                 graph_basis,
                 gG,
                 chosen_ports_buf

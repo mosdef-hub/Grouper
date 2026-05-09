@@ -364,7 +364,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 // objects to release the conn struct's memory.
                 PQfinish(conn);
             } else {
-                std::unordered_set<GroupGraph> local_basis;
+                LocalBasis local_basis;
                 // n is the maximum number of nauty vertices we'll see in
                 // this run — exactly n_nodes, since geng emits graphs of
                 // size n_nodes. The previous hard-coded 20 silently
@@ -385,7 +385,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                         positiveConstraints, negativeConstraints,
                         g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
                     );
-                    for (const auto& graph : local_basis) {
+                    for (const auto& [canon, graph] : local_basis) {
                         insertGraph(conn, graph, table_name);
                     }
                     long long finished = ++n_finished;
@@ -407,14 +407,17 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         return {};
     } else {
         size_t previous_n_colorings = 0;
-        std::unordered_set<std::vector<setword>, hash_vector> canon_basis;
         int max_threads = num_procs;
-        std::vector<std::unordered_set<GroupGraph>> all_local_bases(max_threads);
+        // Each thread keeps a canon-keyed map: same molecule produced by
+        // different vcolg lines collapses into one entry, instead of
+        // accumulating one duplicate copy per line. Memory now scales
+        // with the unique-output count rather than total work performed.
+        std::vector<LocalBasis> all_local_bases(max_threads);
 
     #pragma omp parallel
     {
             int tid = omp_get_thread_num();
-            std::unordered_set<GroupGraph>& local_basis = all_local_bases[tid];
+            LocalBasis& local_basis = all_local_bases[tid];
             // n is the maximum number of nauty vertices we'll see —
             // matches geng's output size exactly.
             const int n = n_nodes;
@@ -444,14 +447,24 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         producer.join();
         if (producer_exc) std::rethrow_exception(producer_exc);
 
-        for (const auto& local_basis : all_local_bases) {
-            for (const auto& graph : local_basis) {
-                auto canon = graph.canonizeAtomic();
-                if (canon_basis.insert(std::move(canon)).second) {
-                    global_basis.insert(graph);
+        // Cross-thread merge. Each thread already deduplicated within
+        // itself by canon, so we just need a single global canon set
+        // here. No re-canonicalization — the canon is the map key.
+        std::unordered_set<std::vector<setword>, hash_vector> canon_basis;
+        for (auto& local_basis : all_local_bases) {
+            for (auto& [canon, graph] : local_basis) {
+                if (canon_basis.insert(canon).second) {
+                    global_basis.insert(std::move(graph));
                 }
             }
         }
+        // Free the per-thread maps (and their canon keys) before the
+        // py::set conversion in the binding allocates 4519 wrappers.
+        // Without this, container destruction would happen *after* the
+        // function returns, contributing to the post-print delay.
+        all_local_bases.clear();
+        canon_basis.clear();
+
         std::cout << std::endl;
         std::cout<< "Number of unique graphs: " << global_basis.size() << std::endl;
 
