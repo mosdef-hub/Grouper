@@ -7,12 +7,14 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstdlib>
 #include <deque>
 #include <exception>
 #include <iostream>
 #include <fstream>
 #include <mutex>
 #include <thread>
+#include <unistd.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -259,6 +261,17 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     // buffer their full output in RAM.
     BoundedLineQueue queue(/*capacity=*/8192);
     std::atomic<long long> producer_total{0};
+    // Flips to true once the producer has finished reading its input
+    // source. Until then, producer_total is still growing and the bar
+    // would show a moving denominator (e.g. 180736/188931 jumping to
+    // 180736/190494). The progress display uses this flag to switch
+    // from a feeder-counter to a real percentage bar.
+    std::atomic<bool> producer_done{false};
+    // vcolg/geng diagnostic lines (the >A header / >Z trailer lines).
+    // Captured via 2>&1 in the popen command and filtered out of the
+    // graph stream by leading-'>' check, so they don't race the bar
+    // on the user's terminal. Replayed to stderr once the bar is done.
+    std::vector<std::string> diag_lines;
     std::exception_ptr producer_exc = nullptr;
     const bool from_pipe = vcolg_output_file.empty();
     const std::string vcolg_input_path = vcolg_output_file;
@@ -266,16 +279,29 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     std::thread producer([&]() {
         try {
             auto push_line = [&](std::string&& line) {
-                if (!line.empty()) {
-                    queue.push(std::move(line));
-                    producer_total.fetch_add(1, std::memory_order_relaxed);
-                }
+                if (line.empty()) return;
+                queue.push(std::move(line));
+                producer_total.fetch_add(1, std::memory_order_relaxed);
             };
             if (from_pipe) {
-                std::string cmd = "geng " + std::to_string(n_nodes) + " -c | vcolg -T -m" +
-                                  std::to_string(node_defs.size());
+                // Capture nauty's stderr (>A/>Z lines) to a temp file
+                // rather than 2>&1-merging it: the merge is byte-level,
+                // not line-level, so a partial stdout line + a stderr
+                // write can concatenate into one corrupted line. With a
+                // separate fd, line atomicity is preserved and the
+                // diagnostics appear cleanly under the bar at the end.
+                char err_template[] = "/tmp/grouper_nauty_err_XXXXXX";
+                int err_fd = ::mkstemp(err_template);
+                if (err_fd < 0) {
+                    throw std::runtime_error("mkstemp failed for nauty stderr capture");
+                }
+                ::close(err_fd);
+                const std::string err_path = err_template;
+                std::string cmd = "(geng " + std::to_string(n_nodes) + " -c | vcolg -T -m" +
+                                  std::to_string(node_defs.size()) + ") 2>" + err_path;
                 FILE* pipe = popen(cmd.c_str(), "r");
                 if (!pipe) {
+                    ::unlink(err_path.c_str());
                     throw std::runtime_error("popen failed for: " + cmd);
                 }
                 char buf[4096];
@@ -290,6 +316,14 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 }
                 if (!accumulated.empty()) push_line(std::move(accumulated));
                 int rc = pclose(pipe);
+                {
+                    std::ifstream err_in(err_path);
+                    std::string err_line;
+                    while (std::getline(err_in, err_line)) {
+                        diag_lines.push_back(std::move(err_line));
+                    }
+                }
+                ::unlink(err_path.c_str());
                 if (rc != 0) {
                     throw std::runtime_error(
                         "geng | vcolg failed (exit " + std::to_string(rc) +
@@ -308,6 +342,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         } catch (...) {
             producer_exc = std::current_exception();
         }
+        producer_done.store(true, std::memory_order_release);
         queue.close();
     });
     // Make sure the producer is reaped on every exit path.
@@ -327,20 +362,30 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     constexpr long long progress_step = 256;
     std::cout << "Using " << num_procs << " processors (streaming)" << std::endl;
     auto print_progress = [&](long long finished) {
+        // \033[2K clears the current terminal line; pairs with the \r
+        // we emit before each write so we always start from a known-
+        // empty line, even if a stray write to stdout/stderr (or a
+        // shorter previous bar) left residue.
+        if (!producer_done.load(std::memory_order_acquire)) {
+            // Total still ramping; show a counter without a percentage
+            // so the denominator can't appear to rewind.
+            std::cout << "\033[2K\rreading vcolg | processing... "
+                      << finished << " lines" << std::flush;
+            return;
+        }
         long long total = producer_total.load(std::memory_order_relaxed);
         if (total <= 0) return;
         if (finished > total) finished = total;
         constexpr int bar_width = 100;
         int pos = static_cast<int>((bar_width * finished) / total);
-        std::cout << "[";
+        std::cout << "\033[2K\r[";
         for (int i = 0; i < bar_width; ++i) {
             if (i < pos) std::cout << "=";
             else if (i == pos) std::cout << ">";
             else std::cout << " ";
         }
         int pct = static_cast<int>((100 * finished) / total);
-        std::cout << "] " << finished << "/" << total << " (" << pct << "%)\r";
-        std::cout.flush();
+        std::cout << "] " << finished << "/" << total << " (" << pct << "%)" << std::flush;
     };
 
     if (!config_path.empty()) {
@@ -419,6 +464,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         if (producer_exc) std::rethrow_exception(producer_exc);
         print_progress(n_finished.load());
         std::cout << std::endl;
+        for (const auto& l : diag_lines) std::cerr << l << '\n';
         std::cout << "Graphs saved to database." << std::endl;
         return {};
     } else {
@@ -465,6 +511,10 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         // Final 100% bar update so the visible state lands at N/N, not
         // the last 256-boundary it happened to cross.
         print_progress(n_finished.load());
+        std::cout << std::endl;
+        // Replay nauty's >A/>Z diagnostics now that the bar is settled,
+        // so they appear cleanly under the bar instead of racing it.
+        for (const auto& l : diag_lines) std::cerr << l << '\n';
 
         // Cross-thread merge. Each thread already deduplicated within
         // itself by canon, so we just need a single global canon set
@@ -484,7 +534,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         all_local_bases.clear();
         canon_basis.clear();
 
-        std::cout << std::endl;
         std::cout<< "Number of unique graphs: " << global_basis.size() << std::endl;
 
         return global_basis;
