@@ -205,6 +205,45 @@ public:
     // the dedup key in exhaustive_generate's hot path.
     std::vector<setword> canonizeAtomic() const;
 
+    // Per-nauty-line precompute that lets canonizeAtomicWithSetup skip
+    // the work that's invariant across leaves of the same line: atom
+    // list, intra-group bonds, color partition, color hashes. Only the
+    // cross-group bond adjacencies are added per leaf in the fast path.
+    // Built once after the GroupGraph's nodes are added but before any
+    // cross-group edges are added; reused for every leaf of the line.
+    struct AtomicCanonSetup {
+        int n = 0;                  // total nauty vertex count
+        int m = 0;                  // SETWORDSNEEDED(n)
+        int numAtoms = 0;
+        int numIntraBonds = 0;
+        int numCrossSlots = 0;      // reserved cross-group bond vertices
+        int crossBondStart = 0;     // first cross-bond nauty index
+        std::vector<setword> baseGraph;  // m*n setwords; atoms+intra wired
+        std::vector<int> lab;       // pre-sorted by color
+        std::vector<int> ptn;
+        std::vector<setword> colorHash;  // size n; hash of each vertex's color string
+        // (group nodeID, port id) -> global atom index
+        std::unordered_map<NodeIDType, std::unordered_map<int, int>> portToAtom;
+    };
+
+    // Fill `out` with precomputed data based on the current `nodes`
+    // (caller must have added nodes but not yet added cross-group edges).
+    // numCrossEdges is the number of cross-group edges that will appear
+    // per leaf (constant within a nauty line).
+    void buildAtomicCanonSetup(AtomicCanonSetup& out, int numCrossEdges) const;
+
+    // Per-leaf dedup key. Uses the precomputed setup for invariant work
+    // and only re-wires the cross-bond adjacencies. `edge_topology[i]`
+    // = (srcNodeID, dstNodeID) for cross-edge i; `chosen_ports[i]` =
+    // (srcPort, dstPort) actually used (after addEdge's potential swap).
+    // Returns a vector<setword> bit-identical to canonizeAtomic() called
+    // on the equivalent fully-edged GroupGraph.
+    std::vector<setword> canonizeAtomicWithSetup(
+        const AtomicCanonSetup& setup,
+        const std::vector<std::pair<int, int>>& edge_topology,
+        const std::vector<std::pair<int, int>>& chosen_ports
+    ) const;
+
 
 private:
     std::vector<std::vector<int>> toEdgeGraph(const std::vector<std::pair<int, int>>& edge_list) const;

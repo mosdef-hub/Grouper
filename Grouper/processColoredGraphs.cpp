@@ -535,13 +535,18 @@ void processColoring(
     const std::unordered_map<std::string, std::vector<int>>& node_types,
     const std::vector<int>& colors,
     const std::unordered_set<std::string>& negativeConstraints,
+    // Precomputed atom-level canonical-form setup for this nauty line.
+    // Built once before the recursive coloring search, reused per leaf.
+    const GroupGraph::AtomicCanonSetup& canon_setup,
     std::unordered_set<std::vector<setword>, hash_vector>& canon_set,
     std::unordered_set<GroupGraph>* graph_basis,
-    GroupGraph& gG
+    GroupGraph& gG,
+    std::vector<std::pair<int, int>>& chosen_ports_buf
 ) {
     gG.clearEdges();
     bool all_edges_added = true;
     const size_t numEdges = edge_list.size();
+    chosen_ports_buf.resize(numEdges);
 
     for (size_t edge_index = 0; edge_index < numEdges; ++edge_index) {
         const auto& edge = edge_list[edge_index];
@@ -555,8 +560,12 @@ void processColoring(
         bool added;
 
         added = gG.addEdge({s, sPort}, {t, tPort}, 1, false);
-        if (!added)
+        if (added) {
+            chosen_ports_buf[edge_index] = {sPort, tPort};
+        } else {
             added = gG.addEdge({s, tPort}, {t, sPort}, 1, false);
+            if (added) chosen_ports_buf[edge_index] = {tPort, sPort};
+        }
 
         if (!added) {
             all_edges_added = false;
@@ -566,11 +575,11 @@ void processColoring(
 
     if (!all_edges_added) return;
 
-    // Dedup by atom-level canonical form, computed directly from the
-    // GroupGraph without materializing an intermediate AtomGraph. The
-    // key is identical to gG.toAtomicGraph()->canonize() (same colored
-    // nauty encoding) but avoids the AtomGraph allocation per call.
-    auto canon = gG.canonizeAtomic();
+    // Dedup key via the precomputed-setup fast path: only the cross-
+    // group bond adjacencies vary per leaf; everything else (atom set,
+    // intra-group bonds, color partition, color hashes) is invariant
+    // within this nauty line and was already computed in canon_setup.
+    auto canon = gG.canonizeAtomicWithSetup(canon_setup, edge_list, chosen_ports_buf);
     if (canon_set.insert(std::move(canon)).second) {
         // Apply negative constraints — forbidden SMILES substrings.
         // Compute toSmiles() only when needed (negativeConstraints is
@@ -666,6 +675,15 @@ void process_nauty_output(
             node_type_to_pattern_type.at(int_to_node_type.at(colors[i]))
         );
     }
+
+    // Build the per-line atom-level canonicalization setup once. Every
+    // leaf produced by the recursive coloring search reuses this — it
+    // captures the work that's invariant across leaves (atom list,
+    // intra-bond wiring, color partition, color hashes).
+    GroupGraph::AtomicCanonSetup canon_setup;
+    gG.buildAtomicCanonSetup(canon_setup, static_cast<int>(edge_list.size()));
+    // Per-leaf scratch buffer for chosen port pairs, reused across leaves.
+    std::vector<std::pair<int, int>> chosen_ports_buf;
     // Get degree of each node
     std::unordered_map<int, int> node_degree;
     for (const auto& edge : edge_list) {
@@ -738,9 +756,11 @@ void process_nauty_output(
                 node_types,
                 colors,
                 negativeConstraints,
+                canon_setup,
                 canon_set,
                 graph_basis,
-                gG
+                gG,
+                chosen_ports_buf
             );
         }
     );

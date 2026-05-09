@@ -1243,6 +1243,135 @@ std::vector<setword> GroupGraph::canonizeAtomic() const {
     return canong;
 }
 
+void GroupGraph::buildAtomicCanonSetup(AtomicCanonSetup& out, int numCrossEdges) const {
+    out.numAtoms = 0;
+    out.numIntraBonds = 0;
+    out.numCrossSlots = numCrossEdges;
+    out.portToAtom.clear();
+
+    // Atoms (per-group, in `nodes` iteration order) and intra-group bonds
+    // (from cached patterns). Identical iteration to canonizeAtomic so
+    // the per-vertex assignments line up.
+    struct LocalAtom { std::string symbol; };
+    struct LocalBond { int begin; int end; double order; };
+    std::vector<LocalAtom> atomList;
+    std::vector<LocalBond> intraBonds;
+
+    int atomBase = 0;
+    for (const auto& [nodeID, node] : nodes) {
+        bool isSmarts = node.patternType != "SMILES";
+        const auto& cached = *getCachedMolData(node.pattern, isSmarts);
+        for (const auto& a : cached.atoms) atomList.push_back({a.symbol});
+        for (const auto& b : cached.bonds) {
+            intraBonds.push_back({atomBase + b.begin, atomBase + b.end, b.bondOrder});
+        }
+        for (size_t i = 0; i < node.hubs.size(); ++i) {
+            out.portToAtom[nodeID][node.ports[i]] = atomBase + node.hubs[i];
+        }
+        atomBase += static_cast<int>(cached.atoms.size());
+    }
+
+    out.numAtoms = static_cast<int>(atomList.size());
+    out.numIntraBonds = static_cast<int>(intraBonds.size());
+    out.crossBondStart = out.numAtoms + out.numIntraBonds;
+    out.n = out.crossBondStart + out.numCrossSlots;
+    out.m = SETWORDSNEEDED(out.n);
+
+    // Build the base graph: atoms wired to intra-bond vertices. Cross-
+    // bond vertices remain isolated; per-leaf code adds their adjacency.
+    out.baseGraph.assign(static_cast<size_t>(out.m) * out.n, 0);
+    EMPTYGRAPH(out.baseGraph.data(), out.m, out.n);
+    int bv = out.numAtoms;
+    for (const auto& b : intraBonds) {
+        ADDONEEDGE(out.baseGraph.data(), b.begin, bv, out.m);
+        ADDONEEDGE(out.baseGraph.data(), bv, b.end, out.m);
+        ++bv;
+    }
+
+    // Color string per vertex. Cross-bonds are always color "b:<1.0>"
+    // because processColoring always adds cross-group edges with
+    // bondOrder=1; if that ever changes the assumption here breaks.
+    std::vector<std::string> color_str(out.n);
+    for (int i = 0; i < out.numAtoms; ++i) {
+        color_str[i] = "a:" + atomList[i].symbol;
+    }
+    for (int i = 0; i < out.numIntraBonds; ++i) {
+        color_str[out.numAtoms + i] = "b:" + std::to_string(intraBonds[i].order);
+    }
+    const std::string crossColor = "b:" + std::to_string(1.0);
+    for (int i = 0; i < out.numCrossSlots; ++i) {
+        color_str[out.crossBondStart + i] = crossColor;
+    }
+
+    // Sort vertices by color so the partition order is a function of
+    // chemistry only — same invariant canonizeAtomic enforces.
+    std::vector<std::pair<std::string, int>> color_sorted;
+    color_sorted.reserve(out.n);
+    for (int i = 0; i < out.n; ++i) color_sorted.emplace_back(color_str[i], i);
+    std::sort(color_sorted.begin(), color_sorted.end());
+
+    out.lab.resize(out.n);
+    out.ptn.resize(out.n);
+    for (int i = 0; i < out.n; ++i) out.lab[i] = color_sorted[i].second;
+    for (int i = 0; i < out.n - 1; ++i) {
+        out.ptn[i] = (color_sorted[i].first == color_sorted[i + 1].first) ? 1 : 0;
+    }
+    if (out.n > 0) out.ptn[out.n - 1] = 0;
+
+    // Color hash array, indexed by ORIGINAL vertex index.
+    out.colorHash.resize(out.n);
+    std::hash<std::string> hasher;
+    for (int i = 0; i < out.n; ++i) {
+        out.colorHash[i] = static_cast<setword>(hasher(color_str[i]));
+    }
+}
+
+std::vector<setword> GroupGraph::canonizeAtomicWithSetup(
+    const AtomicCanonSetup& setup,
+    const std::vector<std::pair<int, int>>& edge_topology,
+    const std::vector<std::pair<int, int>>& chosen_ports
+) const {
+    if (setup.n == 0) return {};
+
+    // Per-leaf graph buffer: copy precomputed base, then add the
+    // cross-bond adjacencies. The graph adjacency for atoms+intra-bonds
+    // is identical for every leaf of this nauty line.
+    std::vector<setword> g(setup.baseGraph);  // m*n setwords; small (~hundreds of bytes)
+
+    const size_t k = std::min(edge_topology.size(), chosen_ports.size());
+    for (size_t i = 0; i < k; ++i) {
+        const int from = edge_topology[i].first;
+        const int to = edge_topology[i].second;
+        const int sPort = chosen_ports[i].first;
+        const int tPort = chosen_ports[i].second;
+        const int atom_a = setup.portToAtom.at(from).at(sPort);
+        const int atom_b = setup.portToAtom.at(to).at(tPort);
+        const int bv = setup.crossBondStart + static_cast<int>(i);
+        ADDONEEDGE(g.data(), atom_a, bv, setup.m);
+        ADDONEEDGE(g.data(), bv, atom_b, setup.m);
+    }
+
+    // Copies of lab/ptn because densenauty mutates them.
+    std::vector<int> lab(setup.lab);
+    std::vector<int> ptn(setup.ptn);
+    std::vector<int> orbits(setup.n);
+
+    DEFAULTOPTIONS_GRAPH(options);
+    options.getcanon = TRUE;
+    options.defaultptn = FALSE;
+    statsblk stats;
+
+    std::vector<setword> canong(static_cast<size_t>(setup.m) * setup.n, 0);
+    densenauty(g.data(), lab.data(), ptn.data(), orbits.data(),
+               &options, &stats, setup.m, setup.n, canong.data());
+
+    canong.reserve(canong.size() + setup.n);
+    for (int i = 0; i < setup.n; ++i) {
+        canong.push_back(setup.colorHash[lab[i]]);
+    }
+    return canong;
+}
+
 std::string GroupGraph::serialize() const {
     std::ostringstream oss;
 
