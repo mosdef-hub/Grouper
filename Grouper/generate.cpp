@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <csignal>
 #include <cstdlib>
 #include <deque>
 #include <exception>
@@ -25,7 +26,11 @@
 #include <omp.h>
 #include <stdio.h>
 
+#include <pybind11/pybind11.h>
+
 #include <nauty/nauty.h>
+
+namespace py = pybind11;
 
 #include "dataStructures.hpp"
 #include "processColoredGraphs.hpp"
@@ -261,20 +266,48 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     // buffer their full output in RAM.
     BoundedLineQueue queue(/*capacity=*/8192);
     std::atomic<long long> producer_total{0};
-    // Flips to true once the producer has finished reading its input
-    // source. Until then, producer_total is still growing and the bar
-    // would show a moving denominator (e.g. 180736/188931 jumping to
-    // 180736/190494). The progress display uses this flag to switch
-    // from a feeder-counter to a real percentage bar.
-    std::atomic<bool> producer_done{false};
-    // vcolg/geng diagnostic lines (the >A header / >Z trailer lines).
-    // Captured via 2>&1 in the popen command and filtered out of the
-    // graph stream by leading-'>' check, so they don't race the bar
-    // on the user's terminal. Replayed to stderr once the bar is done.
+    // Set to true when a Ctrl-C is observed via PyErr_CheckSignals.
+    // Producer/workers check this on each loop iteration and exit
+    // early; main thread re-raises py::error_already_set after the
+    // OMP region winds down so the user gets a KeyboardInterrupt
+    // rather than the run silently completing.
+    std::atomic<bool> interrupted{false};
+    // vcolg/geng diagnostic lines (the >A header / >Z trailer lines)
+    // captured via shell stderr redirection to a temp file, then
+    // replayed to stderr after the bar finishes so they don't race
+    // the bar on the user's terminal.
     std::vector<std::string> diag_lines;
     std::exception_ptr producer_exc = nullptr;
     const bool from_pipe = vcolg_output_file.empty();
     const std::string vcolg_input_path = vcolg_output_file;
+
+    // Pre-count vcolg's output so the progress bar has a stable
+    // denominator. The producer's queue is bounded (capacity 8192),
+    // so under load it pushes at the *workers'* rate — meaning
+    // producer_total tracks consumption, not production, and any
+    // bar built on it would only show a meaningful percentage in
+    // the last few % of the run. A separate `geng | vcolg | wc -l`
+    // pass is single-threaded and finishes long before the workers
+    // do, so the cost is small relative to the OMP processing
+    // phase. For the file-input branch we count lines in the file.
+    long long total_lines = 0;
+    if (from_pipe) {
+        std::string count_cmd = "geng " + std::to_string(n_nodes) +
+                                " -c 2>/dev/null | vcolg -T -m" +
+                                std::to_string(node_defs.size()) +
+                                " 2>/dev/null | wc -l";
+        FILE* cp = popen(count_cmd.c_str(), "r");
+        if (cp) {
+            if (std::fscanf(cp, "%lld", &total_lines) != 1) total_lines = 0;
+            pclose(cp);
+        }
+    } else {
+        std::ifstream count_in(vcolg_input_path);
+        if (count_in.is_open()) {
+            std::string l;
+            while (std::getline(count_in, l)) ++total_lines;
+        }
+    }
 
     std::thread producer([&]() {
         try {
@@ -307,6 +340,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 char buf[4096];
                 std::string accumulated;
                 while (std::fgets(buf, sizeof(buf), pipe) != nullptr) {
+                    if (interrupted.load(std::memory_order_acquire)) break;
                     accumulated.append(buf);
                     if (!accumulated.empty() && accumulated.back() == '\n') {
                         accumulated.pop_back();
@@ -324,7 +358,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                     }
                 }
                 ::unlink(err_path.c_str());
-                if (rc != 0) {
+                if (rc != 0 && !interrupted.load(std::memory_order_acquire)) {
                     throw std::runtime_error(
                         "geng | vcolg failed (exit " + std::to_string(rc) +
                         ", is nauty on PATH? command: " + cmd + ")");
@@ -336,13 +370,13 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 }
                 std::string line;
                 while (std::getline(input_file, line)) {
+                    if (interrupted.load(std::memory_order_acquire)) break;
                     push_line(std::move(line));
                 }
             }
         } catch (...) {
             producer_exc = std::current_exception();
         }
-        producer_done.store(true, std::memory_order_release);
         queue.close();
     });
     // Make sure the producer is reaped on every exit path.
@@ -363,29 +397,24 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     std::cout << "Using " << num_procs << " processors (streaming)" << std::endl;
     auto print_progress = [&](long long finished) {
         // \033[2K clears the current terminal line; pairs with the \r
-        // we emit before each write so we always start from a known-
-        // empty line, even if a stray write to stdout/stderr (or a
-        // shorter previous bar) left residue.
-        if (!producer_done.load(std::memory_order_acquire)) {
-            // Total still ramping; show a counter without a percentage
-            // so the denominator can't appear to rewind.
-            std::cout << "\033[2K\rreading vcolg | processing... "
-                      << finished << " lines" << std::flush;
+        // before each write so we always start from a known-empty
+        // line, even if a stray write to stdout/stderr (or a shorter
+        // previous bar) left residue.
+        if (total_lines <= 0) {
+            std::cout << "\033[2K\rprocessed " << finished << " lines" << std::flush;
             return;
         }
-        long long total = producer_total.load(std::memory_order_relaxed);
-        if (total <= 0) return;
-        if (finished > total) finished = total;
+        if (finished > total_lines) finished = total_lines;
         constexpr int bar_width = 100;
-        int pos = static_cast<int>((bar_width * finished) / total);
+        int pos = static_cast<int>((bar_width * finished) / total_lines);
         std::cout << "\033[2K\r[";
         for (int i = 0; i < bar_width; ++i) {
             if (i < pos) std::cout << "=";
             else if (i == pos) std::cout << ">";
             else std::cout << " ";
         }
-        int pct = static_cast<int>((100 * finished) / total);
-        std::cout << "] " << finished << "/" << total << " (" << pct << "%)" << std::flush;
+        int pct = static_cast<int>((100 * finished) / total_lines);
+        std::cout << "] " << finished << "/" << total_lines << " (" << pct << "%)" << std::flush;
     };
 
     if (!config_path.empty()) {
@@ -437,8 +466,10 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 DEFAULTOPTIONS_GRAPH(options);
                 statsblk stats;
 
+                const bool is_master = (omp_get_thread_num() == 0);
                 std::string line;
                 while (queue.pop(line)) {
+                    if (interrupted.load(std::memory_order_acquire)) break;
                     local_basis.clear();
                     process_nauty_output(
                         line, node_defs, &local_basis,
@@ -452,6 +483,13 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                     if (finished % progress_step == 0) {
                         #pragma omp critical
                         { print_progress(finished); }
+                        if (is_master) {
+                            py::gil_scoped_acquire gil;
+                            if (PyErr_CheckSignals() != 0) {
+                                interrupted.store(true, std::memory_order_release);
+                                queue.close();
+                            }
+                        }
                     }
                 }
                 PQfinish(conn);
@@ -465,6 +503,10 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         print_progress(n_finished.load());
         std::cout << std::endl;
         for (const auto& l : diag_lines) std::cerr << l << '\n';
+        if (interrupted.load(std::memory_order_acquire)) {
+            py::gil_scoped_acquire gil;
+            throw py::error_already_set();
+        }
         std::cout << "Graphs saved to database." << std::endl;
         return {};
     } else {
@@ -489,8 +531,10 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
             DEFAULTOPTIONS_GRAPH(options);
             statsblk stats;
 
+            const bool is_master = (omp_get_thread_num() == 0);
             std::string line;
             while (queue.pop(line)) {
+                if (interrupted.load(std::memory_order_acquire)) break;
                 process_nauty_output(
                     line, node_defs, &local_basis,
                     positiveConstraints, negativeConstraints,
@@ -500,6 +544,19 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 if (finished % progress_step == 0) {
                     #pragma omp critical
                     { print_progress(finished); }
+                    // Signal polling has to happen on the Python main
+                    // thread — that's the OMP master inside this
+                    // parallel region. Workers on other OS threads
+                    // can call PyErr_CheckSignals but Python only
+                    // raises KeyboardInterrupt on the main thread,
+                    // so the check is effectively a no-op there.
+                    if (is_master) {
+                        py::gil_scoped_acquire gil;
+                        if (PyErr_CheckSignals() != 0) {
+                            interrupted.store(true, std::memory_order_release);
+                            queue.close();
+                        }
+                    }
                 }
             }
         }
@@ -515,6 +572,10 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         // Replay nauty's >A/>Z diagnostics now that the bar is settled,
         // so they appear cleanly under the bar instead of racing it.
         for (const auto& l : diag_lines) std::cerr << l << '\n';
+        if (interrupted.load(std::memory_order_acquire)) {
+            py::gil_scoped_acquire gil;
+            throw py::error_already_set();
+        }
 
         // Cross-thread merge. Each thread already deduplicated within
         // itself by canon, so we just need a single global canon set

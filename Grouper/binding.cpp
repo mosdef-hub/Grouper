@@ -286,7 +286,15 @@ PYBIND11_MODULE(_Grouper, m) {
                                     const std::unordered_map<std::string, int>& positive_constraints,
                                     const std::unordered_set<std::string>& negative_constraints,
                                     const std::string& config_path) {
-        auto result = exhaustiveGenerate(n_nodes, node_defs, num_procs, vcolg_output_file, positive_constraints, negative_constraints, config_path);
+        std::unordered_set<GroupGraph> result;
+        {
+            // Release the GIL during the long C++ call so the producer
+            // thread can briefly re-acquire it to call PyErr_CheckSignals
+            // and propagate Ctrl-C as KeyboardInterrupt instead of the
+            // run blocking the interpreter for the whole duration.
+            py::gil_scoped_release release;
+            result = exhaustiveGenerate(n_nodes, node_defs, num_procs, vcolg_output_file, positive_constraints, negative_constraints, config_path);
+        }
         return convert_unordered_set(result);
     },
     R"doc(Exhaustively generate all possible GroupGraphs with a given number of nodes and a set of allowed groups.
