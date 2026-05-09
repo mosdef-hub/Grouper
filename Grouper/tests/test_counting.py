@@ -143,8 +143,13 @@ class TestCounting(BaseTest):
                 negative_constraints=set(),
                 config_path="",
             )
+            # Re-run nauty to get the colored-graph stream we need to
+            # count valid atom-level molecules against. exhaustive_generate
+            # consumes vcolg's output internally via popen and never
+            # writes it to disk, so we have to invoke it ourselves here.
+            os.system("geng -c 4 > geng_output.txt 2>/dev/null")
+            os.system(f"vcolg geng_output.txt -T -m{len(combo)} > vcolg_out.txt 2>/dev/null")
             total_unique_graphs = 0
-            # Count number of lines in vcolg output file
             with open("vcolg_out.txt", "r") as f:
                 lines = f.readlines()
                 for line in lines:

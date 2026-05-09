@@ -46,20 +46,27 @@ class TestGeneration(BaseTest):
                 f"Graph {graph.to_smiles()} violates amine>=1 constraint"
             )
 
-    @pytest.mark.xfail(
-        reason=(
-            "negative_constraints is a public parameter on exhaustive_generate "
-            "but processColoredGraphs.cpp does not currently consume it. "
-            "Test pinned as xfail to track the missing enforcement."
-        ),
-        strict=True,
-    )
     def test_negative_constraint_filters_results(self):
-        """negative_constraints should forbid SMILES substrings (currently a no-op)."""
+        """negative_constraints must drop SMILES containing forbidden substrings.
+
+        Compares against an unconstrained run on the same inputs to keep
+        the test non-vacuous: if the unconstrained set contained no
+        NN-bearing graphs to begin with, the constrained set passing the
+        substring check would prove nothing.
+        """
         node_defs = {
             Group("amine", "N", [0, 0, 0]),
             Group("methyl", "C", [0, 0, 0, 0]),
         }
+        unconstrained = exhaustive_generate(
+            n_nodes=3,
+            node_defs=node_defs,
+            num_procs=1,
+            vcolg_output_file="",
+            positive_constraints={},
+            negative_constraints=set(),
+            config_path="",
+        )
         constrained = exhaustive_generate(
             n_nodes=3,
             node_defs=node_defs,
@@ -68,6 +75,15 @@ class TestGeneration(BaseTest):
             positive_constraints={},
             negative_constraints={"NN"},
             config_path="",
+        )
+        unc_smiles = {g.to_smiles() for g in unconstrained}
+        assert any("NN" in s for s in unc_smiles), (
+            "Vacuous test case: unconstrained set has no NN-bearing graphs "
+            "to filter — pick a forbidden substring that actually appears."
+        )
+        assert len(constrained) < len(unconstrained), (
+            f"negative_constraints did not filter anything: "
+            f"|constrained|={len(constrained)} == |unconstrained|={len(unconstrained)}"
         )
         for graph in constrained:
             smiles = graph.to_smiles()
