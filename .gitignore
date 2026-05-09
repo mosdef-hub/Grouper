@@ -173,3 +173,23 @@ cython_debug/
 
 # vscode
 .vscode
+
+# Research / scratch artifacts in repo root.
+# Per CLAUDE.md these accumulate during exploration and aren't part of
+# the shipped package. They were polluting `git status` so add patterns
+# to keep the working tree quiet without touching the files themselves.
+/debug*.py
+/temp_debug.py
+/parse_xml.py
+/polymer_function.py
+/run_comparison.py
+/random_performance_comparision.ipynb
+/suzuki.py
+/*.txt
+/*.png
+/publication_figures/
+# Allow LICENSE.rst, README.md, etc. — only top-level *.txt/*.png are
+# scratch outputs (geng_out.txt, *_library.png, isomorphism_checks_plot.png).
+!LICENSE.rst
+!README.md
+!CLAUDE.md
