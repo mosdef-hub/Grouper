@@ -11,7 +11,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <filesystem>
 #include <random>
 #include <algorithm>
 
@@ -199,73 +198,51 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     }
 
 
-    // Build geng/vcolg outputs in a per-call temp dir rather than in CWD.
-    // The previous version wrote `geng_out.txt`/`vcolg_out.txt` to the
-    // current working directory, which (a) raced if two
-    // exhaustive_generate calls ran concurrently in the same dir and (b)
-    // littered the user's CWD with intermediate files. Cleaned up via
-    // RAII regardless of how the function exits.
-    namespace fs = std::filesystem;
-    struct TmpDirCleaner {
-        fs::path path;
-        bool owned;
-        ~TmpDirCleaner() {
-            if (owned) {
-                std::error_code ec;
-                fs::remove_all(path, ec);
+    // Run `geng N -c | vcolg -T -mK` and read its output directly,
+    // avoiding the round trip through two temp files. The shell handles
+    // the pipe so geng's stdout flows straight into vcolg's stdin.
+    std::vector<std::string> lines;
+    if (vcolg_output_file.empty()) {
+        std::string cmd = "geng " + std::to_string(n_nodes) + " -c | vcolg -T -m" +
+                          std::to_string(node_defs.size());
+        FILE* pipe = popen(cmd.c_str(), "r");
+        if (!pipe) {
+            throw std::runtime_error("popen failed for: " + cmd);
+        }
+        // fgets reads up to a newline OR buffer-1 bytes. For lines longer
+        // than the buffer we accumulate across reads until we see the
+        // newline.
+        char buf[4096];
+        std::string accumulated;
+        while (std::fgets(buf, sizeof(buf), pipe) != nullptr) {
+            accumulated.append(buf);
+            if (!accumulated.empty() && accumulated.back() == '\n') {
+                accumulated.pop_back();
+                if (!accumulated.empty()) lines.push_back(std::move(accumulated));
+                accumulated.clear();
             }
         }
-    };
-    fs::path tmpdir;
-    TmpDirCleaner cleaner{tmpdir, false};
-    if (vcolg_output_file.empty()) {
-        static std::atomic<unsigned long long> call_counter{0};
-        std::random_device rd;
-        unsigned long long call_id = call_counter.fetch_add(1, std::memory_order_relaxed);
-        tmpdir = fs::temp_directory_path() /
-            ("grouper_" + std::to_string(rd()) + "_" + std::to_string(call_id));
-        fs::create_directories(tmpdir);
-        cleaner.path = tmpdir;
-        cleaner.owned = true;
-
-        fs::path geng_path = tmpdir / "geng_out.txt";
-        fs::path vcolg_path = tmpdir / "vcolg_out.txt";
-        std::string geng_command = "geng " + std::to_string(n_nodes) + " -c > " + geng_path.string();
-        std::string vcolg_command = "vcolg " + geng_path.string() + " -T -m" +
-                                    std::to_string(node_defs.size()) + " > " + vcolg_path.string();
-        if (std::system(geng_command.c_str()) != 0) {
-            throw std::runtime_error("geng failed (is nauty on PATH? command was: " + geng_command + ")");
+        if (!accumulated.empty()) lines.push_back(std::move(accumulated));
+        int rc = pclose(pipe);
+        if (rc != 0) {
+            throw std::runtime_error(
+                "geng | vcolg failed (exit " + std::to_string(rc) +
+                ", is nauty on PATH? command: " + cmd + ")");
         }
-        if (std::system(vcolg_command.c_str()) != 0) {
-            throw std::runtime_error("vcolg failed (is nauty on PATH? command was: " + vcolg_command + ")");
+    } else {
+        std::ifstream input_file(vcolg_output_file);
+        if (!input_file.is_open()) {
+            throw std::runtime_error("Error opening vcolg output file: " + vcolg_output_file);
         }
-        vcolg_output_file = vcolg_path.string();
-    }
-
-    // Read the input file
-    std::ifstream input_file(vcolg_output_file);
-    if (!input_file.is_open()) {
-        throw std::runtime_error("Error opening vcolg output file, check vcolg_output_file argument and make sure nauty is installed...");
-    }
-
-    std::string line;
-    std::vector<std::string> lines;
-    int total_lines = 0;
-
-    // Read all lines into a vector
-    while (std::getline(input_file, line)) {
-        if (!line.empty()) {  // Optionally skip empty lines
-            lines.push_back(line);
-            ++total_lines;
+        std::string line;
+        while (std::getline(input_file, line)) {
+            if (!line.empty()) lines.push_back(std::move(line));
         }
     }
-
+    int total_lines = static_cast<int>(lines.size());
     std::cout << "Processing " << total_lines << " lines from vcolg output..." << std::endl;
-
-    input_file.close(); // Close the input file as it's no longer needed
-
     if (total_lines == 0) {
-        throw std::runtime_error("No lines found in vcolg output file...");
+        throw std::runtime_error("No lines found in vcolg output...");
     }
 
     std::unordered_set<GroupGraph> global_basis;
@@ -430,50 +407,35 @@ std::unordered_set<GroupGraph> randomGenerate(
         num_procs = omp_get_max_threads();
     }
 
-    // Same per-call temp dir treatment as exhaustiveGenerate (see notes
-    // there). Cleaned up via RAII at end of scope.
-    namespace fs = std::filesystem;
-    struct TmpDirCleaner {
-        fs::path path;
-        ~TmpDirCleaner() {
-            std::error_code ec;
-            fs::remove_all(path, ec);
-        }
-    };
-    static std::atomic<unsigned long long> rg_call_counter{0};
-    std::random_device rd_tmp;
-    unsigned long long rg_call_id = rg_call_counter.fetch_add(1, std::memory_order_relaxed);
-    fs::path tmpdir = fs::temp_directory_path() /
-        ("grouper_rg_" + std::to_string(rd_tmp()) + "_" + std::to_string(rg_call_id));
-    fs::create_directories(tmpdir);
-    TmpDirCleaner cleaner{tmpdir};
-    fs::path geng_path = tmpdir / "geng_out.txt";
-    fs::path vcolg_path = tmpdir / "vcolg_out.txt";
-    std::string geng_command = "geng " + std::to_string(n_nodes) + " -c > " + geng_path.string();
-    std::string vcolg_command = "vcolg " + geng_path.string() + " -T -m" +
-                                std::to_string(node_defs.size()) + " > " + vcolg_path.string();
-    if (std::system(geng_command.c_str()) != 0) {
-        throw std::runtime_error("geng failed (is nauty on PATH? command was: " + geng_command + ")");
-    }
-    if (std::system(vcolg_command.c_str()) != 0) {
-        throw std::runtime_error("vcolg failed (is nauty on PATH? command was: " + vcolg_command + ")");
-    }
-
-    std::ifstream input_file(vcolg_path.string());
-    if (!input_file.is_open()) {
-        throw std::runtime_error("Error opening input file...");
-    }
-
+    // Pipe geng directly into vcolg via popen, same as exhaustiveGenerate.
     std::vector<std::string> lines;
-    std::string line;
-    while (std::getline(input_file, line)) {
-        if (!line.empty()) {
-            lines.push_back(line);
+    {
+        std::string cmd = "geng " + std::to_string(n_nodes) + " -c | vcolg -T -m" +
+                          std::to_string(node_defs.size());
+        FILE* pipe = popen(cmd.c_str(), "r");
+        if (!pipe) {
+            throw std::runtime_error("popen failed for: " + cmd);
+        }
+        char buf[4096];
+        std::string accumulated;
+        while (std::fgets(buf, sizeof(buf), pipe) != nullptr) {
+            accumulated.append(buf);
+            if (!accumulated.empty() && accumulated.back() == '\n') {
+                accumulated.pop_back();
+                if (!accumulated.empty()) lines.push_back(std::move(accumulated));
+                accumulated.clear();
+            }
+        }
+        if (!accumulated.empty()) lines.push_back(std::move(accumulated));
+        int rc = pclose(pipe);
+        if (rc != 0) {
+            throw std::runtime_error(
+                "geng | vcolg failed (exit " + std::to_string(rc) +
+                ", is nauty on PATH? command: " + cmd + ")");
         }
     }
-    input_file.close();
     if (lines.empty()) {
-        throw std::runtime_error("No valid graphs found...");
+        throw std::runtime_error("No valid graphs found from geng | vcolg.");
     }
 
     std::vector<std::tuple<int, std::vector<int>, std::vector<std::pair<int, int>>>> possible_node_colored_graphs;
