@@ -5,6 +5,12 @@ project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Carry the link-path directories into the installed binary's RPATH so
+# the loader can find rdkit/nauty/etc at import time. Without this, the
+# .so installed via `pip install -e .` ends up with no RPATH and dlopen
+# fails (the installer strips build-tree RPATHs by default).
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 # Find required packages
 find_package(pybind11 REQUIRED CONFIG)
 
