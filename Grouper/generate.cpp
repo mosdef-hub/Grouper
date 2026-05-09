@@ -319,13 +319,28 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     std::unordered_set<GroupGraph> global_basis;
     omp_set_num_threads(num_procs);
     std::atomic<long long> n_finished{0};
-    // We don't know the total line count up front when streaming, so the
-    // progress display is a debounced counter (single carriage-return
-    // line) rather than a percentage bar.
+    // Progress bar with streaming: producer_total is the running count of
+    // lines pushed by the producer. It races ahead of n_finished early
+    // and stabilises at the true total once the producer is done — by
+    // then the percentage is exact. Update every progress_step leaves to
+    // keep the omp critical section out of the hot loop.
     constexpr long long progress_step = 256;
     std::cout << "Using " << num_procs << " processors (streaming)" << std::endl;
     auto print_progress = [&](long long finished) {
-        std::cout << "  processed " << finished << " lines\r" << std::flush;
+        long long total = producer_total.load(std::memory_order_relaxed);
+        if (total <= 0) return;
+        if (finished > total) finished = total;
+        constexpr int bar_width = 100;
+        int pos = static_cast<int>((bar_width * finished) / total);
+        std::cout << "[";
+        for (int i = 0; i < bar_width; ++i) {
+            if (i < pos) std::cout << "=";
+            else if (i == pos) std::cout << ">";
+            else std::cout << " ";
+        }
+        int pct = static_cast<int>((100 * finished) / total);
+        std::cout << "] " << finished << "/" << total << " (" << pct << "%)\r";
+        std::cout.flush();
     };
 
     if (!config_path.empty()) {
@@ -402,6 +417,7 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         // joiner declared above will see joinable()==false and no-op.
         producer.join();
         if (producer_exc) std::rethrow_exception(producer_exc);
+        print_progress(n_finished.load());
         std::cout << std::endl;
         std::cout << "Graphs saved to database." << std::endl;
         return {};
@@ -446,6 +462,9 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         // OMP region above to have exited. Surface any producer error.
         producer.join();
         if (producer_exc) std::rethrow_exception(producer_exc);
+        // Final 100% bar update so the visible state lands at N/N, not
+        // the last 256-boundary it happened to cross.
+        print_progress(n_finished.load());
 
         // Cross-thread merge. Each thread already deduplicated within
         // itself by canon, so we just need a single global canon set
