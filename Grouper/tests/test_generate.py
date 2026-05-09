@@ -1,4 +1,5 @@
 import logging
+import time
 
 import pytest
 
@@ -7,6 +8,105 @@ from Grouper.tests.base_test import BaseTest
 
 
 class TestGeneration(BaseTest):
+    def test_positive_constraint_filters_results(self):
+        """exhaustive_generate must drop graphs that lack the required node types."""
+        node_defs = {
+            Group("amine", "N", [0, 0, 0]),
+            Group("methyl", "C", [0, 0, 0, 0]),
+        }
+        unconstrained = exhaustive_generate(
+            n_nodes=3,
+            node_defs=node_defs,
+            num_procs=1,
+            vcolg_output_file="",
+            positive_constraints={},
+            negative_constraints=set(),
+            config_path="",
+        )
+        constrained = exhaustive_generate(
+            n_nodes=3,
+            node_defs=node_defs,
+            num_procs=1,
+            vcolg_output_file="",
+            positive_constraints={"amine": 1},
+            negative_constraints=set(),
+            config_path="",
+        )
+        assert len(constrained) > 0, (
+            "Positive constraint of one amine should still leave valid graphs"
+        )
+        assert len(constrained) < len(unconstrained), (
+            "Constrained set should drop the methyl-only graphs"
+        )
+        for graph in constrained:
+            n_amines = sum(
+                1 for node in graph.nodes.values() if node.type == "amine"
+            )
+            assert n_amines >= 1, (
+                f"Graph {graph.to_smiles()} violates amine>=1 constraint"
+            )
+
+    @pytest.mark.xfail(
+        reason=(
+            "negative_constraints is a public parameter on exhaustive_generate "
+            "but processColoredGraphs.cpp does not currently consume it. "
+            "Test pinned as xfail to track the missing enforcement."
+        ),
+        strict=True,
+    )
+    def test_negative_constraint_filters_results(self):
+        """negative_constraints should forbid SMILES substrings (currently a no-op)."""
+        node_defs = {
+            Group("amine", "N", [0, 0, 0]),
+            Group("methyl", "C", [0, 0, 0, 0]),
+        }
+        constrained = exhaustive_generate(
+            n_nodes=3,
+            node_defs=node_defs,
+            num_procs=1,
+            vcolg_output_file="",
+            positive_constraints={},
+            negative_constraints={"NN"},
+            config_path="",
+        )
+        for graph in constrained:
+            smiles = graph.to_smiles()
+            assert "NN" not in smiles, (
+                f"Graph {smiles} contains the forbidden substring 'NN'"
+            )
+
+    def test_exhaustive_generate_runtime_alarm(self):
+        """Explosion alarm: a small generate run must finish under a generous wall budget.
+
+        Catches catastrophic regressions (≫10x slowdowns or runaway enumeration)
+        without being flaky on shared CI runners. The threshold is intentionally
+        loose; use --no-skip on test_exhaustive_generate_performance for fine-
+        grained perf tracking against pytest-benchmark baselines in .benchmarks/.
+        """
+        node_defs = {
+            Group("amine", "N", [0, 0, 0]),
+            Group("methyl", "C", [0, 0, 0]),
+            Group("ester", "C(=O)O", [0, 2]),
+            Group("hydroxyl", "O", [0, 0]),
+        }
+        start = time.perf_counter()
+        result = exhaustive_generate(
+            n_nodes=4,
+            node_defs=node_defs,
+            num_procs=1,
+            vcolg_output_file="",
+            positive_constraints={},
+            negative_constraints=set(),
+            config_path="",
+        )
+        elapsed = time.perf_counter() - start
+        assert len(result) > 0, "n=4 over four small groups should produce graphs"
+        assert elapsed < 30.0, (
+            f"exhaustive_generate(n=4) took {elapsed:.1f}s "
+            f"(alarm threshold 30s; suggests an algorithmic regression)"
+        )
+
+
     @pytest.mark.skip(reason="Too slow for general testing")
     @pytest.mark.parametrize("n_nodes", [2, 3, 4, 5, 6])
     @pytest.mark.parametrize("num_procs", [1, 2, 4, 8, 16])

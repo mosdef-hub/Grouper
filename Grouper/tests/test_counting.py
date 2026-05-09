@@ -155,6 +155,91 @@ class TestCounting(BaseTest):
             assert len(exhausted_space) == total_unique_graphs, f"Expected {len(exhausted_space)} unique graphs, got {total_unique_graphs}"
 
 
+    def _exhaustive_vs_python_reference(self, n_nodes, node_types_set):
+        """Compare exhaustive_generate output to a Python reference enumeration.
+
+        The reference iterates the full Cartesian product of port pairings for
+        each colored graph from vcolg and dedups by SMILES. Both sides converge
+        to the same ground-truth set, so count divergence flags either
+        under-generation or canonical-form mismatch.
+        """
+        node_types = {i: node for i, node in enumerate(node_types_set)}
+        os.system(f"geng -c {n_nodes} > geng_output.txt")
+        os.system(
+            f"vcolg geng_output.txt -T -m{len(node_types)} > vcolg_out.txt"
+        )
+        pattern_inventory = set()
+        with open("vcolg_out.txt", "r") as f:
+            lines = f.readlines()
+            for line in lines:
+                unfiltered_edge_inventory = {}
+                n_vertices, colors, edge_list = self.parse_vcolg_txt(
+                    line, set(range(len(node_types)))
+                )
+                gG = GroupGraph()
+                for i in range(n_vertices):
+                    gG.add_node(
+                        node_types[colors[i]].type,
+                        node_types[colors[i]].pattern,
+                        node_types[colors[i]].hubs,
+                    )
+                for (src, dst) in edge_list:
+                    src_ports = node_types[colors[src]].ports
+                    dst_ports = node_types[colors[dst]].ports
+                    unfiltered_edge_inventory[(src, dst)] = list(
+                        itertools.product(src_ports, dst_ports)
+                    )
+
+                for ports in itertools.product(
+                    *unfiltered_edge_inventory.values()
+                ):
+                    try:
+                        gG.clear_edges()
+                        for i, (src, dst) in enumerate(edge_list):
+                            src_port, dst_port = ports[i]
+                            gG.add_edge((src, src_port), (dst, dst_port))
+                        pattern_inventory.add(gG.to_smiles())
+                    except Exception:
+                        continue
+
+        exhausted_space = exhaustive_generate(
+            n_nodes=n_nodes,
+            node_defs=set(node_types.values()),
+            num_procs=1,
+            vcolg_output_file="",
+            positive_constraints={},
+            negative_constraints=set(),
+            config_path="",
+        )
+        exhausted_smiles = {g.to_smiles() for g in exhausted_space}
+        missing_in_inventory = exhausted_smiles - pattern_inventory
+        missing_in_exhausted = pattern_inventory - exhausted_smiles
+        assert not missing_in_inventory, (
+            f"exhaustive_generate produced graphs the reference did not: "
+            f"{missing_in_inventory}"
+        )
+        assert not missing_in_exhausted, (
+            f"reference produced graphs exhaustive_generate did not: "
+            f"{missing_in_exhausted}"
+        )
+        assert len(exhausted_smiles) == len(pattern_inventory)
+
+    def test_group_graph_count_high_port_symmetry(self):
+        """Correctness oracle covering groups with non-trivial port orbits.
+
+        Includes benzene (6 distinct hub atoms, 6-fold cyclic orbit) and amine
+        (3 ports all on the same hub atom -> single orbit). These exercise the
+        orbit-aware port enumeration paths that the existing tests miss; if
+        a future change collapses or over-counts orbit reps, the cardinality
+        comparison here will trip.
+        """
+        node_types = {
+            Group("benzene", "c1ccccc1", [0, 1, 2, 3, 4, 5]),
+            Group("amine", "N", [0, 0, 0]),
+            Group("methyl", "C", [0, 0, 0, 0]),
+        }
+        self._exhaustive_vs_python_reference(n_nodes=2, node_types_set=node_types)
+
     def test_group_graph_count(self):
         for n_nodes in range(2, 4):
             node_types = {
