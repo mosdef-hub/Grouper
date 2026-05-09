@@ -95,7 +95,7 @@ class TestCounting(BaseTest):
         inventory = dummy_graph.generate_inventory(atom_types)
         print("Inventory:", inventory)
 
-    def test_exhaustive_generate_atom_graph(self):
+    def test_exhaustive_generate_atom_graph(self, tmp_path):
 
         def is_valid_molecule(edge_list, id_to_node, colors):
             """
@@ -147,10 +147,12 @@ class TestCounting(BaseTest):
             # count valid atom-level molecules against. exhaustive_generate
             # consumes vcolg's output internally via popen and never
             # writes it to disk, so we have to invoke it ourselves here.
-            os.system("geng -c 4 > geng_output.txt 2>/dev/null")
-            os.system(f"vcolg geng_output.txt -T -m{len(combo)} > vcolg_out.txt 2>/dev/null")
+            geng_path = tmp_path / "geng_output.txt"
+            vcolg_path = tmp_path / "vcolg_out.txt"
+            os.system(f"geng -c 4 > {geng_path} 2>/dev/null")
+            os.system(f"vcolg {geng_path} -T -m{len(combo)} > {vcolg_path} 2>/dev/null")
             total_unique_graphs = 0
-            with open("vcolg_out.txt", "r") as f:
+            with open(vcolg_path, "r") as f:
                 lines = f.readlines()
                 for line in lines:
                     n_vertices, colors, edge_list = self.parse_vcolg_txt(line, set(range(len(combo))))
@@ -160,7 +162,7 @@ class TestCounting(BaseTest):
             assert len(exhausted_space) == total_unique_graphs, f"Expected {len(exhausted_space)} unique graphs, got {total_unique_graphs}"
 
 
-    def _exhaustive_vs_python_reference(self, n_nodes, node_types_set):
+    def _exhaustive_vs_python_reference(self, tmp_path, n_nodes, node_types_set):
         """Compare exhaustive_generate output to a Python reference enumeration.
 
         The reference iterates the full Cartesian product of port pairings for
@@ -169,12 +171,14 @@ class TestCounting(BaseTest):
         under-generation or canonical-form mismatch.
         """
         node_types = {i: node for i, node in enumerate(node_types_set)}
-        os.system(f"geng -c {n_nodes} > geng_output.txt")
+        geng_path = tmp_path / "geng_output.txt"
+        vcolg_path = tmp_path / "vcolg_out.txt"
+        os.system(f"geng -c {n_nodes} > {geng_path}")
         os.system(
-            f"vcolg geng_output.txt -T -m{len(node_types)} > vcolg_out.txt"
+            f"vcolg {geng_path} -T -m{len(node_types)} > {vcolg_path}"
         )
         pattern_inventory = set()
-        with open("vcolg_out.txt", "r") as f:
+        with open(vcolg_path, "r") as f:
             lines = f.readlines()
             for line in lines:
                 unfiltered_edge_inventory = {}
@@ -229,7 +233,7 @@ class TestCounting(BaseTest):
         )
         assert len(exhausted_smiles) == len(pattern_inventory)
 
-    def test_group_graph_count_high_port_symmetry(self):
+    def test_group_graph_count_high_port_symmetry(self, tmp_path):
         """Correctness oracle covering groups with non-trivial port orbits.
 
         Includes benzene (6 distinct hub atoms, 6-fold cyclic orbit) and amine
@@ -243,9 +247,9 @@ class TestCounting(BaseTest):
             Group("amine", "N", [0, 0, 0]),
             Group("methyl", "C", [0, 0, 0, 0]),
         }
-        self._exhaustive_vs_python_reference(n_nodes=2, node_types_set=node_types)
+        self._exhaustive_vs_python_reference(tmp_path, n_nodes=2, node_types_set=node_types)
 
-    def test_group_graph_count(self):
+    def test_group_graph_count(self, tmp_path):
         for n_nodes in range(2, 4):
             node_types = {
                 Group("ester", "C(O)=O", [0,1]),
@@ -255,14 +259,16 @@ class TestCounting(BaseTest):
                 # Group("benzene", "C1=CC=CC=C1", [0,1,2,3,4,5])
             }
             node_types = {i: node for i, node in enumerate(node_types)}
+            geng_path = tmp_path / "geng_output.txt"
+            vcolg_path = tmp_path / "vcolg_out.txt"
             # generate uncolored graphs
-            os.system(f"geng -c {n_nodes} > geng_output.txt")
+            os.system(f"geng -c {n_nodes} > {geng_path}")
             # generate colored graphs
-            os.system(f"vcolg geng_output.txt -T -m{len(node_types)} > vcolg_out.txt")
+            os.system(f"vcolg {geng_path} -T -m{len(node_types)} > {vcolg_path}")
             # calculate hub reps
             pattern_inventory = set()
             # determine every possible port pairing for each edge
-            with open("vcolg_out.txt", "r") as f:
+            with open(vcolg_path, "r") as f:
                 lines = f.readlines()
                 for line in tqdm(lines, desc="Generating patterns", total=len(lines)):
                     unfiltered_edge_inventory = {} # (src,dst) -> list of all possible port pairings
