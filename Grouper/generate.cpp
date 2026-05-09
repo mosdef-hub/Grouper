@@ -434,16 +434,38 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     // keep the omp critical section out of the hot loop.
     constexpr long long progress_step = 256;
     std::cout << "Using " << num_procs << " processors (streaming)" << std::endl;
+    // Detect whether stdout is an interactive terminal. The TTY path
+    // uses ANSI escapes (\033[2K\r) for an in-place updating bar; the
+    // non-TTY path (CI logs, piped output, redirected to a file) emits
+    // a plain "N% (a/b)" line at every 10% milestone, since dumping
+    // the escape codes and the ~750 progress prints of a long run
+    // produces unreadable log files.
+    const bool stdout_is_tty = ::isatty(::fileno(stdout));
+    int last_pct_printed = -1;
     auto print_progress = [&](long long finished) {
+        if (total_lines <= 0) {
+            // Pre-count failed or wasn't run; show count only. In
+            // non-TTY mode skip — without a denominator the count is
+            // not very informative and would spam logs.
+            if (stdout_is_tty) {
+                std::cout << "\033[2K\rprocessed " << finished << " lines" << std::flush;
+            }
+            return;
+        }
+        if (finished > total_lines) finished = total_lines;
+        int pct = static_cast<int>((100 * finished) / total_lines);
+        if (!stdout_is_tty) {
+            int rounded = (pct / 10) * 10;
+            if (rounded == 0 || rounded <= last_pct_printed) return;
+            last_pct_printed = rounded;
+            std::cout << rounded << "% (" << finished << "/" << total_lines
+                      << ")\n" << std::flush;
+            return;
+        }
         // \033[2K clears the current terminal line; pairs with the \r
         // before each write so we always start from a known-empty
         // line, even if a stray write to stdout/stderr (or a shorter
         // previous bar) left residue.
-        if (total_lines <= 0) {
-            std::cout << "\033[2K\rprocessed " << finished << " lines" << std::flush;
-            return;
-        }
-        if (finished > total_lines) finished = total_lines;
         constexpr int bar_width = 100;
         int pos = static_cast<int>((bar_width * finished) / total_lines);
         std::cout << "\033[2K\r[";
@@ -452,7 +474,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
             else if (i == pos) std::cout << ">";
             else std::cout << " ";
         }
-        int pct = static_cast<int>((100 * finished) / total_lines);
         std::cout << "] " << finished << "/" << total_lines << " (" << pct << "%)" << std::flush;
     };
 
@@ -535,7 +556,12 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         producer.join();
         if (producer_exc) std::rethrow_exception(producer_exc);
         print_progress(n_finished.load());
-        std::cout << std::endl;
+        // TTY bar leaves the cursor on the bar line with no \n; force
+        // one so subsequent output (the diagnostics replay, "Number
+        // of unique graphs", or the user's own prints) starts on a
+        // clean row. In non-TTY mode the last milestone already ended
+        // with \n, so an unconditional endl would just add a blank.
+        if (stdout_is_tty) std::cout << std::endl;
         for (const auto& l : diag_lines) std::cerr << l << '\n';
         if (interrupted.load(std::memory_order_acquire)) {
             // Our SIGINT handler set the flag. Raise it to Python as a
@@ -595,7 +621,12 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         // Final 100% bar update so the visible state lands at N/N, not
         // the last 256-boundary it happened to cross.
         print_progress(n_finished.load());
-        std::cout << std::endl;
+        // TTY bar leaves the cursor on the bar line with no \n; force
+        // one so subsequent output (the diagnostics replay, "Number
+        // of unique graphs", or the user's own prints) starts on a
+        // clean row. In non-TTY mode the last milestone already ended
+        // with \n, so an unconditional endl would just add a blank.
+        if (stdout_is_tty) std::cout << std::endl;
         // Replay nauty's >A/>Z diagnostics now that the bar is settled,
         // so they appear cleanly under the bar instead of racing it.
         for (const auto& l : diag_lines) std::cerr << l << '\n';
