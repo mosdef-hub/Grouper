@@ -6,8 +6,13 @@
 #include <GraphMol/Bond.h>
 
 #include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <exception>
 #include <iostream>
 #include <fstream>
+#include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -51,6 +56,54 @@ struct hash_vector {
         return seed;
     }
 };
+
+// Bounded thread-safe queue used to stream vcolg output lines from the
+// reader thread into the OMP worker pool. The cap exists so the producer
+// blocks if consumers can't keep up — at large N (n=7+) the full vcolg
+// output can run to GB; without the cap we'd buffer it all in memory.
+namespace {
+class BoundedLineQueue {
+public:
+    explicit BoundedLineQueue(std::size_t capacity) : capacity_(capacity) {}
+
+    // Producer side. Blocks if the queue is full.
+    void push(std::string line) {
+        std::unique_lock<std::mutex> lock(mtx_);
+        not_full_.wait(lock, [&] { return q_.size() < capacity_ || closed_; });
+        if (closed_) return; // dropped — consumers gave up
+        q_.push_back(std::move(line));
+        not_empty_.notify_one();
+    }
+
+    // Consumer side. Returns false iff the queue is closed AND empty.
+    bool pop(std::string& out) {
+        std::unique_lock<std::mutex> lock(mtx_);
+        not_empty_.wait(lock, [&] { return !q_.empty() || closed_; });
+        if (q_.empty()) return false;
+        out = std::move(q_.front());
+        q_.pop_front();
+        not_full_.notify_one();
+        return true;
+    }
+
+    // Producer signals end of stream. Wakes any blocked consumers so
+    // they can exit their pop loops.
+    void close() {
+        std::lock_guard<std::mutex> lock(mtx_);
+        closed_ = true;
+        not_empty_.notify_all();
+        not_full_.notify_all();
+    }
+
+private:
+    std::size_t capacity_;
+    std::deque<std::string> q_;
+    std::mutex mtx_;
+    std::condition_variable not_empty_;
+    std::condition_variable not_full_;
+    bool closed_ = false;
+};
+} // anonymous namespace
 
 std::unordered_map<std::string, std::string> parseConfig(const std::string& configFile) {
     std::unordered_map<std::string, std::string> configParams;
@@ -198,59 +251,82 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     }
 
 
-    // Run `geng N -c | vcolg -T -mK` and read its output directly,
-    // avoiding the round trip through two temp files. The shell handles
-    // the pipe so geng's stdout flows straight into vcolg's stdin.
-    std::vector<std::string> lines;
-    if (vcolg_output_file.empty()) {
-        std::string cmd = "geng " + std::to_string(n_nodes) + " -c | vcolg -T -m" +
-                          std::to_string(node_defs.size());
-        FILE* pipe = popen(cmd.c_str(), "r");
-        if (!pipe) {
-            throw std::runtime_error("popen failed for: " + cmd);
-        }
-        // fgets reads up to a newline OR buffer-1 bytes. For lines longer
-        // than the buffer we accumulate across reads until we see the
-        // newline.
-        char buf[4096];
-        std::string accumulated;
-        while (std::fgets(buf, sizeof(buf), pipe) != nullptr) {
-            accumulated.append(buf);
-            if (!accumulated.empty() && accumulated.back() == '\n') {
-                accumulated.pop_back();
-                if (!accumulated.empty()) lines.push_back(std::move(accumulated));
-                accumulated.clear();
+    // Stream vcolg output through a bounded queue. A producer thread
+    // reads lines from the popen'd `geng | vcolg` pipe (or the
+    // user-provided file) and pushes them into the queue; the OMP
+    // workers below consume from it. Memory is capped at the queue's
+    // capacity, so even gigabyte-scale vcolg runs at large N don't
+    // buffer their full output in RAM.
+    BoundedLineQueue queue(/*capacity=*/8192);
+    std::atomic<long long> producer_total{0};
+    std::exception_ptr producer_exc = nullptr;
+    const bool from_pipe = vcolg_output_file.empty();
+    const std::string vcolg_input_path = vcolg_output_file;
+
+    std::thread producer([&]() {
+        try {
+            auto push_line = [&](std::string&& line) {
+                if (!line.empty()) {
+                    queue.push(std::move(line));
+                    producer_total.fetch_add(1, std::memory_order_relaxed);
+                }
+            };
+            if (from_pipe) {
+                std::string cmd = "geng " + std::to_string(n_nodes) + " -c | vcolg -T -m" +
+                                  std::to_string(node_defs.size());
+                FILE* pipe = popen(cmd.c_str(), "r");
+                if (!pipe) {
+                    throw std::runtime_error("popen failed for: " + cmd);
+                }
+                char buf[4096];
+                std::string accumulated;
+                while (std::fgets(buf, sizeof(buf), pipe) != nullptr) {
+                    accumulated.append(buf);
+                    if (!accumulated.empty() && accumulated.back() == '\n') {
+                        accumulated.pop_back();
+                        push_line(std::move(accumulated));
+                        accumulated.clear();
+                    }
+                }
+                if (!accumulated.empty()) push_line(std::move(accumulated));
+                int rc = pclose(pipe);
+                if (rc != 0) {
+                    throw std::runtime_error(
+                        "geng | vcolg failed (exit " + std::to_string(rc) +
+                        ", is nauty on PATH? command: " + cmd + ")");
+                }
+            } else {
+                std::ifstream input_file(vcolg_input_path);
+                if (!input_file.is_open()) {
+                    throw std::runtime_error("Error opening vcolg output file: " + vcolg_input_path);
+                }
+                std::string line;
+                while (std::getline(input_file, line)) {
+                    push_line(std::move(line));
+                }
             }
+        } catch (...) {
+            producer_exc = std::current_exception();
         }
-        if (!accumulated.empty()) lines.push_back(std::move(accumulated));
-        int rc = pclose(pipe);
-        if (rc != 0) {
-            throw std::runtime_error(
-                "geng | vcolg failed (exit " + std::to_string(rc) +
-                ", is nauty on PATH? command: " + cmd + ")");
-        }
-    } else {
-        std::ifstream input_file(vcolg_output_file);
-        if (!input_file.is_open()) {
-            throw std::runtime_error("Error opening vcolg output file: " + vcolg_output_file);
-        }
-        std::string line;
-        while (std::getline(input_file, line)) {
-            if (!line.empty()) lines.push_back(std::move(line));
-        }
-    }
-    int total_lines = static_cast<int>(lines.size());
-    std::cout << "Processing " << total_lines << " lines from vcolg output..." << std::endl;
-    if (total_lines == 0) {
-        throw std::runtime_error("No lines found in vcolg output...");
-    }
+        queue.close();
+    });
+    // Make sure the producer is reaped on every exit path.
+    struct ProducerJoiner {
+        std::thread& t;
+        ~ProducerJoiner() { if (t.joinable()) t.join(); }
+    } joiner{producer};
 
     std::unordered_set<GroupGraph> global_basis;
-    omp_set_num_threads(num_procs);      // Set the number of threads to match
-    std::atomic<int> n_finished{0};
-    // Print progress at most ~100 times across the run, regardless of thread count.
-    const int progress_step = std::max(1, total_lines / 100);
-    std::cout<< "Using "<<num_procs << " processors" << std::endl;
+    omp_set_num_threads(num_procs);
+    std::atomic<long long> n_finished{0};
+    // We don't know the total line count up front when streaming, so the
+    // progress display is a debounced counter (single carriage-return
+    // line) rather than a percentage bar.
+    constexpr long long progress_step = 256;
+    std::cout << "Using " << num_procs << " processors (streaming)" << std::endl;
+    auto print_progress = [&](long long finished) {
+        std::cout << "  processed " << finished << " lines\r" << std::flush;
+    };
 
     if (!config_path.empty()) {
         std::unordered_map<std::string, std::string> configParams = parseConfig(config_path);
@@ -301,30 +377,31 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 DEFAULTOPTIONS_GRAPH(options);
                 statsblk stats;
 
-                #pragma omp for schedule(dynamic) nowait
-                for (int i = 0; i < total_lines; ++i) {
+                std::string line;
+                while (queue.pop(line)) {
                     local_basis.clear();
                     process_nauty_output(
-                        lines[i], node_defs, &local_basis,
+                        line, node_defs, &local_basis,
                         positiveConstraints, negativeConstraints,
                         g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
                     );
-
                     for (const auto& graph : local_basis) {
                         insertGraph(conn, graph, table_name);
                     }
-
-                    int finished = ++n_finished;
-                    if (finished % progress_step == 0 || finished == total_lines) {
+                    long long finished = ++n_finished;
+                    if (finished % progress_step == 0) {
                         #pragma omp critical
-                        {
-                            update_progress(finished, total_lines);
-                        }
+                        { print_progress(finished); }
                     }
                 }
                 PQfinish(conn);
             }
         }
+        // Producer is done at this point (queue is closed and drained).
+        // Join explicitly so we can surface its exception, if any. The
+        // joiner declared above will see joinable()==false and no-op.
+        producer.join();
+        if (producer_exc) std::rethrow_exception(producer_exc);
         std::cout << std::endl;
         std::cout << "Graphs saved to database." << std::endl;
         return {};
@@ -347,23 +424,25 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
             DEFAULTOPTIONS_GRAPH(options);
             statsblk stats;
 
-            #pragma omp for schedule(dynamic) nowait
-            for (int i = 0; i < total_lines; ++i) {
+            std::string line;
+            while (queue.pop(line)) {
                 process_nauty_output(
-                    lines[i], node_defs, &local_basis,
+                    line, node_defs, &local_basis,
                     positiveConstraints, negativeConstraints,
                     g.data(), lab.data(), ptn.data(), orbits.data(), &options, &stats
                 );
-
-                int finished = ++n_finished;
-                if (finished % progress_step == 0 || finished == total_lines) {
+                long long finished = ++n_finished;
+                if (finished % progress_step == 0) {
                     #pragma omp critical
-                    {
-                        update_progress(finished, total_lines);
-                    }
+                    { print_progress(finished); }
                 }
             }
         }
+
+        // Producer must have finished (queue closed/drained) for the
+        // OMP region above to have exited. Surface any producer error.
+        producer.join();
+        if (producer_exc) std::rethrow_exception(producer_exc);
 
         for (const auto& local_basis : all_local_bases) {
             for (const auto& graph : local_basis) {
