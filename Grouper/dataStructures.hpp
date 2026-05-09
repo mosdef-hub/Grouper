@@ -151,12 +151,13 @@ public:
     std::unordered_map<std::string, std::vector<PortType>> nodetypes; ///< Map of node types to their respective ports.
     bool isCoarseGrained = false;
     // Per-node bitmask of which ports are currently bonded by an edge.
-    // bit i of port_used_bits[nodeID] is 1 iff port i of nodeID is in
-    // use. Replaces the previous unordered_set<pair<int,int>> — same
-    // semantics, ~3x faster in the inner loop (one int hash + bit op
-    // instead of pair hashing). Limit: 64 ports per group, which is
-    // larger than any realistic chemical group.
-    std::unordered_map<NodeIDType, std::uint64_t> port_used_bits;
+    // port_used_bits[nodeID] bit i == 1 iff port i of nodeID is in use.
+    // Indexed by NodeID directly: addNode assigns id = nodes.size(), so
+    // IDs are dense 0..n-1, and port_used_bits is kept in lockstep with
+    // nodes via push_back in addNode. addEdge then does O(1) array
+    // access and a bit-test, no hash work at all. Limit: 64 ports per
+    // group, larger than any realistic chemical group.
+    std::vector<std::uint64_t> port_used_bits;
 
     // Operators
     GroupGraph();

@@ -261,16 +261,18 @@ void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGrap
 
 // Core methods
 GroupGraph::GroupGraph()
-    : nodes(), edges(), nodetypes() {}
+    : nodes(), edges(), nodetypes(), port_used_bits() {}
 
 GroupGraph::GroupGraph(const GroupGraph& other)
-    : nodes(other.nodes), edges(other.edges), nodetypes(other.nodetypes) {}
+    : nodes(other.nodes), edges(other.edges), nodetypes(other.nodetypes),
+      port_used_bits(other.port_used_bits) {}
 
 GroupGraph& GroupGraph::operator=(const GroupGraph& other) {
     if (this != &other) {
         nodes = other.nodes;
         edges = other.edges;
         nodetypes = other.nodetypes;
+        port_used_bits = other.port_used_bits;
     }
     return *this;
 }
@@ -644,6 +646,7 @@ void GroupGraph::addNode(
         int id = nodes.size();
         nodes[id] = Group(ntype, pattern, hubs, patternType);
         nodetypes[ntype] = hubs;
+        port_used_bits.push_back(0);
     }
     // Case 1: Group type (ntype) is provided
     else if (!ntype.empty() && pattern.empty()) {
@@ -660,6 +663,7 @@ void GroupGraph::addNode(
             }
         }
         nodes[id] = Group(ntype, pattern, hubs, patternType);
+        port_used_bits.push_back(0);
     }
     else {
         std::string hubs_str = "[";
@@ -692,6 +696,7 @@ void GroupGraph::addNode(Group group) {
     int id = nodes.size();
     nodes[id] = group;
     nodetypes[group.ntype] = group.hubs;
+    port_used_bits.push_back(0);
 }
 
 bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, double bondOrder, bool strict) {
@@ -731,29 +736,25 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
 
     // Bit-test both endpoints against per-node port_used_bits before
     // committing. If either is already set we bail without mutating
-    // anything, so no rollback is needed. The previous explicit
-    // `edges.count(edge)` check was redundant: any duplicate edge is
-    // impossible without one of its ports already being marked used,
-    // so these bit tests cover it.
+    // anything, so no rollback is needed. port_used_bits is a vector
+    // indexed directly by NodeID — no hash lookup, no allocation.
     if (fromPort < 0 || fromPort >= 64 || toPort < 0 || toPort >= 64) {
         if (strict) throw std::invalid_argument("Port index out of range for bitmask (0..63)");
         return false;
     }
-    auto& fromBits = port_used_bits[from];
     const std::uint64_t fromMask = std::uint64_t{1} << fromPort;
-    if (fromBits & fromMask) {
+    if (port_used_bits[from] & fromMask) {
         if (strict) throw std::invalid_argument("Source port already in use");
         return false;
     }
-    auto& toBits = port_used_bits[to];
     const std::uint64_t toMask = std::uint64_t{1} << toPort;
-    if (toBits & toMask) {
+    if (port_used_bits[to] & toMask) {
         if (strict) throw std::invalid_argument("Destination port already in use");
         return false;
     }
 
-    fromBits |= fromMask;
-    toBits |= toMask;
+    port_used_bits[from] |= fromMask;
+    port_used_bits[to] |= toMask;
     edges.emplace(from, fromPort, to, toPort, bondOrder);
     return true;
 }
@@ -790,7 +791,9 @@ bool GroupGraph::isPortFree(NodeIDType nodeID, PortType port) const {
 
 void GroupGraph::clearEdges() {
     edges.clear();
-    port_used_bits.clear();
+    // Preserve the vector's size and storage; just zero the bits.
+    // No allocation, just a memset over n_nodes uint64_ts.
+    std::fill(port_used_bits.begin(), port_used_bits.end(), 0);
 }
 
 void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int stabvertex, int n) {
