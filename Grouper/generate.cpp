@@ -64,6 +64,45 @@ struct hash_vector {
     }
 };
 
+// Process-wide pointer used by the SIGINT handler to flip the per-run
+// `interrupted` flag. We can't rely on Python's PyErr_CheckSignals here:
+// with the GIL released, signal delivery is racy across the OMP master
+// vs. our std::thread producer, and on macOS the signal often lands on
+// a non-Python-aware OMP worker thread that doesn't wake up the main
+// thread's flag. A direct C-level handler fires regardless of which
+// thread receives the signal and just sets our atomic.
+static std::atomic<std::atomic<bool>*> g_interrupt_flag{nullptr};
+extern "C" void grouper_sigint_handler(int) {
+    auto* p = g_interrupt_flag.load(std::memory_order_acquire);
+    if (p) p->store(true, std::memory_order_release);
+}
+
+// RAII guard: install our SIGINT handler on entry, restore the previous
+// (typically Python's) handler on exit. Saving and restoring is what
+// keeps `KeyboardInterrupt` working in the surrounding Python session
+// after the call returns.
+class SigIntScope {
+public:
+    explicit SigIntScope(std::atomic<bool>& flag) {
+        g_interrupt_flag.store(&flag, std::memory_order_release);
+        struct sigaction new_act{};
+        new_act.sa_handler = grouper_sigint_handler;
+        sigemptyset(&new_act.sa_mask);
+        new_act.sa_flags = 0; // no SA_RESTART — let blocking syscalls
+                              // (e.g. fgets) return EINTR so the
+                              // producer can notice and exit.
+        ::sigaction(SIGINT, &new_act, &old_act_);
+    }
+    ~SigIntScope() {
+        ::sigaction(SIGINT, &old_act_, nullptr);
+        g_interrupt_flag.store(nullptr, std::memory_order_release);
+    }
+    SigIntScope(const SigIntScope&) = delete;
+    SigIntScope& operator=(const SigIntScope&) = delete;
+private:
+    struct sigaction old_act_{};
+};
+
 // Bounded thread-safe queue used to stream vcolg output lines from the
 // reader thread into the OMP worker pool. The cap exists so the producer
 // blocks if consumers can't keep up — at large N (n=7+) the full vcolg
@@ -266,12 +305,12 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
     // buffer their full output in RAM.
     BoundedLineQueue queue(/*capacity=*/8192);
     std::atomic<long long> producer_total{0};
-    // Set to true when a Ctrl-C is observed via PyErr_CheckSignals.
-    // Producer/workers check this on each loop iteration and exit
-    // early; main thread re-raises py::error_already_set after the
-    // OMP region winds down so the user gets a KeyboardInterrupt
-    // rather than the run silently completing.
+    // Set to true by our SIGINT handler (installed below). Producer
+    // and workers check this on each loop iteration and exit early;
+    // after the OMP region we re-raise as KeyboardInterrupt so the
+    // run doesn't silently complete after Ctrl-C.
     std::atomic<bool> interrupted{false};
+    SigIntScope sigint_scope(interrupted);
     // vcolg/geng diagnostic lines (the >A header / >Z trailer lines)
     // captured via shell stderr redirection to a temp file, then
     // replayed to stderr after the bar finishes so they don't race
@@ -466,10 +505,12 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 DEFAULTOPTIONS_GRAPH(options);
                 statsblk stats;
 
-                const bool is_master = (omp_get_thread_num() == 0);
                 std::string line;
                 while (queue.pop(line)) {
-                    if (interrupted.load(std::memory_order_acquire)) break;
+                    if (interrupted.load(std::memory_order_acquire)) {
+                        queue.close();
+                        break;
+                    }
                     local_basis.clear();
                     process_nauty_output(
                         line, node_defs, &local_basis,
@@ -483,13 +524,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                     if (finished % progress_step == 0) {
                         #pragma omp critical
                         { print_progress(finished); }
-                        if (is_master) {
-                            py::gil_scoped_acquire gil;
-                            if (PyErr_CheckSignals() != 0) {
-                                interrupted.store(true, std::memory_order_release);
-                                queue.close();
-                            }
-                        }
                     }
                 }
                 PQfinish(conn);
@@ -504,7 +538,11 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         std::cout << std::endl;
         for (const auto& l : diag_lines) std::cerr << l << '\n';
         if (interrupted.load(std::memory_order_acquire)) {
+            // Our SIGINT handler set the flag. Raise it to Python as a
+            // KeyboardInterrupt so the user gets the standard interrupt
+            // experience instead of a silent return after Ctrl-C.
             py::gil_scoped_acquire gil;
+            PyErr_SetString(PyExc_KeyboardInterrupt, "");
             throw py::error_already_set();
         }
         std::cout << "Graphs saved to database." << std::endl;
@@ -531,10 +569,12 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
             DEFAULTOPTIONS_GRAPH(options);
             statsblk stats;
 
-            const bool is_master = (omp_get_thread_num() == 0);
             std::string line;
             while (queue.pop(line)) {
-                if (interrupted.load(std::memory_order_acquire)) break;
+                if (interrupted.load(std::memory_order_acquire)) {
+                    queue.close();
+                    break;
+                }
                 process_nauty_output(
                     line, node_defs, &local_basis,
                     positiveConstraints, negativeConstraints,
@@ -544,19 +584,6 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
                 if (finished % progress_step == 0) {
                     #pragma omp critical
                     { print_progress(finished); }
-                    // Signal polling has to happen on the Python main
-                    // thread — that's the OMP master inside this
-                    // parallel region. Workers on other OS threads
-                    // can call PyErr_CheckSignals but Python only
-                    // raises KeyboardInterrupt on the main thread,
-                    // so the check is effectively a no-op there.
-                    if (is_master) {
-                        py::gil_scoped_acquire gil;
-                        if (PyErr_CheckSignals() != 0) {
-                            interrupted.store(true, std::memory_order_release);
-                            queue.close();
-                        }
-                    }
                 }
             }
         }
@@ -573,7 +600,11 @@ std::unordered_set<GroupGraph> exhaustiveGenerate(
         // so they appear cleanly under the bar instead of racing it.
         for (const auto& l : diag_lines) std::cerr << l << '\n';
         if (interrupted.load(std::memory_order_acquire)) {
+            // Our SIGINT handler set the flag. Raise it to Python as a
+            // KeyboardInterrupt so the user gets the standard interrupt
+            // experience instead of a silent return after Ctrl-C.
             py::gil_scoped_acquire gil;
+            PyErr_SetString(PyExc_KeyboardInterrupt, "");
             throw py::error_already_set();
         }
 
