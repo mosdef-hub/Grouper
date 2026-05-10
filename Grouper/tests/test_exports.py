@@ -233,6 +233,67 @@ def test_groupgraph_to_sdf_method_round_trip():
 def test_groupgraph_format_methods_exist():
     """Every promised export method is bound on GroupGraph and callable."""
     gg = _ethanol_groupgraph()
-    for method_name in ("to_3d", "to_sdf", "to_mol", "to_xyz", "to_pdb"):
+    for method_name in (
+        "to_3d", "to_sdf", "to_mol", "to_xyz", "to_pdb",
+        "to_inchi", "to_inchi_key", "to_smarts", "visualize",
+    ):
         assert hasattr(gg, method_name), f"{method_name} missing on GroupGraph"
         assert callable(getattr(gg, method_name))
+
+
+# ---------------------------------------------------------------------
+# Identifier formats (InChI, InChIKey, SMARTS) — single-line strings,
+# no 3D coords needed.
+# ---------------------------------------------------------------------
+@pytest.mark.parametrize("smiles", ["CCO", "c1ccccc1", "CC(=O)O"])
+def test_to_inchi_round_trip(smiles):
+    """InChI must round-trip via Chem.MolFromInchi back to the same
+    canonical SMILES."""
+    from Grouper.exports import to_inchi
+    inchi = to_inchi(smiles)
+    assert inchi.startswith("InChI=")
+    mol = Chem.MolFromInchi(inchi)
+    assert mol is not None
+    assert Chem.CanonSmiles(smiles) == Chem.CanonSmiles(Chem.MolToSmiles(mol))
+
+
+def test_to_inchi_key_format():
+    """InChIKey must be the standard 27-char dashed form."""
+    from Grouper.exports import to_inchi_key
+    key = to_inchi_key("CCO")
+    parts = key.split("-")
+    assert len(parts) == 3
+    assert len(parts[0]) == 14
+    assert len(parts[1]) == 10
+    assert len(parts[2]) == 1
+    assert all(p.isalnum() for p in parts)
+
+
+def test_to_smarts_matches_self():
+    """A SMARTS pattern derived from a molecule must match that
+    molecule (substructure of itself)."""
+    from Grouper.exports import to_smarts
+    smarts = to_smarts("CCO")
+    pattern = Chem.MolFromSmarts(smarts)
+    mol = Chem.MolFromSmiles("CCO")
+    assert mol.HasSubstructMatch(pattern)
+
+
+def test_groupgraph_identifier_methods():
+    """The bound shortcut methods produce the same output as the
+    free functions."""
+    from Grouper.exports import to_inchi, to_inchi_key, to_smarts
+    gg = _ethanol_groupgraph()
+    smi = gg.to_smiles()
+    assert gg.to_inchi() == to_inchi(smi)
+    assert gg.to_inchi_key() == to_inchi_key(smi)
+    assert gg.to_smarts() == to_smarts(smi)
+
+
+def test_invalid_smiles_to_identifier_raises():
+    """Identifier methods refuse unparseable SMILES rather than
+    silently returning RDKit's None."""
+    from Grouper.exports import EmbedError, to_inchi, to_inchi_key, to_smarts
+    for fn in (to_inchi, to_inchi_key, to_smarts):
+        with pytest.raises(EmbedError, match="could not parse"):
+            fn("not a smiles")

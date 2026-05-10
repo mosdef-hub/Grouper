@@ -236,6 +236,55 @@ def to_pdb(
     return _write_or_return(Chem.MolToPDBBlock(mol), path)
 
 
+# ---------------------------------------------------------------------
+# Identifier formats: InChI, InChIKey, SMARTS. These don't need 3D
+# coordinates — they're 1D string identifiers used for
+# database lookup (PubChem, ChEMBL, NIST), substructure querying, and
+# stable cross-tool referencing.
+# ---------------------------------------------------------------------
+def to_inchi(target: Union[str, "GroupGraph"]) -> str:
+    """Return the IUPAC InChI string. InChI is a layered, deterministic
+    identifier that's standard across cheminformatics databases — two
+    drawings of the same molecule produce the same InChI even when
+    their canonical SMILES differ across implementations.
+
+    Used to look molecules up in PubChem, ChEMBL, NIST WebBook, etc.
+    For shorter primary-key use, prefer `to_inchi_key`.
+    """
+    smiles = _smiles_of(target)
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise EmbedError(f"could not parse SMILES: {smiles!r}")
+    return Chem.MolToInchi(mol)
+
+
+def to_inchi_key(target: Union[str, "GroupGraph"]) -> str:
+    """Return the 27-character InChIKey hash of the InChI. This is the
+    primary-key form most chemistry databases use — fixed length,
+    URL-safe, and deterministic across implementations.
+
+    Format: `XXXXXXXXXXXXXX-YYYYYYYYYY-Z` where the dashes separate
+    the structural-skeleton hash, the stereochemistry/isotope hash,
+    and a final disambiguation block.
+    """
+    smiles = _smiles_of(target)
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise EmbedError(f"could not parse SMILES: {smiles!r}")
+    return Chem.MolToInchiKey(mol)
+
+
+def to_smarts(target: Union[str, "GroupGraph"]) -> str:
+    """Return the SMARTS pattern for the molecule. Useful when a
+    generated structure becomes a query pattern for substructure
+    searching elsewhere in a pipeline."""
+    smiles = _smiles_of(target)
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise EmbedError(f"could not parse SMILES: {smiles!r}")
+    return Chem.MolToSmarts(mol)
+
+
 def write_sdf(
     targets: Iterable[Union[str, "GroupGraph"]],
     path: str,

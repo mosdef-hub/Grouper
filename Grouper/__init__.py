@@ -144,8 +144,44 @@ def _gg_to_pdb(self, path=None, **kw):
     return to_pdb(self, path, **kw)
 
 
+def _gg_to_inchi(self):
+    """Return the IUPAC InChI string (cross-tool deterministic
+    identifier)."""
+    from Grouper.exports import to_inchi
+    return to_inchi(self)
+
+
+def _gg_to_inchi_key(self):
+    """Return the 27-character InChIKey — primary-key form used by
+    most chemistry databases (PubChem, ChEMBL, NIST)."""
+    from Grouper.exports import to_inchi_key
+    return to_inchi_key(self)
+
+
+def _gg_to_smarts(self):
+    """Return the SMARTS pattern for this molecule. Useful as a query
+    pattern in substructure searches downstream."""
+    from Grouper.exports import to_smarts
+    return to_smarts(self)
+
+
+def _gg_visualize(self, **kw):
+    """Render the port-graph (groups as colored nodes, port
+    connections as edges) via matplotlib. Distinct from a 2D
+    chemical-structure drawing — for that, use `to_smiles()` and
+    feed it to RDKit's Draw module.
+
+    Wraps `Grouper.visualization.visualize_graph.visualize`."""
+    from Grouper.visualization.visualize_graph import visualize
+    return visualize(self, **kw)
+
+
 GroupGraph.to_3d = _gg_to_3d
 GroupGraph.to_sdf = _gg_to_sdf
 GroupGraph.to_mol = _gg_to_mol
 GroupGraph.to_xyz = _gg_to_xyz
 GroupGraph.to_pdb = _gg_to_pdb
+GroupGraph.to_inchi = _gg_to_inchi
+GroupGraph.to_inchi_key = _gg_to_inchi_key
+GroupGraph.to_smarts = _gg_to_smarts
+GroupGraph.visualize = _gg_visualize

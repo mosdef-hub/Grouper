@@ -258,3 +258,116 @@ def test_repr_truncates_for_large_sets():
 
 def test_repr_empty():
     assert repr(GroupGraphSet()) == "GroupGraphSet(empty)"
+
+
+# ---------------------------------------------------------------------
+# sample — random subset, with and without seed.
+# ---------------------------------------------------------------------
+def test_sample_returns_groupgraphset_of_right_size():
+    results = exhaustive_generate(
+        2, {Group("methyl", "C", [0, 0, 0, 0]), Group("hydroxyl", "O", [0, 0])}
+    )
+    n = min(2, len(results))
+    sub = results.sample(n)
+    assert isinstance(sub, GroupGraphSet)
+    assert len(sub) == n
+    # Sampled elements must all come from the parent set.
+    assert sub.issubset(results)
+
+
+def test_sample_seed_is_reproducible():
+    """Same seed -> same sample. Sets have no inherent order, but
+    `random.sample(seeded_rng, list(set), k)` is deterministic for a
+    given Python build because list(set) iteration order is fixed
+    once the set is built."""
+    results = exhaustive_generate(
+        2, {Group("methyl", "C", [0, 0, 0, 0]), Group("hydroxyl", "O", [0, 0])}
+    )
+    if len(results) < 2:
+        pytest.skip("need at least 2 elements to test reproducibility")
+    a = results.sample(2, seed=42)
+    b = results.sample(2, seed=42)
+    assert a == b
+
+
+def test_sample_too_many_raises():
+    """Asking for more than len(self) must raise — matches the
+    `random.sample` semantic."""
+    results = exhaustive_generate(
+        2, {Group("methyl", "C", [0, 0, 0, 0])}
+    )
+    with pytest.raises(ValueError):
+        results.sample(len(results) + 5)
+
+
+# ---------------------------------------------------------------------
+# to_csv / to_jsonl — pass-throughs to to_dataframe + serializer.
+# ---------------------------------------------------------------------
+def test_to_csv_round_trip(tmp_path):
+    """CSV must be readable back via pandas with the same columns."""
+    import pandas as pd
+    results = exhaustive_generate(
+        2, {Group("methyl", "C", [0, 0, 0, 0]), Group("hydroxyl", "O", [0, 0])}
+    )
+    out = tmp_path / "results.csv"
+    results.to_csv(str(out))
+    df = pd.read_csv(out)
+    assert "smiles" in df.columns
+    assert "n_nodes" in df.columns
+    assert len(df) == len(results)
+
+
+def test_to_csv_default_sort():
+    """Default sort_by='smiles' makes the file deterministic across
+    runs. Two calls produce the same bytes."""
+    results = exhaustive_generate(
+        2, {Group("methyl", "C", [0, 0, 0, 0]), Group("hydroxyl", "O", [0, 0])}
+    )
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f1:
+        p1 = f1.name
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f2:
+        p2 = f2.name
+    try:
+        results.to_csv(p1)
+        results.to_csv(p2)
+        assert open(p1).read() == open(p2).read()
+    finally:
+        os.unlink(p1)
+        os.unlink(p2)
+
+
+def test_to_jsonl_round_trip(tmp_path):
+    """JSONL must be readable back via pandas with one row per line."""
+    import pandas as pd
+    results = exhaustive_generate(
+        2, {Group("methyl", "C", [0, 0, 0, 0]), Group("hydroxyl", "O", [0, 0])}
+    )
+    out = tmp_path / "results.jsonl"
+    results.to_jsonl(str(out))
+    df = pd.read_json(out, lines=True)
+    assert "smiles" in df.columns
+    assert "n_nodes" in df.columns
+    assert len(df) == len(results)
+
+
+def test_to_csv_with_estimator(tmp_path):
+    """CSV with property columns: round-trip preserves the data."""
+    import pandas as pd
+    results = exhaustive_generate(
+        2, {Group("methyl", "C", [0, 0, 0, 0])}
+    )
+    out = tmp_path / "with_props.csv"
+    results.to_csv(str(out), properties=[_DummyEstimator])
+    df = pd.read_csv(out)
+    assert "dummy.heavy_atoms" in df.columns
+    assert "dummy.label" in df.columns
+
+
+def test_to_csv_returns_path(tmp_path):
+    """Path is returned for chained ops (e.g. logging the destination)."""
+    results = exhaustive_generate(
+        2, {Group("methyl", "C", [0, 0, 0, 0])}
+    )
+    out = tmp_path / "results.csv"
+    returned = results.to_csv(str(out))
+    assert returned == str(out)

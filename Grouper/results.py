@@ -198,7 +198,7 @@ class GroupGraphSet(set):
             **embed_kwargs,
         )
 
-    # ----- convenience filtering ------------------------------------
+    # ----- convenience filtering / sampling -------------------------
 
     def filter(self, predicate: Callable[[Any], bool]) -> "GroupGraphSet":
         """Return a new GroupGraphSet containing only graphs for which
@@ -207,6 +207,72 @@ class GroupGraphSet(set):
         keep the convenience methods.
         """
         return GroupGraphSet(g for g in self if predicate(g))
+
+    def sample(
+        self,
+        n: int,
+        seed: Optional[int] = None,
+    ) -> "GroupGraphSet":
+        """Return a uniformly-random subset of `n` graphs.
+
+        `seed` makes the sample reproducible — useful when you want
+        the same subset across re-runs of a screening notebook. Sets
+        are unordered in Python, so the sample's "starting position"
+        is whatever the hash table dictates; combined with a seeded
+        RNG the result is deterministic for a given Python build.
+
+        Raises ValueError if `n > len(self)` (matching `random.sample`
+        semantics so the failure mode is recognizable).
+        """
+        import random
+
+        rng = random.Random(seed) if seed is not None else random
+        # `random.sample` requires a sequence, not a set. Materialize
+        # via list — fine for the sample sizes (~thousands) people
+        # actually use; if a 10⁷-graph set ever wants this method it
+        # warrants a reservoir-sampling pass instead.
+        return GroupGraphSet(rng.sample(list(self), n))
+
+    # ----- file output ----------------------------------------------
+
+    def to_csv(
+        self,
+        path: str,
+        properties: Optional[Sequence[Union[str, Type]]] = None,
+        sort_by: Optional[str] = "smiles",
+        **df_kwargs,
+    ) -> str:
+        """Write to CSV via `to_dataframe(...).to_csv(...)`.
+
+        Defaults to `sort_by="smiles"` so the on-disk file is
+        deterministic across runs (sets are unordered). Pass
+        `sort_by=None` to skip sorting if order doesn't matter or if
+        you've already sorted upstream.
+
+        Returns the path that was written, so calls can chain into
+        further file operations.
+        """
+        df = self.to_dataframe(properties=properties, sort_by=sort_by, **df_kwargs)
+        df.to_csv(path, index=False)
+        return path
+
+    def to_jsonl(
+        self,
+        path: str,
+        properties: Optional[Sequence[Union[str, Type]]] = None,
+        sort_by: Optional[str] = "smiles",
+        **df_kwargs,
+    ) -> str:
+        """Write to JSON Lines (one JSON object per row) via
+        `to_dataframe(...).to_json(orient='records', lines=True)`.
+
+        JSONL is the de-facto interchange format for ML training
+        pipelines (HuggingFace datasets, JAX/Flax dataloaders) and is
+        a more honest serialization of mixed-type data than CSV.
+        """
+        df = self.to_dataframe(properties=properties, sort_by=sort_by, **df_kwargs)
+        df.to_json(path, orient="records", lines=True)
+        return path
 
     # ----- repr ------------------------------------------------------
 
