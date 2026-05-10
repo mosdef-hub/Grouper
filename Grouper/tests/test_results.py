@@ -1,8 +1,6 @@
 """Tests for GroupGraphSet — the wrapper around exhaustive_generate
 results that adds DataFrame / SMILES-list / SDF helpers."""
 
-import os
-import tempfile
 import warnings
 
 import pytest
@@ -317,23 +315,21 @@ def test_to_csv_round_trip(tmp_path):
     assert len(df) == len(results)
 
 
-def test_to_csv_default_sort():
+def test_to_csv_default_sort(tmp_path):
     """Default sort_by='smiles' makes the file deterministic across
     runs. Two calls produce the same bytes."""
     results = exhaustive_generate(
         2, {Group("methyl", "C", [0, 0, 0, 0]), Group("hydroxyl", "O", [0, 0])}
     )
-    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f1:
-        p1 = f1.name
-    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f2:
-        p2 = f2.name
-    try:
-        results.to_csv(p1)
-        results.to_csv(p2)
-        assert open(p1).read() == open(p2).read()
-    finally:
-        os.unlink(p1)
-        os.unlink(p2)
+    p1 = tmp_path / "a.csv"
+    p2 = tmp_path / "b.csv"
+    results.to_csv(str(p1))
+    results.to_csv(str(p2))
+    # Read bytes through context managers so file handles get released
+    # promptly (and CodeQL stops flagging an asserted open()-no-close).
+    contents_p1 = p1.read_text()
+    contents_p2 = p2.read_text()
+    assert contents_p1 == contents_p2
 
 
 def test_to_jsonl_round_trip(tmp_path):
