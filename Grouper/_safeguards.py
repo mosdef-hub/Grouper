@@ -132,17 +132,30 @@ def check_resource_limits(
     if warn_vcolg_lines is None:
         warn_vcolg_lines = _DEFAULT_WARN_VCOLG_LINES
 
+    # Single shared trailer. The strategies live in the tutorial
+    # because they're a multi-paragraph topic; the messages here
+    # surface the existence of the menu without trying to inline it.
+    strategies_pointer = (
+        "See docs/tutorials/runtime_safeguards.ipynb for strategies — "
+        "multi-processing (num_procs=-1, on by default), random sampling "
+        "(random_generate), constraint pruning, library reduction, "
+        "file-based streaming (vcolg_output_file), and patterns for "
+        "distributed compute."
+    )
+
     if n_nodes > _MAX_KNOWN_N:
         if confirm:
             return
         raise GrouperResourceLimitError(
             f"n_nodes={n_nodes} is intractable for exhaustive enumeration: "
             f"the connected-graph count alone (OEIS A001349) is beyond "
-            f"the reach of a single machine for n>10. The largest "
-            f"safely-supported size is n_nodes={_MAX_KNOWN_N}. "
-            f"For larger n, use random_generate with a small num_graphs, "
-            f"or pass confirm=True if you have a specialized setup "
-            f"(distributed compute, etc.) and accept the consequences."
+            f"the reach of a single machine for n>10, even with all "
+            f"cores in use. The largest safely-supported size is "
+            f"n_nodes={_MAX_KNOWN_N}. "
+            f"For larger n, use random_generate(..., num_graphs=N) to "
+            f"sample, or pass confirm=True if you have a specialized "
+            f"setup (precomputed vcolg output, distributed compute) "
+            f"and accept the consequences. {strategies_pointer}"
         )
 
     estimated = estimate_vcolg_lines(n_nodes, n_colors)
@@ -157,17 +170,21 @@ def check_resource_limits(
             f"n_colors={n_colors}) would process up to "
             f"~{estimated:,} vcolg lines, exceeding the safety "
             f"threshold of {max_vcolg_lines:,}. "
-            f"Estimated wall time: {_format_wall_time(estimated)}. "
-            f"To proceed anyway, pass confirm=True or raise the limit "
-            f"via max_vcolg_lines=<N>. To stay under the limit, "
-            f"reduce n_nodes or shrink the group library."
+            f"Estimated wall time: {_format_wall_time(estimated)} "
+            f"(multi-processing is already on by default; this is "
+            f"the work that overwhelms it). "
+            f"To stay under the limit, reduce n_nodes by 1-2 or shrink "
+            f"the group library. To proceed anyway, pass confirm=True "
+            f"or raise the limit via max_vcolg_lines=<N>. "
+            f"{strategies_pointer}"
         )
 
     if estimated > warn_vcolg_lines:
         warnings.warn(
             f"Large enumeration: ~{estimated:,} vcolg lines "
-            f"(estimated wall time: {_format_wall_time(estimated)}). "
-            f"Pass confirm=True to silence this warning, or "
-            f"max_vcolg_lines=<N> to adjust the threshold.",
+            f"(estimated wall time: {_format_wall_time(estimated)} on "
+            f"multi-core hardware). Pass confirm=True to silence this "
+            f"warning, or max_vcolg_lines=<N> to adjust the threshold. "
+            f"{strategies_pointer}",
             stacklevel=3,
         )
