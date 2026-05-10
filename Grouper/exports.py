@@ -32,10 +32,17 @@ For batch output (a whole `exhaustive_generate` result to one SDF):
 from __future__ import annotations
 
 import warnings
-from typing import Iterable, Optional, Union
+from typing import TYPE_CHECKING, Iterable, Optional, Union
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
+
+if TYPE_CHECKING:
+    # Type-only import: GroupGraph comes from a C++ binding and importing
+    # it at runtime would create a circular dependency through
+    # Grouper.__init__.py. The string-forward-reference in the function
+    # signatures below points here, satisfying static analyzers.
+    from Grouper import GroupGraph  # noqa: F401
 
 
 class EmbedError(Exception):

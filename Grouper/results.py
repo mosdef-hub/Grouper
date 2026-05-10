@@ -186,7 +186,9 @@ class GroupGraphSet(set):
 
             properties_fn = attach
         else:
-            properties_fn = lambda g: {"smiles": g.to_smiles()}
+
+            def properties_fn(g):
+                return {"smiles": g.to_smiles()}
 
         return write_sdf(
             self,

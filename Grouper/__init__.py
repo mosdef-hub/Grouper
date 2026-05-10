@@ -98,9 +98,7 @@ def random_generate(
     )
 
 
-from .fragmentation import (  # noqa: E402  (intentional: must come after the wrapper defs above)
-    fragment,
-)
+from .fragmentation import fragment  # noqa: E402  -- must follow wrappers
 
 
 # Add Pythonic export shortcuts to the C++ GroupGraph class. We do this
