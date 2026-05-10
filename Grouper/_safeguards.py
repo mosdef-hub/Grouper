@@ -35,16 +35,16 @@ class GrouperResourceLimitError(Exception):
 # These are the *un-colored* graphs that geng emits before vcolg
 # multiplies them out by colorings.
 _CONNECTED_GRAPHS_BY_N: dict[int, int] = {
-    1:                  1,
-    2:                  1,
-    3:                  2,
-    4:                  6,
-    5:                 21,
-    6:                112,
-    7:                853,
-    8:             11_117,
-    9:            261_080,
-    10:        11_716_571,
+    1: 1,
+    2: 1,
+    3: 2,
+    4: 6,
+    5: 21,
+    6: 112,
+    7: 853,
+    8: 11_117,
+    9: 261_080,
+    10: 11_716_571,
     # n >= 11 is treated as intractable below — the table stops here
     # because by then geng's output alone exceeds practical machine
     # capacity even before vcolg adds colorings.
@@ -89,7 +89,7 @@ def estimate_vcolg_lines(n_nodes: int, n_colors: int) -> int | None:
     """
     if n_nodes not in _CONNECTED_GRAPHS_BY_N:
         return None
-    return _CONNECTED_GRAPHS_BY_N[n_nodes] * (n_colors ** n_nodes)
+    return _CONNECTED_GRAPHS_BY_N[n_nodes] * (n_colors**n_nodes)
 
 
 def _format_wall_time(estimated_lines: int) -> str:

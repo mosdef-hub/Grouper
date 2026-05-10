@@ -17,8 +17,6 @@ from Grouper import (
     random_generate,
 )
 from Grouper._safeguards import (
-    _CONNECTED_GRAPHS_BY_N,
-    _DEFAULT_MAX_VCOLG_LINES,
     _format_wall_time,
     check_resource_limits,
     estimate_vcolg_lines,
