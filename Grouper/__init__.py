@@ -6,8 +6,8 @@ from Grouper._Grouper import (
     AtomGraph,
     Group,
     GroupGraph,
+    exhaustive_fragment,
 )
-from Grouper._Grouper import exhaustive_fragment as _cpp_exhaustive_fragment
 from Grouper._Grouper import exhaustive_generate as _cpp_exhaustive_generate
 from Grouper._Grouper import random_generate as _cpp_random_generate
 
@@ -32,6 +32,12 @@ from .results import GroupGraphSet
 # from Grouper.results — `.to_dataframe()`, `.to_smiles_list()`,
 # `.to_sdf()`, `.filter()`. Existing patterns (iteration, `len`, `in`)
 # work unchanged because GroupGraphSet IS a set.
+#
+# We deliberately do NOT wrap exhaustive_fragment. It returns a
+# std::vector<GroupGraph> → Python list, not a set: fragment results
+# are ordered by quality and may legitimately contain duplicates
+# (different port assignments producing the same SMILES). Tests
+# elsewhere rely on list semantics.
 def exhaustive_generate(
     n_nodes,
     node_defs,
@@ -90,11 +96,6 @@ def random_generate(
             negative_constraints if negative_constraints is not None else set(),
         )
     )
-
-
-@_wraps(_cpp_exhaustive_fragment)
-def exhaustive_fragment(*args, **kwargs):
-    return GroupGraphSet(_cpp_exhaustive_fragment(*args, **kwargs))
 
 
 from .fragmentation import (  # noqa: E402  (intentional: must come after the wrapper defs above)
@@ -197,28 +198,16 @@ def _gg_visualize(self, figsize=(10, 5), structure_size=(400, 400)):
 
     # Left: chemical structure. RDKit gives us a PIL image; matplotlib
     # imshow happily accepts it.
-    smiles = self.to_smiles()
-    mol = Chem.MolFromSmiles(smiles)
+    mol = Chem.MolFromSmiles(self.to_smiles())
     if mol is not None:
         img = Draw.MolToImage(mol, size=structure_size)
         ax_struct.imshow(img)
-        ax_struct.set_title(f"Molecule  ({smiles})")
-    else:
-        ax_struct.text(
-            0.5,
-            0.5,
-            f"could not draw\n{smiles!r}",
-            ha="center",
-            va="center",
-            transform=ax_struct.transAxes,
-        )
-        ax_struct.set_title("Molecule (parse failed)")
     ax_struct.axis("off")
+    ax_struct.set_title("Molecule")
 
-    # Right: port-graph. visualize() now accepts an `ax` so it
-    # composes with our subplot.
+    # Right: port graph. visualize() takes its own ax kwarg.
     visualize(self, ax=ax_graph)
-    ax_graph.set_title("Port graph")
+    ax_graph.set_title("GroupGraph (ports)")
 
     fig.tight_layout()
     return fig
