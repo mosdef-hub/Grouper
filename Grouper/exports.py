@@ -56,9 +56,7 @@ def _smiles_of(target: Union[str, "GroupGraph"]) -> str:
         return target
     if hasattr(target, "to_smiles") and callable(target.to_smiles):
         return target.to_smiles()
-    raise TypeError(
-        f"expected SMILES str or GroupGraph; got {type(target).__name__}"
-    )
+    raise TypeError(f"expected SMILES str or GroupGraph; got {type(target).__name__}")
 
 
 def _mol_with_explicit_h(smiles: str) -> Chem.Mol:
@@ -125,8 +123,7 @@ def to_3d_mol(
         pass
     else:
         raise ValueError(
-            f"unknown force_field {force_field!r}; "
-            f"choose 'mmff94', 'uff', or 'none'"
+            f"unknown force_field {force_field!r}; choose 'mmff94', 'uff', or 'none'"
         )
 
     return mol
@@ -187,6 +184,7 @@ def to_sdf(
         return None
 
     import io
+
     buf = io.StringIO()
     writer = Chem.SDWriter(buf)
     writer.write(mol)

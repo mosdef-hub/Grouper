@@ -148,6 +148,7 @@ def _gg_to_inchi(self):
     """Return the IUPAC InChI string (cross-tool deterministic
     identifier)."""
     from Grouper.exports import to_inchi
+
     return to_inchi(self)
 
 
@@ -155,6 +156,7 @@ def _gg_to_inchi_key(self):
     """Return the 27-character InChIKey — primary-key form used by
     most chemistry databases (PubChem, ChEMBL, NIST)."""
     from Grouper.exports import to_inchi_key
+
     return to_inchi_key(self)
 
 
@@ -162,6 +164,7 @@ def _gg_to_smarts(self):
     """Return the SMARTS pattern for this molecule. Useful as a query
     pattern in substructure searches downstream."""
     from Grouper.exports import to_smarts
+
     return to_smarts(self)
 
 
@@ -187,6 +190,7 @@ def _gg_visualize(self, figsize=(10, 5), structure_size=(400, 400)):
     import matplotlib.pyplot as plt
     from rdkit import Chem
     from rdkit.Chem import Draw
+
     from Grouper.visualization.visualize_graph import visualize
 
     fig, (ax_struct, ax_graph) = plt.subplots(1, 2, figsize=figsize)
@@ -200,8 +204,14 @@ def _gg_visualize(self, figsize=(10, 5), structure_size=(400, 400)):
         ax_struct.imshow(img)
         ax_struct.set_title(f"Molecule  ({smiles})")
     else:
-        ax_struct.text(0.5, 0.5, f"could not draw\n{smiles!r}",
-                       ha="center", va="center", transform=ax_struct.transAxes)
+        ax_struct.text(
+            0.5,
+            0.5,
+            f"could not draw\n{smiles!r}",
+            ha="center",
+            va="center",
+            transform=ax_struct.transAxes,
+        )
         ax_struct.set_title("Molecule (parse failed)")
     ax_struct.axis("off")
 

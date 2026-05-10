@@ -21,8 +21,7 @@ membership tests, comprehensions) keeps working unchanged.
 from __future__ import annotations
 
 import warnings
-from typing import Any, Callable, Iterable, List, Optional, Sequence, Type, Union
-
+from typing import Any, Callable, List, Optional, Sequence, Type, Union
 
 # ---------------------------------------------------------------------
 # Property-estimator registry (lazy import so this module loads even if
