@@ -165,15 +165,53 @@ def _gg_to_smarts(self):
     return to_smarts(self)
 
 
-def _gg_visualize(self, **kw):
-    """Render the port-graph (groups as colored nodes, port
-    connections as edges) via matplotlib. Distinct from a 2D
-    chemical-structure drawing — for that, use `to_smiles()` and
-    feed it to RDKit's Draw module.
+def _gg_visualize(self, figsize=(10, 5), structure_size=(400, 400)):
+    """Render a side-by-side view of the molecule for this GroupGraph.
 
-    Wraps `Grouper.visualization.visualize_graph.visualize`."""
+    Two panels:
+
+      Left  — 2D chemical structure (atoms and bonds), via RDKit's
+              `Draw.MolToImage` on the SMILES of this graph.
+      Right — port-graph (groups as colored nodes, ports as edges),
+              via `Grouper.visualization.visualize_graph.visualize`.
+
+    The two views answer different questions: the left tells you
+    *what molecule* this is in chemistry terms; the right tells you
+    *how Grouper sees it* — which groups, which ports, which edges.
+    Together they're the easiest way to sanity-check a generated
+    structure in a notebook.
+
+    Returns the matplotlib Figure so callers can `plt.show()`,
+    `fig.savefig(...)`, or embed it.
+    """
+    import matplotlib.pyplot as plt
+    from rdkit import Chem
+    from rdkit.Chem import Draw
     from Grouper.visualization.visualize_graph import visualize
-    return visualize(self, **kw)
+
+    fig, (ax_struct, ax_graph) = plt.subplots(1, 2, figsize=figsize)
+
+    # Left: chemical structure. RDKit gives us a PIL image; matplotlib
+    # imshow happily accepts it.
+    smiles = self.to_smiles()
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is not None:
+        img = Draw.MolToImage(mol, size=structure_size)
+        ax_struct.imshow(img)
+        ax_struct.set_title(f"Molecule  ({smiles})")
+    else:
+        ax_struct.text(0.5, 0.5, f"could not draw\n{smiles!r}",
+                       ha="center", va="center", transform=ax_struct.transAxes)
+        ax_struct.set_title("Molecule (parse failed)")
+    ax_struct.axis("off")
+
+    # Right: port-graph. visualize() now accepts an `ax` so it
+    # composes with our subplot.
+    visualize(self, ax=ax_graph)
+    ax_graph.set_title("Port graph")
+
+    fig.tight_layout()
+    return fig
 
 
 GroupGraph.to_3d = _gg_to_3d
