@@ -6,8 +6,8 @@ from Grouper._Grouper import (
     AtomGraph,
     Group,
     GroupGraph,
-    exhaustive_fragment,
 )
+from Grouper._Grouper import exhaustive_fragment as _cpp_exhaustive_fragment
 from Grouper._Grouper import exhaustive_generate as _cpp_exhaustive_generate
 from Grouper._Grouper import random_generate as _cpp_random_generate
 
@@ -16,6 +16,7 @@ from ._safeguards import (
     check_resource_limits,
     estimate_vcolg_lines,
 )
+from .results import GroupGraphSet
 
 
 # Pre-flight wrappers around the two C++ entry points whose runtime
@@ -25,6 +26,12 @@ from ._safeguards import (
 # These wrappers raise `GrouperResourceLimitError` with a clear
 # message before any heavy work starts. Pass `confirm=True` (or
 # raise `max_vcolg_lines`) to override.
+#
+# Each wrapper also coerces the C++ Python-set return value to a
+# `GroupGraphSet` (subclass of set), exposing the convenience methods
+# from Grouper.results — `.to_dataframe()`, `.to_smiles_list()`,
+# `.to_sdf()`, `.filter()`. Existing patterns (iteration, `len`, `in`)
+# work unchanged because GroupGraphSet IS a set.
 def exhaustive_generate(
     n_nodes,
     node_defs,
@@ -43,14 +50,16 @@ def exhaustive_generate(
         confirm=confirm,
         max_vcolg_lines=max_vcolg_lines,
     )
-    return _cpp_exhaustive_generate(
-        n_nodes,
-        node_defs,
-        num_procs,
-        vcolg_output_file,
-        positive_constraints if positive_constraints is not None else {},
-        negative_constraints if negative_constraints is not None else set(),
-        config_path,
+    return GroupGraphSet(
+        _cpp_exhaustive_generate(
+            n_nodes,
+            node_defs,
+            num_procs,
+            vcolg_output_file,
+            positive_constraints if positive_constraints is not None else {},
+            negative_constraints if negative_constraints is not None else set(),
+            config_path,
+        )
     )
 
 
@@ -71,14 +80,21 @@ def random_generate(
         confirm=confirm,
         max_vcolg_lines=max_vcolg_lines,
     )
-    return _cpp_random_generate(
-        n_nodes,
-        node_defs,
-        num_graphs,
-        num_procs,
-        positive_constraints if positive_constraints is not None else {},
-        negative_constraints if negative_constraints is not None else set(),
+    return GroupGraphSet(
+        _cpp_random_generate(
+            n_nodes,
+            node_defs,
+            num_graphs,
+            num_procs,
+            positive_constraints if positive_constraints is not None else {},
+            negative_constraints if negative_constraints is not None else set(),
+        )
     )
+
+
+@_wraps(_cpp_exhaustive_fragment)
+def exhaustive_fragment(*args, **kwargs):
+    return GroupGraphSet(_cpp_exhaustive_fragment(*args, **kwargs))
 
 
 from .fragmentation import (  # noqa: E402  (intentional: must come after the wrapper defs above)
