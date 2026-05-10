@@ -84,3 +84,52 @@ def random_generate(
 from .fragmentation import (  # noqa: E402  (intentional: must come after the wrapper defs above)
     fragment,
 )
+
+
+# Add Pythonic export shortcuts to the C++ GroupGraph class. We do this
+# via attribute assignment rather than C++ binding changes so adding
+# new format methods doesn't require a rebuild. Each shortcut is a
+# thin wrapper around a function in Grouper.exports.
+def _gg_to_3d(self, **kw):
+    """Generate 3D coordinates via ETKDG + force-field minimization.
+    Returns an RDKit Mol with explicit hydrogens. See
+    Grouper.exports.to_3d_mol for parameters."""
+    from Grouper.exports import to_3d_mol
+
+    return to_3d_mol(self, **kw)
+
+
+def _gg_to_sdf(self, path=None, **kw):
+    """Render as SDF. Pass `path` to write to disk; otherwise returns
+    the SDF as a string. See Grouper.exports.to_sdf for parameters."""
+    from Grouper.exports import to_sdf
+
+    return to_sdf(self, path, **kw)
+
+
+def _gg_to_mol(self, path=None, **kw):
+    """Render as a V2000 MOL block (single-molecule)."""
+    from Grouper.exports import to_mol
+
+    return to_mol(self, path, **kw)
+
+
+def _gg_to_xyz(self, path=None, **kw):
+    """Render as XYZ (always 3D)."""
+    from Grouper.exports import to_xyz
+
+    return to_xyz(self, path, **kw)
+
+
+def _gg_to_pdb(self, path=None, **kw):
+    """Render as PDB (always 3D)."""
+    from Grouper.exports import to_pdb
+
+    return to_pdb(self, path, **kw)
+
+
+GroupGraph.to_3d = _gg_to_3d
+GroupGraph.to_sdf = _gg_to_sdf
+GroupGraph.to_mol = _gg_to_mol
+GroupGraph.to_xyz = _gg_to_xyz
+GroupGraph.to_pdb = _gg_to_pdb
