@@ -358,5 +358,3 @@ def to_smarts(target: Union[str, "GroupGraph"]) -> str:
     if mol is None:
         raise EmbedError(f"could not parse SMILES: {smiles!r}")
     return Chem.MolToSmarts(mol)
-
-
