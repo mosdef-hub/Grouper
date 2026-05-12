@@ -16,7 +16,7 @@ from ._safeguards import (
     check_resource_limits,
     estimate_vcolg_lines,
 )
-from .results import GroupGraphSet
+from .group_graph_set import GroupGraphSet
 
 
 # Pre-flight wrappers around the two C++ entry points whose runtime
@@ -29,7 +29,7 @@ from .results import GroupGraphSet
 #
 # Each wrapper also coerces the C++ Python-set return value to a
 # `GroupGraphSet` (subclass of set), exposing the convenience methods
-# from Grouper.results — `.to_dataframe()`, `.to_smiles_list()`,
+# from Grouper.group_graph_set — `.to_dataframe()`, `.to_smiles_list()`,
 # `.to_sdf()`, `.filter()`. Existing patterns (iteration, `len`, `in`)
 # work unchanged because GroupGraphSet IS a set.
 #

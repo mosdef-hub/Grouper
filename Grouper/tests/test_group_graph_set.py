@@ -6,7 +6,7 @@ import warnings
 import pytest
 
 from Grouper import Group, GroupGraph, exhaustive_generate, random_generate
-from Grouper.results import GroupGraphSet
+from Grouper.group_graph_set import GroupGraphSet
 
 
 # ---------------------------------------------------------------------

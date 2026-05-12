@@ -159,42 +159,40 @@ class GroupGraphSet(set):
     ) -> int:
         """Write every graph to a multi-molecule SDF.
 
-        Calls `Grouper.exports.write_sdf` under the hood. If
-        `properties` is given, each molecule's SDF entry carries the
-        predicted property values as `> <KEY>` blocks — feeds straight
-        into KNIME, RDKit's `PandasTools.LoadSDF`, or any tool that
-        reads SD properties.
+        Delegates to `Grouper.exports.to_sdf` with the set as the
+        iterable target. If `properties` is given, each molecule's SDF
+        entry carries the predicted property values as `> <KEY>`
+        blocks — feeds straight into KNIME, RDKit's
+        `PandasTools.LoadSDF`, or any tool that reads SD properties.
 
         Returns the number of molecules successfully written.
         """
-        from Grouper.exports import write_sdf
+        from Grouper.exports import to_sdf
 
         if properties:
             estimators = [_resolve_estimator(p) for p in properties]
 
             def attach(g):
-                out = {"smiles": g.to_smiles()}
+                out = {}
                 for est in estimators:
                     prefix = est.method_name + "."
                     try:
                         est_obj = est.from_group_graph(g)
                     except Exception:
-                        continue  # write_sdf still emits the structure
+                        continue  # to_sdf still emits the structure
                     for k in est_obj.keys():
                         out[prefix + k] = est_obj[k]
                 return out
 
-            properties_fn = attach
+            props_arg = attach
         else:
+            props_arg = None
 
-            def properties_fn(g):
-                return {"smiles": g.to_smiles()}
-
-        return write_sdf(
+        return to_sdf(
             self,
-            path,
+            path=path,
             embed_3d=embed_3d,
-            properties_fn=properties_fn,
+            properties=props_arg,
             skip_failures=skip_failures,
             **embed_kwargs,
         )

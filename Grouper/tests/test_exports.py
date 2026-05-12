@@ -19,7 +19,6 @@ from Grouper.exports import (
     to_pdb,
     to_sdf,
     to_xyz,
-    write_sdf,
 )
 
 
@@ -120,11 +119,12 @@ def test_pdb_contains_atom_records():
 # Disk output paths
 # ---------------------------------------------------------------------
 def test_to_sdf_writes_file(tmp_path):
-    """Path argument writes to disk and returns None; file content
-    matches the in-memory string output."""
+    """Path argument writes to disk and returns the count of molecules
+    written (1 for a single target); file content matches the
+    in-memory string output."""
     out = tmp_path / "out.sdf"
     result = to_sdf("CCO", path=str(out))
-    assert result is None
+    assert result == 1
     text_on_disk = out.read_text()
     text_in_memory = to_sdf("CCO")
     assert text_on_disk == text_in_memory
@@ -152,11 +152,11 @@ def test_sdf_property_block():
 # ---------------------------------------------------------------------
 # Multi-molecule SDF
 # ---------------------------------------------------------------------
-def test_write_sdf_multi_molecule(tmp_path):
-    """write_sdf must concatenate molecules with $$$$ separators that
-    RDKit's SDMolSupplier can re-iterate."""
+def test_to_sdf_multi_molecule(tmp_path):
+    """to_sdf called with an iterable must concatenate molecules with
+    $$$$ separators that RDKit's SDMolSupplier can re-iterate."""
     out = tmp_path / "multi.sdf"
-    n = write_sdf(["CCO", "CC(=O)C", "c1ccccc1"], path=str(out))
+    n = to_sdf(["CCO", "CC(=O)C", "c1ccccc1"], path=str(out))
     assert n == 3
 
     supplier = Chem.SDMolSupplier(str(out), removeHs=False)
@@ -167,15 +167,15 @@ def test_write_sdf_multi_molecule(tmp_path):
     assert canons_in == canons_out
 
 
-def test_write_sdf_with_properties_fn(tmp_path):
-    """A properties_fn callback should attach per-molecule property
+def test_to_sdf_iterable_with_properties_callable(tmp_path):
+    """A callable `properties` should attach per-molecule property
     blocks. Verify the round-tripped molecule carries them."""
     out = tmp_path / "with_props.sdf"
 
     def props_for(smi):
         return {"length": len(smi), "tag": "test"}
 
-    write_sdf(["CCO", "CCCCC"], path=str(out), properties_fn=props_for)
+    to_sdf(["CCO", "CCCCC"], path=str(out), properties=props_for)
 
     supplier = Chem.SDMolSupplier(str(out))
     mols = [m for m in supplier if m is not None]
@@ -184,17 +184,36 @@ def test_write_sdf_with_properties_fn(tmp_path):
     assert mols[1].GetProp("length") == "5"
 
 
-def test_write_sdf_skip_failures(tmp_path):
+def test_to_sdf_iterable_with_properties_dict(tmp_path):
+    """A dict `properties` should be applied to every molecule in
+    the iterable."""
+    out = tmp_path / "with_props_dict.sdf"
+    to_sdf(["CCO", "CCCCC"], path=str(out), properties={"tag": "shared"})
+
+    supplier = Chem.SDMolSupplier(str(out))
+    mols = [m for m in supplier if m is not None]
+    assert mols[0].GetProp("tag") == "shared"
+    assert mols[1].GetProp("tag") == "shared"
+
+
+def test_to_sdf_skip_failures(tmp_path):
     """skip_failures=True should warn and continue past unembed-able
     molecules. Use an obviously bad SMILES alongside a good one."""
     out = tmp_path / "skipped.sdf"
     with pytest.warns(UserWarning, match="skipping"):
-        n = write_sdf(
+        n = to_sdf(
             ["CCO", "not a smiles", "CC"],
             path=str(out),
             skip_failures=True,
         )
     assert n == 2
+
+
+def test_to_sdf_rejects_non_dict_non_callable_properties():
+    """properties must be None, a dict, or a callable. Anything else
+    is a TypeError, not a silent miscoercion."""
+    with pytest.raises(TypeError, match="properties must be"):
+        to_sdf("CCO", properties=["not", "valid"])
 
 
 # ---------------------------------------------------------------------

@@ -23,16 +23,18 @@ Methods on GroupGraph (added via monkey-patch in Grouper/__init__.py):
     gG.to_xyz(path=None)                     -> str | None  (always 3D)
     gG.to_pdb(path=None)                     -> str | None  (always 3D)
 
-For batch output (a whole `exhaustive_generate` result to one SDF):
+The same `to_sdf` function also handles a whole library — pass any
+iterable of graphs/SMILES instead of a single target:
 
-    from Grouper.exports import write_sdf
-    write_sdf(list_of_graphs, "out.sdf")
+    from Grouper.exports import to_sdf
+    to_sdf(results, path="library.sdf")            # multi-mol SDF
+    to_sdf(["CCO", "CC"], path="out.sdf")          # raw SMILES list
 """
 
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Iterable, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -45,7 +47,17 @@ if TYPE_CHECKING:
     from Grouper import GroupGraph  # noqa: F401
 
 
-class EmbedError(Exception):
+class GrouperError(Exception):
+    """Base class for errors raised by Grouper. Catch this to
+    distinguish failures originating in Grouper from those bubbling
+    up from dependencies (RDKit, NumPy, etc.).
+
+    Future Grouper-raised exceptions should inherit from this so a
+    single ``except GrouperError`` handler covers them all.
+    """
+
+
+class EmbedError(GrouperError):
     """Raised when 3D coordinate generation fails for a molecule.
 
     Common causes: highly strained ring systems where ETKDG can't find
@@ -148,55 +160,105 @@ def _write_or_return(text: str, path: Optional[str]) -> Optional[str]:
 
 
 def to_sdf(
-    target: Union[str, "GroupGraph"],
+    target,
     path: Optional[str] = None,
     embed_3d: bool = True,
     name: Optional[str] = None,
-    properties: Optional[dict] = None,
+    properties=None,
+    skip_failures: bool = False,
     **embed_kwargs,
-) -> Optional[str]:
-    """Render the molecule as an SDF block.
+):
+    """Render one molecule or a library as SDF — single function for
+    both cases, since SDF natively supports one-or-many molecules per
+    file.
 
-    `path=None` returns the SDF string; passing a path writes to disk
-    and returns None.
+    `target` may be:
+      - a single `GroupGraph` or SMILES string, or
+      - any iterable of those (e.g. a `GroupGraphSet`, a list of
+        SMILES, a generator).
 
-    `embed_3d=True` (default) generates 3D coordinates via ETKDG +
-    MMFF94. Set False for a 2D-only SDF (faster, smaller output —
-    appropriate when downstream tools will re-embed themselves).
+    `path`:
+      - `None` (default) — return the SDF text as a string.
+      - a filesystem path — write to disk; return the number of
+        molecules successfully written.
 
-    `properties` is a dict of arbitrary key→value pairs that get
-    written into the SDF as `> <KEY>` blocks — useful for piping
-    Joback predictions or ML scores alongside the structure.
+    `properties`:
+      - `None` — no extra property tags.
+      - `dict` — apply the same key→value pairs to every molecule.
+      - `callable(target) -> dict` — invoked per molecule; useful for
+        attaching per-molecule predictions, e.g.::
+
+            to_sdf(
+                results, "library.sdf",
+                properties=lambda g: dict(JobackEstimate.from_group_graph(g)),
+            )
+
+    `name` is set as the SDF `_Name` field for the single-target case.
+    For iterables, names default to ``mol_<index>`` and `name` is
+    ignored.
+
+    `skip_failures=True` continues past molecules that fail to embed
+    (e.g., strained rings ETKDG can't solve) or parse, emitting a
+    warning for each. Default is to stop and re-raise.
+
+    `embed_3d=True` (default) runs ETKDG + MMFF94 for 3D coords. Set
+    False for a 2D-only SDF.
     """
-    smiles = _smiles_of(target)
-    if embed_3d:
-        mol = to_3d_mol(smiles, **embed_kwargs)
+    single = isinstance(target, str) or hasattr(target, "to_smiles")
+    targets = [target] if single else target
+
+    if properties is None:
+        props_for = None
+    elif callable(properties):
+        props_for = properties
+    elif isinstance(properties, dict):
+        _frozen = dict(properties)
+
+        def props_for(_t):
+            return _frozen
     else:
-        mol = Chem.MolFromSmiles(smiles)
-        if mol is None:
-            raise EmbedError(f"could not parse SMILES: {smiles!r}")
-
-    if name is not None:
-        mol.SetProp("_Name", name)
-    if properties:
-        for k, v in properties.items():
-            mol.SetProp(str(k), str(v))
-
-    # Route through SDWriter so the `> <KEY>` property tags get emitted.
-    # MolToMolBlock drops them; writing to a single-mol SDF and stripping
-    # gives us a string when no path is requested.
-    if path is not None:
-        with Chem.SDWriter(path) as writer:
-            writer.write(mol)
-        return None
+        raise TypeError(
+            "properties must be None, a dict, or a callable; "
+            f"got {type(properties).__name__}"
+        )
 
     import io
 
-    buf = io.StringIO()
-    writer = Chem.SDWriter(buf)
-    writer.write(mol)
-    writer.close()
-    return buf.getvalue()
+    buf = io.StringIO() if path is None else None
+    writer = Chem.SDWriter(buf if path is None else path)
+    n_written = 0
+    try:
+        for i, t in enumerate(targets):
+            smiles = _smiles_of(t)
+            try:
+                if embed_3d:
+                    mol = to_3d_mol(smiles, **embed_kwargs)
+                else:
+                    mol = Chem.MolFromSmiles(smiles)
+                    if mol is None:
+                        raise EmbedError(f"could not parse SMILES: {smiles!r}")
+            except EmbedError as e:
+                if skip_failures:
+                    warnings.warn(f"skipping #{i} ({smiles!r}): {e}")
+                    continue
+                raise
+
+            if single and name is not None:
+                mol.SetProp("_Name", name)
+            elif not single:
+                mol.SetProp("_Name", f"mol_{i}")
+                mol.SetProp("smiles", smiles)
+            if props_for is not None:
+                for k, v in props_for(t).items():
+                    mol.SetProp(str(k), str(v))
+            writer.write(mol)
+            n_written += 1
+    finally:
+        writer.close()
+
+    if path is None:
+        return buf.getvalue()
+    return n_written
 
 
 def to_mol(
@@ -206,7 +268,7 @@ def to_mol(
     **embed_kwargs,
 ) -> Optional[str]:
     """Render the molecule as a V2000 MOL block (single-molecule). For
-    multi-molecule output use SDF (`to_sdf` or `write_sdf`)."""
+    multi-molecule output use `to_sdf` with an iterable target."""
     smiles = _smiles_of(target)
     if embed_3d:
         mol = to_3d_mol(smiles, **embed_kwargs)
@@ -280,9 +342,17 @@ def to_inchi_key(target: Union[str, "GroupGraph"]) -> str:
 
 
 def to_smarts(target: Union[str, "GroupGraph"]) -> str:
-    """Return the SMARTS pattern for the molecule. Useful when a
-    generated structure becomes a query pattern for substructure
-    searching elsewhere in a pipeline."""
+    """Return the SMARTS pattern for the molecule, as produced by
+    RDKit's ``Chem.MolToSmarts``. Useful when a generated structure
+    becomes a query pattern for substructure searching elsewhere in
+    a pipeline.
+
+    Note: a molecule has infinitely many valid SMARTS renderings;
+    this returns RDKit's canonical form, which may differ from the
+    output of other toolkits (OpenEye, Daylight, etc.). For exact
+    string equality across tools, normalize through a shared
+    canonicalizer.
+    """
     smiles = _smiles_of(target)
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
@@ -290,53 +360,3 @@ def to_smarts(target: Union[str, "GroupGraph"]) -> str:
     return Chem.MolToSmarts(mol)
 
 
-def write_sdf(
-    targets: Iterable[Union[str, "GroupGraph"]],
-    path: str,
-    embed_3d: bool = True,
-    properties_fn: Optional[callable] = None,
-    skip_failures: bool = False,
-    **embed_kwargs,
-) -> int:
-    """Write a sequence of GroupGraphs (or SMILES) to a multi-molecule
-    SDF file. Returns the number of molecules successfully written.
-
-    `properties_fn(target)` is an optional callable that returns a
-    dict of properties to attach to each molecule in the SDF — useful
-    for embedding predicted properties alongside the structures::
-
-        from Grouper.properties import JobackEstimate
-        write_sdf(
-            results, "screened.sdf",
-            properties_fn=lambda g: dict(JobackEstimate.from_group_graph(g)),
-        )
-
-    `skip_failures=True` keeps going past molecules that fail to embed
-    (e.g., strained rings ETKDG can't solve), logging a warning for
-    each. Default is to stop and re-raise.
-    """
-    n_written = 0
-    with Chem.SDWriter(path) as writer:
-        for i, target in enumerate(targets):
-            smiles = _smiles_of(target)
-            try:
-                if embed_3d:
-                    mol = to_3d_mol(smiles, **embed_kwargs)
-                else:
-                    mol = Chem.MolFromSmiles(smiles)
-                    if mol is None:
-                        raise EmbedError(f"could not parse SMILES: {smiles!r}")
-            except EmbedError as e:
-                if skip_failures:
-                    warnings.warn(f"skipping #{i} ({smiles!r}): {e}")
-                    continue
-                raise
-
-            mol.SetProp("_Name", f"mol_{i}")
-            mol.SetProp("smiles", smiles)
-            if properties_fn is not None:
-                for k, v in properties_fn(target).items():
-                    mol.SetProp(str(k), str(v))
-            writer.write(mol)
-            n_written += 1
-    return n_written
