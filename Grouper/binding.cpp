@@ -316,6 +316,33 @@ Two graphs return equal lists iff they are isomorphic with group ntype, port hub
     },
     R"doc(Exhaustively generate all possible GroupGraphs with a given number of nodes and a set of allowed groups.
 
+    Parameters
+    ----------
+    n_nodes : int
+        Number of group nodes per generated graph.
+    node_defs : set[Group]
+        The palette of groups the enumeration is allowed to use.
+    num_procs : int, default -1
+        OpenMP worker count for the colored-graph processing stage.
+        -1 binds to all available cores.
+    vcolg_output_file : str, default ""
+        Path to a pre-computed vcolg ``-T`` output file. When empty
+        (the default), the call pipes ``geng -c n | vcolg -T -m|node_defs|``
+        internally. Set this to feed in your own filtered or
+        externally-generated colored-graph list (e.g. when sweeping
+        a custom subset of colorings, or when reusing a large vcolg
+        run across multiple invocations).
+    positive_constraints : dict[str, int], default {}
+        Map from group ``type`` to a minimum required count. Graphs
+        that don't meet every floor are dropped.
+    negative_constraints : set[str], default set()
+        SMILES substrings that disqualify a generated graph.
+    config_path : str, default ""
+        Optional path to a ``key=value`` config file with PostgreSQL
+        connection settings (``table_name``, ``dbname``, ``user``,
+        ``password``, ``hostaddr``, ``port``). When set, generated
+        graphs are also persisted to the named table.
+
     .. code-block:: python
 
         from Grouper import Group, exhaustive_generate
