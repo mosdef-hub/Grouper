@@ -1,4 +1,5 @@
 from Grouper import Group, GroupGraph, exhaustive_fragment
+from Grouper.libraries import Joback
 from Grouper.tests.base_test import BaseTest
 
 # from pysmiles import write_smiles
@@ -190,3 +191,32 @@ class TestGroupGraph(BaseTest):
         out = exhaustive_fragment("CCOCO", node_defs)
 
         assert truth in out
+
+    def test_smarts_chemistry_constraints(self):
+        """SMARTS group definitions should honor ring/aromaticity/hybridization.
+
+        Isobutane (CC(C)C) is an acyclic, aliphatic molecule, so Joback
+        ring groups (`[CX4H;R]` etc.) and aromatic groups (`[c...]`) must
+        not appear in any returned fragmentation. The only chemically
+        valid Joback decomposition is 3 × -CH3 + 1 × >CH-.
+        """
+        groups = list(Joback().get_groups())
+        out = exhaustive_fragment("CC(C)C", set(groups))
+
+        ring_or_aromatic = lambda t: t.startswith("ring") or t.startswith("aromatic")
+        for gg in out:
+            for node in gg.nodes.values():
+                assert not ring_or_aromatic(node.type), (
+                    f"Fragmentation of acyclic CC(C)C used ring/aromatic group "
+                    f"{node.type!r}: {[n.type for n in gg.nodes.values()]}"
+                )
+
+        # And the canonical decomposition must be present.
+        truth_types = sorted(["-CH3", "-CH3", "-CH3", ">CH-"])
+        observed = [
+            sorted(n.type for n in gg.nodes.values()) for gg in out
+        ]
+        assert truth_types in observed, (
+            f"Expected Joback decomposition {truth_types} not found in any of "
+            f"{len(out)} fragmentations."
+        )
