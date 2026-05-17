@@ -2,41 +2,17 @@
 from Grouper import Group, GroupGraph, exhaustive_generate
 from Grouper.tests.base_test import BaseTest
 from Grouper.counting import NodeColoredGraph
+from Grouper.utils import parse_vcolg_line
 import numpy as np
 import sympy
 from sympy.combinatorics.perm_groups import PermutationGroup
 import os
-from typing import List, Tuple, Set
 import networkx as nx
 import igraph
 import itertools
 from tqdm import tqdm
 
 class TestCounting(BaseTest):
-    @staticmethod
-    def parse_vcolg_txt(line: str, node_defs: Set[int]) -> Tuple[int, List[int], List[Tuple[int, int]]]:
-        split_pos = line.find("  ")
-        if split_pos == -1:
-            raise ValueError("Invalid nauty output line...")
-
-        node_description_str = line[:split_pos]
-        edge_description_str = line[split_pos + 2:]
-
-        node_description = node_description_str.split()
-        edge_description = edge_description_str.split()
-
-        edge_list = []
-        for i in range(0, len(edge_description), 2):
-            edge_list.append((int(edge_description[i]), int(edge_description[i + 1])))
-
-        n_vertices = int(node_description[0])
-        colors = [int(x) for x in node_description[2:]]
-
-        max_color = max(colors, default=0)
-        if len(node_defs) < max_color + 1:
-            raise ValueError("Number of nodes in node_defs does not match the number of nodes in the nauty_output_file...")
-
-        return n_vertices, colors, edge_list
 
     def test_graph_init(self):
         pass
@@ -178,9 +154,7 @@ class TestCounting(BaseTest):
             lines = f.readlines()
             for line in lines:
                 unfiltered_edge_inventory = {}
-                n_vertices, colors, edge_list = self.parse_vcolg_txt(
-                    line, set(range(len(node_types)))
-                )
+                n_vertices, colors, edge_list = parse_vcolg_line(line)
                 gG = GroupGraph()
                 for i in range(n_vertices):
                     gG.add_node(
@@ -268,7 +242,7 @@ class TestCounting(BaseTest):
                 lines = f.readlines()
                 for line in tqdm(lines, desc="Generating patterns", total=len(lines)):
                     unfiltered_edge_inventory = {} # (src,dst) -> list of all possible port pairings
-                    n_vertices, colors, edge_list = self.parse_vcolg_txt(line, set(range(len(node_types))))
+                    n_vertices, colors, edge_list = parse_vcolg_line(line)
                     gG = GroupGraph()
                     # add nodes
                     for i in range(n_vertices):

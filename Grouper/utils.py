@@ -524,3 +524,80 @@ def data_to_gg_edge(data, max_ports):
         dst_edge = int(data.edge_index[1][i].detach().numpy())
         edges.append((src_edge, src_port, dst_edge, dst_port))
     return edges
+
+
+def parse_vcolg_line(line: str) -> Tuple[int, List[int], List[Tuple[int, int]]]:
+    """Parse a single line of vcolg's terse-format (``-T``) output.
+
+    vcolg writes one connected colored graph per line as
+
+        n_vertices n_edges c_0 c_1 ... c_{n-1}  v0 w0 v1 w1 ... vE wE
+
+    with the colors and the edge list separated by two spaces. There's no
+    port information — only which two nodes are bonded — so the caller is
+    responsible for resolving port assignments downstream if they want a
+    fully-formed `GroupGraph`.
+
+    Parameters
+    ----------
+    line : str
+        A single line of vcolg output produced with ``-T`` and ``-mK``.
+
+    Returns
+    -------
+    (n_vertices, colors, edges) : Tuple[int, List[int], List[Tuple[int, int]]]
+        ``n_vertices`` is the number of nodes; ``colors[i]`` is the color
+        (= group index, 0-based) of node ``i``; ``edges`` is the list of
+        ``(src_node, dst_node)`` pairs. No port information is included.
+
+    Raises
+    ------
+    ValueError
+        If the line doesn't match vcolg's expected format (missing the
+        two-space header/edge separator, or the edge list has an odd
+        number of integers).
+
+    Examples
+    --------
+    .. code-block:: python
+
+        from Grouper.utils import parse_vcolg_line
+
+        # A 3-node 2-edge path with all three nodes the same color:
+        n, colors, edges = parse_vcolg_line("3 2 0 0 0   0 1 1 2")
+        # n == 3
+        # colors == [0, 0, 0]
+        # edges == [(0, 1), (1, 2)]
+
+    Notes
+    -----
+    The parser is intentionally minimal: it does not validate that the
+    colors fit within any specific palette size, nor that the edge
+    endpoints reference valid node indices. Downstream code can layer
+    those checks on top depending on what it's doing.
+    """
+    split_pos = line.find("  ")
+    if split_pos == -1:
+        raise ValueError(
+            f"Invalid vcolg line: missing the double-space header/edge "
+            f"separator. Got: {line!r}"
+        )
+
+    header_part, edges_part = line[:split_pos], line[split_pos + 2 :]
+
+    header_tokens = header_part.split()
+    edge_tokens = edges_part.split()
+    if len(edge_tokens) % 2 != 0:
+        raise ValueError(
+            f"Invalid vcolg line: edge list has odd token count "
+            f"{len(edge_tokens)}, can't form (src, dst) pairs. Got: {line!r}"
+        )
+
+    n_vertices = int(header_tokens[0])
+    # header_tokens[1] is n_edges, which we recover from the edge list itself.
+    colors = [int(x) for x in header_tokens[2:]]
+    edges = [
+        (int(edge_tokens[i]), int(edge_tokens[i + 1]))
+        for i in range(0, len(edge_tokens), 2)
+    ]
+    return n_vertices, colors, edges
