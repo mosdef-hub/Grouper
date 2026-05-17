@@ -206,7 +206,7 @@ class Joback(BasisSet):
             GroupExtension(Group('-I', '[I;X1]', [0], 'SMARTS'), self.doi, 'I', None),
             GroupExtension(Group('-OH (alcohol)', '[OX2H;!$([OX2H]-[#6]=[O]);!$([OX2H]-a)]', [0], 'SMARTS'), self.doi, 'O', None),
             GroupExtension(Group('-OH (phenol)', '[O;H1;$(O-!@c)]', [0], 'SMARTS'), self.doi, 'O', None),
-            GroupExtension(Group('-O- (non-ring)', '[OX2H0;!R;!$([OX2H0]-[#6]=[#8])]', [0], 'SMARTS'), self.doi, 'O', None),
+            GroupExtension(Group('-O- (non-ring)', '[OX2H0;!R;!$([OX2H0]-[#6]=[#8])]', [0,0], 'SMARTS'), self.doi, 'O', None),
             GroupExtension(Group('-O- (ring)', '[#8X2H0;R;!$([#8X2H0]~[#6]=[#8])]', [0,0], 'SMARTS'), self.doi, 'Oring', None),
             GroupExtension(Group('>C=O (non-ring)', '[C;$([CX3H0](=[OX1]));!$([CX3](=[OX1])-[OX2]);!R]=O', [0,0], 'SMARTS'), self.doi, 'C=O', None),
             GroupExtension(Group('>C=O (ring)', '[$([#6X3H0](=[OX1]));!$([#6X3](=[#8X1])~[#8X2]);R]=O', [0,0], 'SMARTS'), self.doi, 'C=O', None),

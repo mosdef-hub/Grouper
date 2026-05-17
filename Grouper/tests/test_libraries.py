@@ -355,4 +355,20 @@ class TestLibrariesFragmentations(BaseTest):
             ]
         )
         assert self.assert_equal_edgeDicts({("CH3", "CH2"):2}, groupEdges), groupEdges
+
+    def test_joback_ether_non_ring(self):
+        """Regression: Joback '-O- (non-ring)' was declared with hubs=[0]
+        (one port) but ether oxygen has two external bonds, which made every
+        acyclic ether unfragmentable across all three modes. The ring sibling
+        '-O- (ring)' was already correct with hubs=[0,0]; this is the same
+        fix applied to the non-ring entry."""
+        library = Joback()
+        groupG = library.fragment_smiles("CCOCC")[0]
+        assert Counter([n.type for n in groupG.nodes.values()]) == Counter(
+            {"-CH3": 2, "-CH2-": 2, "-O- (non-ring)": 1}
+        )
+        groupG = library.fragment_smiles("COCCOC")[0]
+        assert Counter([n.type for n in groupG.nodes.values()]) == Counter(
+            {"-CH3": 2, "-CH2-": 2, "-O- (non-ring)": 2}
+        )
         
