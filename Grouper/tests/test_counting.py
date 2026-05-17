@@ -185,10 +185,6 @@ class TestCounting(BaseTest):
             n_nodes=n_nodes,
             node_defs=set(node_types.values()),
             num_procs=1,
-            vcolg_output_file="",
-            positive_constraints={},
-            negative_constraints=set(),
-            config_path="",
         )
         exhausted_smiles = {g.to_smiles() for g in exhausted_space}
         missing_in_inventory = exhausted_smiles - pattern_inventory
@@ -271,10 +267,6 @@ class TestCounting(BaseTest):
                 n_nodes=n_nodes,
                 node_defs=set(node_types.values()),
                 num_procs=1,
-                vcolg_output_file="",
-                positive_constraints={},
-                negative_constraints=set(),
-                config_path="",
             )
 
             # find missing graphs in the exhaustive space
