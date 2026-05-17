@@ -521,10 +521,6 @@ class TestCanonize(BaseTest):
     exhaustive_generate and verifies the partitions agree.
     """
 
-    @staticmethod
-    def _key(g):
-        return tuple(g.to_canonical())
-
     def test_reordered_construction_is_canon_equal(self):
         a = GroupGraph()
         a.add_node("C", "C", [0, 0, 0, 0])
@@ -536,7 +532,7 @@ class TestCanonize(BaseTest):
         b.add_node("C", "C", [0, 0, 0, 0])
         b.add_edge((1, 0), (0, 0))
 
-        assert self._key(a) == self._key(b)
+        assert tuple(a.to_canonical()) == tuple(b.to_canonical())
         assert a.to_smiles() == b.to_smiles()
 
     def test_different_ntype_differs(self):
@@ -550,7 +546,7 @@ class TestCanonize(BaseTest):
         b.add_node("N", "N", [0, 0, 0])
         b.add_edge((0, 0), (1, 0))
 
-        assert self._key(a) != self._key(b)
+        assert tuple(a.to_canonical()) != tuple(b.to_canonical())
         assert a.to_smiles() != b.to_smiles()
 
     def test_different_bond_order_differs(self):
@@ -564,7 +560,7 @@ class TestCanonize(BaseTest):
         b.add_node("C", "C", [0, 0, 0, 0])
         b.add_edge((0, 0), (1, 0), 2)
 
-        assert self._key(a) != self._key(b)
+        assert tuple(a.to_canonical()) != tuple(b.to_canonical())
         assert a.to_smiles() != b.to_smiles()
 
     def test_asymmetric_hub_choice_differs(self):
@@ -579,7 +575,7 @@ class TestCanonize(BaseTest):
         b.add_node("methyl", "C", [0, 0, 0])
         b.add_edge((0, 1), (1, 0))
 
-        assert self._key(a) != self._key(b)
+        assert tuple(a.to_canonical()) != tuple(b.to_canonical())
         assert a.to_smiles() != b.to_smiles()
 
     def test_symmetric_ports_are_canon_equal(self):
@@ -595,7 +591,7 @@ class TestCanonize(BaseTest):
         b.add_node("C", "C", [0, 0, 0, 0])
         b.add_edge((0, 1), (1, 2))
 
-        assert self._key(a) == self._key(b)
+        assert tuple(a.to_canonical()) == tuple(b.to_canonical())
         assert a.to_smiles() == b.to_smiles()
 
     def test_canonize_matches_smiles_on_exhaustive_output(self):
@@ -629,7 +625,7 @@ class TestCanonize(BaseTest):
         canon_to_smiles = defaultdict(set)
         for g in graphs:
             s = g.to_smiles()
-            c = self._key(g)
+            c = tuple(g.to_canonical())
             smiles_to_canon[s].add(c)
             canon_to_smiles[c].add(s)
 
@@ -655,10 +651,6 @@ class TestAtomCanonize(BaseTest):
     flatten to the same molecule).
     """
 
-    @staticmethod
-    def _key(g):
-        return tuple(g.to_canonical())
-
     def test_atomgraph_reordered_construction(self):
         a = AtomGraph()
         a.add_node("C", 4)
@@ -668,7 +660,7 @@ class TestAtomCanonize(BaseTest):
         b.add_node("O", 2)
         b.add_node("C", 4)
         b.add_edge(0, 1)
-        assert self._key(a) == self._key(b)
+        assert tuple(a.to_canonical()) == tuple(b.to_canonical())
 
     def test_atomgraph_different_element_differs(self):
         a = AtomGraph()
@@ -679,7 +671,7 @@ class TestAtomCanonize(BaseTest):
         b.add_node("C", 4)
         b.add_node("N", 3)
         b.add_edge(0, 1)
-        assert self._key(a) != self._key(b)
+        assert tuple(a.to_canonical()) != tuple(b.to_canonical())
 
     def test_atomgraph_different_bond_order_differs(self):
         a = AtomGraph()
@@ -690,7 +682,7 @@ class TestAtomCanonize(BaseTest):
         b.add_node("C", 4)
         b.add_node("C", 4)
         b.add_edge(0, 1, 2)
-        assert self._key(a) != self._key(b)
+        assert tuple(a.to_canonical()) != tuple(b.to_canonical())
 
     def test_atomgraph_canon_collapses_group_decomposition(self):
         """The bug we caught the hard way: two GroupGraphs that decompose
@@ -724,7 +716,7 @@ class TestAtomCanonize(BaseTest):
             "premise: GroupGraph distinguishes group decompositions"
         )
         # The actual contract:
-        assert self._key(g0.to_atom_graph()) == self._key(g1.to_atom_graph())
+        assert tuple(g0.to_atom_graph().to_canonical()) == tuple(g1.to_atom_graph().to_canonical())
 
     def test_atomgraph_canon_matches_smiles_on_exhaustive_output(self):
         """End-to-end: exhaustive_generate output must partition identically
@@ -750,7 +742,7 @@ class TestAtomCanonize(BaseTest):
         c2s = defaultdict(set)
         for g in graphs:
             s = g.to_smiles()
-            c = self._key(g.to_atom_graph())
+            c = tuple(g.to_atom_graph().to_canonical())
             s2c[s].add(c)
             c2s[c].add(s)
         splits = {s: cs for s, cs in s2c.items() if len(cs) > 1}

@@ -168,10 +168,27 @@ PYBIND11_MODULE(_Grouper, m) {
     json_str = graph.to_json()
 )doc")
         .def("to_canonical", &GroupGraph::canonize,
-             "Return a canonical form of the GroupGraph as a list of nauty setwords "
-             "followed by the canonical color sequence. Two graphs return equal lists "
-             "iff they are isomorphic with group ntype, port hub label, and bond order "
-             "preserved.")
+            R"doc(Return a canonical form of the GroupGraph as a list of nauty setwords followed by the canonical color sequence.
+
+Two graphs return equal lists iff they are isomorphic with group ntype, port hub label, and bond order preserved. The canonical form is what `exhaustive_generate`'s dedup uses internally and is suitable as a hash key for cross-run deduplication.
+
+.. code-block:: python
+
+    from Grouper import GroupGraph
+
+    g1 = GroupGraph()
+    g1.add_node("methyl", "C", [0])
+    g1.add_node("hydroxyl", "O", [0])
+    g1.add_edge((0, 0), (1, 0))
+
+    # Same molecule, nodes added in the reverse order:
+    g2 = GroupGraph()
+    g2.add_node("hydroxyl", "O", [0])
+    g2.add_node("methyl", "C", [0])
+    g2.add_edge((1, 0), (0, 0))
+
+    assert g1.to_canonical() == g2.to_canonical()
+)doc")
         .def("from_json", &GroupGraph::deserialize, R"doc(Deserialize a GroupGraph from a JSON string.
 
 .. code-block:: python

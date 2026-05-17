@@ -187,9 +187,13 @@ cython_debug/
 /suzuki.py
 /*.txt
 /*.png
+/*.ipynb
 /publication_figures/
+__pycache__/
 # Allow LICENSE.rst, README.md, etc. — only top-level *.txt/*.png are
 # scratch outputs (geng_out.txt, *_library.png, isomorphism_checks_plot.png).
+# Notebooks under docs/tutorials/ are intentionally tracked (the top-
+# level *.ipynb pattern only excludes ones in the repo root).
 !LICENSE.rst
 !README.md
 !CLAUDE.md

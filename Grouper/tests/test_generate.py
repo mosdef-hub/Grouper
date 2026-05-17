@@ -9,7 +9,13 @@ from Grouper.tests.base_test import BaseTest
 
 class TestGeneration(BaseTest):
     def test_positive_constraint_filters_results(self):
-        """exhaustive_generate must drop graphs that lack the required node types."""
+        """exhaustive_generate must drop graphs that lack the required node types.
+
+        Hard-coded expected counts so this test catches behavior changes
+        in `vcolg` itself (or in our `positive_constraints` handling)
+        rather than re-deriving the counts at runtime and silently
+        agreeing with whatever the new behavior produces.
+        """
         node_defs = {
             Group("amine", "N", [0, 0, 0]),
             Group("methyl", "C", [0, 0, 0, 0]),
@@ -18,26 +24,17 @@ class TestGeneration(BaseTest):
             n_nodes=3,
             node_defs=node_defs,
             num_procs=1,
-            vcolg_output_file="",
-            positive_constraints={},
-            negative_constraints=set(),
-            config_path="",
         )
         constrained = exhaustive_generate(
             n_nodes=3,
             node_defs=node_defs,
             num_procs=1,
-            vcolg_output_file="",
             positive_constraints={"amine": 1},
-            negative_constraints=set(),
-            config_path="",
         )
-        assert len(constrained) > 0, (
-            "Positive constraint of one amine should still leave valid graphs"
-        )
-        assert len(constrained) < len(unconstrained), (
-            "Constrained set should drop the methyl-only graphs"
-        )
+        # n=3 over {amine, methyl}: 10 unique graphs total, 8 with at
+        # least one amine (the missing two are CCC and C1CC1).
+        assert len(unconstrained) == 10
+        assert len(constrained) == 8
         for graph in constrained:
             n_amines = sum(
                 1 for node in graph.nodes.values() if node.type == "amine"
@@ -49,10 +46,10 @@ class TestGeneration(BaseTest):
     def test_negative_constraint_filters_results(self):
         """negative_constraints must drop SMILES containing forbidden substrings.
 
-        Compares against an unconstrained run on the same inputs to keep
-        the test non-vacuous: if the unconstrained set contained no
-        NN-bearing graphs to begin with, the constrained set passing the
-        substring check would prove nothing.
+        Hard-coded counts here so a future regression in either vcolg's
+        output or our negative-constraint filter is caught — re-deriving
+        the "unconstrained" count at runtime would silently track any
+        behavior change in lockstep.
         """
         node_defs = {
             Group("amine", "N", [0, 0, 0]),
@@ -62,29 +59,18 @@ class TestGeneration(BaseTest):
             n_nodes=3,
             node_defs=node_defs,
             num_procs=1,
-            vcolg_output_file="",
-            positive_constraints={},
-            negative_constraints=set(),
-            config_path="",
         )
         constrained = exhaustive_generate(
             n_nodes=3,
             node_defs=node_defs,
             num_procs=1,
-            vcolg_output_file="",
-            positive_constraints={},
             negative_constraints={"NN"},
-            config_path="",
         )
-        unc_smiles = {g.to_smiles() for g in unconstrained}
-        assert any("NN" in s for s in unc_smiles), (
-            "Vacuous test case: unconstrained set has no NN-bearing graphs "
-            "to filter — pick a forbidden substring that actually appears."
-        )
-        assert len(constrained) < len(unconstrained), (
-            f"negative_constraints did not filter anything: "
-            f"|constrained|={len(constrained)} == |unconstrained|={len(unconstrained)}"
-        )
+        # n=3 over {amine, methyl} produces 10 unique graphs; 4 of them
+        # contain "NN" (CNN, NCN, NNN, plus the ring N1NN1 / C1NN1
+        # variants). The constrained run drops them to 6.
+        assert len(unconstrained) == 10
+        assert len(constrained) == 6
         for graph in constrained:
             smiles = graph.to_smiles()
             assert "NN" not in smiles, (
@@ -110,16 +96,12 @@ class TestGeneration(BaseTest):
             n_nodes=4,
             node_defs=node_defs,
             num_procs=1,
-            vcolg_output_file="",
-            positive_constraints={},
-            negative_constraints=set(),
-            config_path="",
         )
         elapsed = time.perf_counter() - start
-        assert len(result) > 0, "n=4 over four small groups should produce graphs"
+        assert len(result) > 0
         assert elapsed < 30.0, (
-            f"exhaustive_generate(n=4) took {elapsed:.1f}s "
-            f"(alarm threshold 30s; suggests an algorithmic regression)"
+            f"exhaustive_generate(n=4) took {elapsed:.1f}s to generate "
+            f"{len(result)} graphs."
         )
 
 
