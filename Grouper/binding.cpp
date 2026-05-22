@@ -167,7 +167,28 @@ PYBIND11_MODULE(_Grouper, m) {
     graph.add_edge((0, 0), (1, 0))
     json_str = graph.to_json()
 )doc")
-        // .def("to_canonical", &GroupGraph::canonize, "Canonicalize GroupGraph")
+        .def("to_canonical", &GroupGraph::canonize,
+            R"doc(Return a canonical form of the GroupGraph as a list of nauty setwords followed by the canonical color sequence.
+
+Two graphs return equal lists iff they are isomorphic with group ntype, port hub label, and bond order preserved. The canonical form is what `exhaustive_generate`'s dedup uses internally and is suitable as a hash key for cross-run deduplication.
+
+.. code-block:: python
+
+    from Grouper import GroupGraph
+
+    g1 = GroupGraph()
+    g1.add_node("methyl", "C", [0])
+    g1.add_node("hydroxyl", "O", [0])
+    g1.add_edge((0, 0), (1, 0))
+
+    # Same molecule, nodes added in the reverse order:
+    g2 = GroupGraph()
+    g2.add_node("hydroxyl", "O", [0])
+    g2.add_node("methyl", "C", [0])
+    g2.add_edge((1, 0), (0, 0))
+
+    assert g1.to_canonical() == g2.to_canonical()
+)doc")
         .def("from_json", &GroupGraph::deserialize, R"doc(Deserialize a GroupGraph from a JSON string.
 
 .. code-block:: python
@@ -264,6 +285,11 @@ PYBIND11_MODULE(_Grouper, m) {
     matches = graph.substructure_search(sub)
 )doc")
         .def("free_valency", &AtomGraph::getFreeValency, "Get the free valency of the graph.")
+        .def("to_canonical", &AtomGraph::canonize,
+             "Return a canonical form of the AtomGraph as a list of nauty setwords "
+             "followed by the canonical color sequence. Two AtomGraphs return equal "
+             "lists iff they are isomorphic with atom element types and bond orders "
+             "preserved.")
         .def("__str__", &AtomGraph::printGraph)
         .def("__eq__", &AtomGraph::operator==)
         .def("__hash__", [](const AtomGraph& g) {
@@ -277,10 +303,45 @@ PYBIND11_MODULE(_Grouper, m) {
                                     const std::unordered_map<std::string, int>& positive_constraints,
                                     const std::unordered_set<std::string>& negative_constraints,
                                     const std::string& config_path) {
-        auto result = exhaustiveGenerate(n_nodes, node_defs, num_procs, vcolg_output_file, positive_constraints, negative_constraints, config_path);
+        std::unordered_set<GroupGraph> result;
+        {
+            // Release the GIL during the long C++ call so the producer
+            // thread can briefly re-acquire it to call PyErr_CheckSignals
+            // and propagate Ctrl-C as KeyboardInterrupt instead of the
+            // run blocking the interpreter for the whole duration.
+            py::gil_scoped_release release;
+            result = exhaustiveGenerate(n_nodes, node_defs, num_procs, vcolg_output_file, positive_constraints, negative_constraints, config_path);
+        }
         return convert_unordered_set(result);
     },
     R"doc(Exhaustively generate all possible GroupGraphs with a given number of nodes and a set of allowed groups.
+
+    Parameters
+    ----------
+    n_nodes : int
+        Number of group nodes per generated graph.
+    node_defs : set[Group]
+        The palette of groups the enumeration is allowed to use.
+    num_procs : int, default -1
+        OpenMP worker count for the colored-graph processing stage.
+        -1 binds to all available cores.
+    vcolg_output_file : str, default ""
+        Path to a pre-computed vcolg ``-T`` output file. When empty
+        (the default), the call pipes ``geng -c n | vcolg -T -m|node_defs|``
+        internally. Set this to feed in your own filtered or
+        externally-generated colored-graph list (e.g. when sweeping
+        a custom subset of colorings, or when reusing a large vcolg
+        run across multiple invocations).
+    positive_constraints : dict[str, int], default {}
+        Map from group ``type`` to a minimum required count. Graphs
+        that don't meet every floor are dropped.
+    negative_constraints : set[str], default set()
+        SMILES substrings that disqualify a generated graph.
+    config_path : str, default ""
+        Optional path to a ``key=value`` config file with PostgreSQL
+        connection settings (``table_name``, ``dbname``, ``user``,
+        ``password``, ``hostaddr``, ``port``). When set, generated
+        graphs are also persisted to the named table.
 
     .. code-block:: python
 

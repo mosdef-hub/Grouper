@@ -8,6 +8,9 @@
 #include <stack>
 #include <nlohmann/json.hpp>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
+#include <unordered_map>
 
 #include "dataStructures.hpp"
 #include "generate.hpp"
@@ -124,6 +127,104 @@ std::unique_ptr<RDKit::ROMol> createMol(const std::string& pattern, bool isSmart
     return std::make_unique<RDKit::ROMol>(processedMol);
 }
 
+// =====================================================================
+// Process-wide cache of parsed group patterns. toSmiles() and
+// toAtomicGraph() are called once per generated graph in the inner loop
+// of exhaustive_generate, and each call used to RDKit-parse every group's
+// pattern from scratch — three times per call inside the original
+// toAtomicGraph. The cache reduces that to one parse per unique
+// (pattern, isSmarts) across the whole process. The cached payload is
+// plain POD (atomic numbers, formal charges, element symbols, bond
+// endpoints + types/orders) so we don't share RDKit ROMol objects across
+// threads, only readable data.
+// =====================================================================
+namespace {
+
+struct GroupMolCacheKey {
+    std::string pattern;
+    bool isSmarts;
+    bool operator==(const GroupMolCacheKey& other) const {
+        return isSmarts == other.isSmarts && pattern == other.pattern;
+    }
+};
+
+struct GroupMolCacheKeyHash {
+    std::size_t operator()(const GroupMolCacheKey& k) const {
+        std::size_t h = std::hash<std::string>{}(k.pattern);
+        h ^= (std::size_t)k.isSmarts * 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        return h;
+    }
+};
+
+struct CachedAtom {
+    int atomicNumber;
+    int formalCharge;
+    std::string symbol;
+};
+
+struct CachedBond {
+    int begin;
+    int end;
+    RDKit::Bond::BondType bondType;
+    double bondOrder;
+};
+
+struct CachedMolData {
+    std::vector<CachedAtom> atoms;
+    std::vector<CachedBond> bonds;
+};
+
+std::unordered_map<GroupMolCacheKey, std::shared_ptr<const CachedMolData>, GroupMolCacheKeyHash>
+    g_groupMolCache;
+std::shared_mutex g_groupMolCacheMutex;
+
+std::shared_ptr<const CachedMolData> getCachedMolData(
+    const std::string& pattern, bool isSmarts
+) {
+    GroupMolCacheKey key{pattern, isSmarts};
+
+    {
+        std::shared_lock<std::shared_mutex> rlock(g_groupMolCacheMutex);
+        auto it = g_groupMolCache.find(key);
+        if (it != g_groupMolCache.end()) return it->second;
+    }
+
+    std::unique_lock<std::shared_mutex> wlock(g_groupMolCacheMutex);
+    // Re-check after acquiring write lock — another thread may have
+    // populated the entry while we waited.
+    auto it = g_groupMolCache.find(key);
+    if (it != g_groupMolCache.end()) return it->second;
+
+    auto mol = createMol(pattern, isSmarts);
+    if (!mol) {
+        throw std::runtime_error("Failed to parse pattern: " + pattern);
+    }
+
+    auto data = std::make_shared<CachedMolData>();
+    data->atoms.reserve(mol->getNumAtoms());
+    for (const auto& atom : mol->atoms()) {
+        data->atoms.push_back({
+            atom->getAtomicNum(),
+            atom->getFormalCharge(),
+            atom->getSymbol()
+        });
+    }
+    data->bonds.reserve(mol->getNumBonds());
+    for (const auto& bond : mol->bonds()) {
+        data->bonds.push_back({
+            static_cast<int>(bond->getBeginAtomIdx()),
+            static_cast<int>(bond->getEndAtomIdx()),
+            bond->getBondType(),
+            bond->getBondTypeAsDouble()
+        });
+    }
+
+    g_groupMolCache.emplace(std::move(key), data);
+    return data;
+}
+
+} // anonymous namespace
+
 // Function to convert rdkit ROMol to AtomGraph
 void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGraph &aG, bool validate=true) {
     const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
@@ -160,16 +261,18 @@ void createAtomGraphFromRDKit(const std::unique_ptr<RDKit::ROMol>& mol, AtomGrap
 
 // Core methods
 GroupGraph::GroupGraph()
-    : nodes(), edges(), nodetypes() {}
+    : nodes(), edges(), nodetypes(), port_used_bits() {}
 
 GroupGraph::GroupGraph(const GroupGraph& other)
-    : nodes(other.nodes), edges(other.edges), nodetypes(other.nodetypes) {}
+    : nodes(other.nodes), edges(other.edges), nodetypes(other.nodetypes),
+      port_used_bits(other.port_used_bits) {}
 
 GroupGraph& GroupGraph::operator=(const GroupGraph& other) {
     if (this != &other) {
         nodes = other.nodes;
         edges = other.edges;
         nodetypes = other.nodetypes;
+        port_used_bits = other.port_used_bits;
     }
     return *this;
 }
@@ -543,6 +646,7 @@ void GroupGraph::addNode(
         int id = nodes.size();
         nodes[id] = Group(ntype, pattern, hubs, patternType);
         nodetypes[ntype] = hubs;
+        port_used_bits.push_back(0);
     }
     // Case 1: Group type (ntype) is provided
     else if (!ntype.empty() && pattern.empty()) {
@@ -559,6 +663,7 @@ void GroupGraph::addNode(
             }
         }
         nodes[id] = Group(ntype, pattern, hubs, patternType);
+        port_used_bits.push_back(0);
     }
     else {
         std::string hubs_str = "[";
@@ -591,6 +696,7 @@ void GroupGraph::addNode(Group group) {
     int id = nodes.size();
     nodes[id] = group;
     nodetypes[group.ntype] = group.hubs;
+    port_used_bits.push_back(0);
 }
 
 bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tuple<NodeIDType,PortType>toNodePort, double bondOrder, bool strict) {
@@ -599,61 +705,57 @@ bool GroupGraph::addEdge(std::tuple<NodeIDType,PortType> fromNodePort, std::tupl
     NodeIDType to = std::get<0>(toNodePort);
     PortType toPort = std::get<1>(toNodePort);
 
-    // Error handling
     if (from == to) {
-        if (strict) {
-            throw std::invalid_argument("Source and destination nodes are the same");
-        }
-        return false;
-    }
-    if (nodes.find(from) == nodes.end()) {
-        if (strict) {
-            throw std::invalid_argument("Source node does not exist");
-        }
-        return false;
-    }
-    if (nodes.find(to) == nodes.end()) {
-        if (strict) {
-            throw std::invalid_argument("Destination node does not exist");
-        }
-        return false;
-    }
-    if (std::find(nodes[from].ports.begin(), nodes[from].ports.end(), fromPort) == nodes[from].ports.end()) {
-        if (strict) {
-            throw std::invalid_argument("Source port does not exist");
-        }
-        return false;
-    }
-    if (std::find(nodes[to].ports.begin(), nodes[to].ports.end(), toPort) == nodes[to].ports.end()) {
-        if (strict) {
-            throw std::invalid_argument("Destination port does not exist");
-        }
+        if (strict) throw std::invalid_argument("Source and destination nodes are the same");
         return false;
     }
 
-    const std::tuple<NodeIDType, PortType, NodeIDType, PortType, double> edge = std::make_tuple(from, fromPort, to, toPort, bondOrder);
-    if (edges.count(edge) != 0) {
-        if (strict) {
-            throw std::invalid_argument("Edge already exists");
-        }
+    // Cache the nodes.find iterators so we don't hash the keys again
+    // when we read the ports vector below.
+    auto fromIt = nodes.find(from);
+    if (fromIt == nodes.end()) {
+        if (strict) throw std::invalid_argument("Source node does not exist");
         return false;
     }
-    if (used_ports.count({from, fromPort}) > 0) {
-        if (strict) {
-            throw std::invalid_argument("Source port already in use");
-        }
+    auto toIt = nodes.find(to);
+    if (toIt == nodes.end()) {
+        if (strict) throw std::invalid_argument("Destination node does not exist");
         return false;
     }
-    if (used_ports.count({to, toPort}) > 0) {
-        if (strict) {
-            throw std::invalid_argument("Destination port already in use");
-        }
+
+    const auto& fromPorts = fromIt->second.ports;
+    const auto& toPorts = toIt->second.ports;
+    if (std::find(fromPorts.begin(), fromPorts.end(), fromPort) == fromPorts.end()) {
+        if (strict) throw std::invalid_argument("Source port does not exist");
         return false;
     }
-    // Add the edge and mark both ports as used
-    edges.insert(edge);
-    used_ports.insert({from, fromPort});
-    used_ports.insert({to, toPort});
+    if (std::find(toPorts.begin(), toPorts.end(), toPort) == toPorts.end()) {
+        if (strict) throw std::invalid_argument("Destination port does not exist");
+        return false;
+    }
+
+    // Bit-test both endpoints against per-node port_used_bits before
+    // committing. If either is already set we bail without mutating
+    // anything, so no rollback is needed. port_used_bits is a vector
+    // indexed directly by NodeID — no hash lookup, no allocation.
+    if (fromPort < 0 || fromPort >= 64 || toPort < 0 || toPort >= 64) {
+        if (strict) throw std::invalid_argument("Port index out of range for bitmask (0..63)");
+        return false;
+    }
+    const std::uint64_t fromMask = std::uint64_t{1} << fromPort;
+    if (port_used_bits[from] & fromMask) {
+        if (strict) throw std::invalid_argument("Source port already in use");
+        return false;
+    }
+    const std::uint64_t toMask = std::uint64_t{1} << toPort;
+    if (port_used_bits[to] & toMask) {
+        if (strict) throw std::invalid_argument("Destination port already in use");
+        return false;
+    }
+
+    port_used_bits[from] |= fromMask;
+    port_used_bits[to] |= toMask;
+    edges.emplace(from, fromPort, to, toPort, bondOrder);
     return true;
 }
 
@@ -689,7 +791,9 @@ bool GroupGraph::isPortFree(NodeIDType nodeID, PortType port) const {
 
 void GroupGraph::clearEdges() {
     edges.clear();
-    used_ports.clear();
+    // Preserve the vector's size and storage; just zero the bits.
+    // No allocation, just a memset over n_nodes uint64_ts.
+    std::fill(port_used_bits.begin(), port_used_bits.end(), 0);
 }
 
 void update_edge_orbits(int count, int *perm, int *orbits, int numorbits, int stabvertex, int n) {
@@ -896,82 +1000,57 @@ std::string GroupGraph::printGraph() const {
 std::string GroupGraph::toSmiles() const {
     using AtomIndexMap = std::unordered_map<int, int>;
 
-    // Allocate molecular graph using smart pointer
     auto molecularGraph = std::make_unique<RDKit::RWMol>();
-
-    std::unordered_map<NodeIDType, std::unique_ptr<RDKit::ROMol>> subGraphs;
     std::unordered_map<NodeIDType, AtomIndexMap> nodePortToAtomIndex;
-    std::unordered_map<NodeIDType, AtomIndexMap> nodeLocalToGlobalAtomIndex;
 
     int globalAtomIndex = 0;
 
-    // === Step 1: Create and store all subgraphs ===
+    // Single pass: for each group, look up its parsed pattern in the
+    // process-wide cache (parsing only happens on first sight of a
+    // (pattern, isSmarts) pair), append atoms to the RWMol, record port
+    // → global-atom mapping, then append intra-group bonds.
     for (const auto& [nodeID, node] : nodes) {
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(node.pattern, node.patternType != "SMILES");
-        if (!subGraph) {
-            throw std::runtime_error("Failed to create molecule for node " + std::to_string(nodeID));
-        }
-        nodePortToAtomIndex[nodeID] = AtomIndexMap();
-        subGraphs[nodeID] = std::move(subGraph);
-    }
+        bool isSmarts = node.patternType != "SMILES";
+        const auto& cached = *getCachedMolData(node.pattern, isSmarts);
 
-    // === Step 2: Add atoms to molecularGraph and track index mapping ===
-    for (const auto& [nodeID, node] : nodes) {
-        RDKit::ROMol* subGraph = subGraphs[nodeID].get();
-        const std::vector<int>& hubs = node.hubs;
-
-        AtomIndexMap& localToGlobal = nodeLocalToGlobalAtomIndex[nodeID];
         AtomIndexMap& portToGlobal = nodePortToAtomIndex[nodeID];
+        const int groupAtomBase = globalAtomIndex;
 
-        int localIndex = 0;
-        for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom, ++localIndex) {
-            // FIXED: Avoid manual memory allocation to prevent memory leaks
-            molecularGraph->addAtom(*atom, true);
-
-            localToGlobal[localIndex] = globalAtomIndex;
-
-            // If this local atom is a hub, associate it with the port
-            for (size_t i = 0; i < hubs.size(); ++i) {
-                if (hubs[i] == localIndex) {
-                    portToGlobal[node.ports[i]] = globalAtomIndex;
-                }
-            }
-
+        for (size_t localIdx = 0; localIdx < cached.atoms.size(); ++localIdx) {
+            const auto& a = cached.atoms[localIdx];
+            RDKit::Atom newAtom(a.atomicNumber);
+            newAtom.setFormalCharge(a.formalCharge);
+            molecularGraph->addAtom(&newAtom, true);
             ++globalAtomIndex;
         }
-    }
 
-    // === Step 3: Add intra-subgraph bonds ===
-    for (const auto& [nodeID, _] : nodes) {
-        RDKit::ROMol* subGraph = subGraphs[nodeID].get();
-        const AtomIndexMap& localToGlobal = nodeLocalToGlobalAtomIndex[nodeID];
+        // Map (this group's port i) → global atom index of the hub atom
+        // it sits on. node.hubs[i] is the local atom index inside the
+        // pattern; node.ports[i] is the externally-visible port id.
+        for (size_t i = 0; i < node.hubs.size(); ++i) {
+            portToGlobal[node.ports[i]] = groupAtomBase + node.hubs[i];
+        }
 
-        for (auto bond = subGraph->beginBonds(); bond != subGraph->endBonds(); ++bond) {
-            int beginLocal = (*bond)->getBeginAtomIdx();
-            int endLocal = (*bond)->getEndAtomIdx();
-            RDKit::Bond::BondType bondType = (*bond)->getBondType();
-
-            int beginGlobal = localToGlobal.at(beginLocal);
-            int endGlobal = localToGlobal.at(endLocal);
-
-            molecularGraph->addBond(beginGlobal, endGlobal, bondType);
+        for (const auto& b : cached.bonds) {
+            molecularGraph->addBond(
+                groupAtomBase + b.begin, groupAtomBase + b.end, b.bondType
+            );
         }
     }
 
-    // === Step 4: Add inter-subgraph (edge) bonds ===
-    std::unordered_map<double, RDKit::Bond::BondType> bondOrderMap;
-    bondOrderMap[1.0] = RDKit::Bond::BondType::SINGLE;
-    bondOrderMap[2.0] = RDKit::Bond::BondType::DOUBLE;
-    bondOrderMap[3.0] = RDKit::Bond::BondType::TRIPLE;
-    bondOrderMap[1.5] = RDKit::Bond::BondType::AROMATIC;
-    for (const auto &[from, fromPort, to, toPort, bondOrder] : edges)
-    {
+    // Inter-subgraph (cross-group) bonds.
+    static const std::unordered_map<double, RDKit::Bond::BondType> bondOrderMap = {
+        {1.0, RDKit::Bond::BondType::SINGLE},
+        {2.0, RDKit::Bond::BondType::DOUBLE},
+        {3.0, RDKit::Bond::BondType::TRIPLE},
+        {1.5, RDKit::Bond::BondType::AROMATIC},
+    };
+    for (const auto &[from, fromPort, to, toPort, bondOrder] : edges) {
         int fromAtom = nodePortToAtomIndex.at(from).at(fromPort);
         int toAtom   = nodePortToAtomIndex.at(to).at(toPort);
-        molecularGraph->addBond(fromAtom, toAtom, bondOrderMap[bondOrder]);
+        molecularGraph->addBond(fromAtom, toAtom, bondOrderMap.at(bondOrder));
     }
 
-    // === Step 5: Convert to SMILES and return ===
     return RDKit::MolToSmiles(*molecularGraph, true, false, -1, true, false);
 }
 
@@ -1012,83 +1091,285 @@ std::unordered_map<std::string, int> GroupGraph::toVector() const {
 }
 
 std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
-    auto atomGraph = std::make_unique<AtomGraph>();
-    const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
-    std::unordered_map<std::string, std::unordered_map<int, int>> nodePortToAtomIndex;
-    int atomCount = 0;
-
-    if (nodes.size() == 0) {
+    if (nodes.empty()) {
         throw std::invalid_argument("No nodes in the graph");
     }
 
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        std::string pattern = entry.second.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        nodePortToAtomIndex[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        for (size_t i = 0; i < node.ports.size(); ++i) {
-            nodePortToAtomIndex[std::to_string(nodeID)][node.ports[i]] = atomCount + node.hubs[i];
+    auto atomGraph = std::make_unique<AtomGraph>();
+    const RDKit::PeriodicTable* pt = RDKit::PeriodicTable::getTable();
+
+    // (group nodeID, port id) -> global atom index in the assembled
+    // AtomGraph. Used to wire up cross-group edges below.
+    std::unordered_map<NodeIDType, std::unordered_map<int, int>> nodePortToAtomIndex;
+
+    int atomBase = 0;
+    for (const auto& [nodeID, node] : nodes) {
+        bool isSmarts = node.patternType != "SMILES";
+        const auto& cached = *getCachedMolData(node.pattern, isSmarts);
+
+        for (const auto& a : cached.atoms) {
+            int maxValence = pt->getDefaultValence(a.atomicNumber) + a.formalCharge;
+            atomGraph->addNode(a.symbol, maxValence);
         }
-        atomCount += subGraph->getNumAtoms();
+        for (const auto& b : cached.bonds) {
+            atomGraph->addEdge(atomBase + b.begin, atomBase + b.end, b.bondOrder);
+        }
+        for (size_t i = 0; i < node.hubs.size(); ++i) {
+            nodePortToAtomIndex[nodeID][node.ports[i]] = atomBase + node.hubs[i];
+        }
+        atomBase += static_cast<int>(cached.atoms.size());
     }
-
-
-
-    int atomId = -1;
-    std::unordered_map<std::string, std::unordered_map<int, int>> nodeSubGraphIndicesToMolecularGraphIndices;
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)] = std::unordered_map<int, int>();
-        std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        for (auto atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
-            atomId++;
-            nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*atom)->getIdx()] = atomId;
-        }
-    }
-
-    // Start building the atom graph from mappings defined above
-    atomId = -1;
-    for (const auto& entry : nodes) {
-        NodeIDType nodeID = entry.first;
-        const Group& node = entry.second;
-        std::string pattern = node.pattern;
-        std::unique_ptr<RDKit::ROMol> subGraph = createMol(pattern, node.patternType != "SMILES");
-        for (RDKit::ROMol::AtomIterator atom = subGraph->beginAtoms(); atom != subGraph->endAtoms(); ++atom) {
-            atomId++;
-            // RDKit::Atom newAtom = **atom;
-            // molecularGraph->addAtom(&newAtom, true);
-            int atomicNumber = (*atom)->getAtomicNum();
-            int maxValence = pt->getDefaultValence(atomicNumber) + (*atom)->getFormalCharge();
-            atomGraph->addNode((*atom)->getSymbol(), maxValence);
-
-        }
-        for (RDKit::ROMol::BondIterator bond = subGraph->beginBonds(); bond != subGraph->endBonds(); ++bond) {
-            // RDKit::Bond newBond = **bond;
-            int atomIdx1 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getBeginAtomIdx()];
-            int atomIdx2 = nodeSubGraphIndicesToMolecularGraphIndices[std::to_string(nodeID)][(*bond)->getEndAtomIdx()];
-            // molecularGraph->addBond(atomIdx1, atomIdx2, newBond.getBondType());
-            double bondOrder = (*bond)->getBondTypeAsDouble();
-            atomGraph->addEdge(atomIdx1, atomIdx2, bondOrder);
-        }
-    }
-
 
     for (const auto& edge : edges) {
-        NodeIDType from = std::get<0>(edge);
-        PortType fromPort = std::get<1>(edge);
-        NodeIDType to = std::get<2>(edge);
-        PortType toPort = std::get<3>(edge);
-        NodeIDType fromAtom = nodePortToAtomIndex[std::to_string(from)][fromPort];
-        NodeIDType toAtom = nodePortToAtomIndex[std::to_string(to)][toPort];
-        double bondOrder = std::get<4>(edge);
-        atomGraph->addEdge(fromAtom, toAtom, bondOrder);
+        auto [from, fromPort, to, toPort, bondOrder] = edge;
+        atomGraph->addEdge(
+            nodePortToAtomIndex.at(from).at(fromPort),
+            nodePortToAtomIndex.at(to).at(toPort),
+            bondOrder
+        );
     }
 
-
     return atomGraph;
+}
+
+std::vector<setword> GroupGraph::canonizeAtomic() const {
+    // Fused toAtomicGraph()->canonize(). Builds the same colored
+    // atom-level nauty encoding that AtomGraph::canonize produces
+    // (one vertex per atom with element-symbol color, plus one
+    // auxiliary vertex per bond colored by bond order), but directly
+    // from cached group patterns + GroupGraph edges — without
+    // allocating an AtomGraph or running its add{Node,Edge} code per
+    // call. Profile-driven: AtomGraph::canonize was 37% of total
+    // runtime and toAtomicGraph another 7%; fusing them removes the
+    // AtomGraph round-trip while preserving the exact same dedup key.
+    if (nodes.empty()) {
+        return {};
+    }
+
+    struct AtomInfo {
+        std::string symbol;
+    };
+    struct BondInfo {
+        int begin;
+        int end;
+        double order;
+    };
+
+    // Collect atoms (per-group, in `nodes` iteration order) and bonds
+    // (intra-group from cached patterns, then cross-group from edges).
+    std::vector<AtomInfo> atomList;
+    std::vector<BondInfo> bondList;
+    // (group nodeID, port id) -> global atom index, used to wire up
+    // cross-group bonds below.
+    std::unordered_map<NodeIDType, std::unordered_map<int, int>> nodePortToAtom;
+
+    int atomBase = 0;
+    for (const auto& [nodeID, node] : nodes) {
+        bool isSmarts = node.patternType != "SMILES";
+        const auto& cached = *getCachedMolData(node.pattern, isSmarts);
+
+        for (const auto& a : cached.atoms) {
+            atomList.push_back({a.symbol});
+        }
+        for (const auto& b : cached.bonds) {
+            bondList.push_back({atomBase + b.begin, atomBase + b.end, b.bondOrder});
+        }
+        for (size_t i = 0; i < node.hubs.size(); ++i) {
+            nodePortToAtom[nodeID][node.ports[i]] = atomBase + node.hubs[i];
+        }
+        atomBase += static_cast<int>(cached.atoms.size());
+    }
+
+    for (const auto& edge : edges) {
+        auto [from, fromPort, to, toPort, bondOrder] = edge;
+        bondList.push_back({
+            nodePortToAtom.at(from).at(fromPort),
+            nodePortToAtom.at(to).at(toPort),
+            bondOrder
+        });
+    }
+
+    // From here this mirrors AtomGraph::canonize: one nauty vertex per
+    // atom, one per bond (colored by order), color-string partition for
+    // stable order, densenauty + appended canonical color sequence.
+    const int numAtoms = static_cast<int>(atomList.size());
+    const int numBonds = static_cast<int>(bondList.size());
+    const int n = numAtoms + numBonds;
+    const int m = SETWORDSNEEDED(n);
+
+    std::vector<setword> g(static_cast<size_t>(m) * n, 0);
+    EMPTYGRAPH(g.data(), m, n);
+
+    int bondVertex = numAtoms;
+    for (const auto& b : bondList) {
+        ADDONEEDGE(g.data(), b.begin, bondVertex, m);
+        ADDONEEDGE(g.data(), bondVertex, b.end, m);
+        ++bondVertex;
+    }
+
+    std::vector<std::string> color_str(n);
+    for (int i = 0; i < numAtoms; ++i) {
+        color_str[i] = "a:" + atomList[i].symbol;
+    }
+    for (int i = 0; i < numBonds; ++i) {
+        color_str[numAtoms + i] = "b:" + std::to_string(bondList[i].order);
+    }
+
+    std::vector<std::pair<std::string, int>> color_sorted;
+    color_sorted.reserve(n);
+    for (int i = 0; i < n; ++i) color_sorted.emplace_back(color_str[i], i);
+    std::sort(color_sorted.begin(), color_sorted.end());
+
+    std::vector<int> lab(n), ptn(n), orbits(n);
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted[i].second;
+    for (int i = 0; i < n - 1; ++i)
+        ptn[i] = (color_sorted[i].first == color_sorted[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
+
+    DEFAULTOPTIONS_GRAPH(options);
+    options.getcanon = TRUE;
+    options.defaultptn = FALSE;
+    statsblk stats;
+
+    std::vector<setword> canong(static_cast<size_t>(m) * n, 0);
+    densenauty(g.data(), lab.data(), ptn.data(), orbits.data(),
+               &options, &stats, m, n, canong.data());
+
+    canong.reserve(canong.size() + n);
+    std::hash<std::string> hasher;
+    for (int i = 0; i < n; ++i) {
+        canong.push_back(static_cast<setword>(hasher(color_str[lab[i]])));
+    }
+    return canong;
+}
+
+void GroupGraph::buildAtomicCanonSetup(AtomicCanonSetup& out, int numCrossEdges) const {
+    out.numAtoms = 0;
+    out.numIntraBonds = 0;
+    out.numCrossSlots = numCrossEdges;
+    out.portToAtom.clear();
+
+    // Atoms (per-group, in `nodes` iteration order) and intra-group bonds
+    // (from cached patterns). Identical iteration to canonizeAtomic so
+    // the per-vertex assignments line up.
+    struct LocalAtom { std::string symbol; };
+    struct LocalBond { int begin; int end; double order; };
+    std::vector<LocalAtom> atomList;
+    std::vector<LocalBond> intraBonds;
+
+    int atomBase = 0;
+    for (const auto& [nodeID, node] : nodes) {
+        bool isSmarts = node.patternType != "SMILES";
+        const auto& cached = *getCachedMolData(node.pattern, isSmarts);
+        for (const auto& a : cached.atoms) atomList.push_back({a.symbol});
+        for (const auto& b : cached.bonds) {
+            intraBonds.push_back({atomBase + b.begin, atomBase + b.end, b.bondOrder});
+        }
+        for (size_t i = 0; i < node.hubs.size(); ++i) {
+            out.portToAtom[nodeID][node.ports[i]] = atomBase + node.hubs[i];
+        }
+        atomBase += static_cast<int>(cached.atoms.size());
+    }
+
+    out.numAtoms = static_cast<int>(atomList.size());
+    out.numIntraBonds = static_cast<int>(intraBonds.size());
+    out.crossBondStart = out.numAtoms + out.numIntraBonds;
+    out.n = out.crossBondStart + out.numCrossSlots;
+    out.m = SETWORDSNEEDED(out.n);
+
+    // Build the base graph: atoms wired to intra-bond vertices. Cross-
+    // bond vertices remain isolated; per-leaf code adds their adjacency.
+    out.baseGraph.assign(static_cast<size_t>(out.m) * out.n, 0);
+    EMPTYGRAPH(out.baseGraph.data(), out.m, out.n);
+    int bv = out.numAtoms;
+    for (const auto& b : intraBonds) {
+        ADDONEEDGE(out.baseGraph.data(), b.begin, bv, out.m);
+        ADDONEEDGE(out.baseGraph.data(), bv, b.end, out.m);
+        ++bv;
+    }
+
+    // Color string per vertex. Cross-bonds are always color "b:<1.0>"
+    // because processColoring always adds cross-group edges with
+    // bondOrder=1; if that ever changes the assumption here breaks.
+    std::vector<std::string> color_str(out.n);
+    for (int i = 0; i < out.numAtoms; ++i) {
+        color_str[i] = "a:" + atomList[i].symbol;
+    }
+    for (int i = 0; i < out.numIntraBonds; ++i) {
+        color_str[out.numAtoms + i] = "b:" + std::to_string(intraBonds[i].order);
+    }
+    const std::string crossColor = "b:" + std::to_string(1.0);
+    for (int i = 0; i < out.numCrossSlots; ++i) {
+        color_str[out.crossBondStart + i] = crossColor;
+    }
+
+    // Sort vertices by color so the partition order is a function of
+    // chemistry only — same invariant canonizeAtomic enforces.
+    std::vector<std::pair<std::string, int>> color_sorted;
+    color_sorted.reserve(out.n);
+    for (int i = 0; i < out.n; ++i) color_sorted.emplace_back(color_str[i], i);
+    std::sort(color_sorted.begin(), color_sorted.end());
+
+    out.lab.resize(out.n);
+    out.ptn.resize(out.n);
+    for (int i = 0; i < out.n; ++i) out.lab[i] = color_sorted[i].second;
+    for (int i = 0; i < out.n - 1; ++i) {
+        out.ptn[i] = (color_sorted[i].first == color_sorted[i + 1].first) ? 1 : 0;
+    }
+    if (out.n > 0) out.ptn[out.n - 1] = 0;
+
+    // Color hash array, indexed by ORIGINAL vertex index.
+    out.colorHash.resize(out.n);
+    std::hash<std::string> hasher;
+    for (int i = 0; i < out.n; ++i) {
+        out.colorHash[i] = static_cast<setword>(hasher(color_str[i]));
+    }
+}
+
+std::vector<setword> GroupGraph::canonizeAtomicWithSetup(
+    const AtomicCanonSetup& setup,
+    const std::vector<std::pair<int, int>>& edge_topology,
+    const std::vector<std::pair<int, int>>& chosen_ports
+) const {
+    if (setup.n == 0) return {};
+
+    // Per-leaf graph buffer: copy precomputed base, then add the
+    // cross-bond adjacencies. The graph adjacency for atoms+intra-bonds
+    // is identical for every leaf of this nauty line.
+    std::vector<setword> g(setup.baseGraph);  // m*n setwords; small (~hundreds of bytes)
+
+    const size_t k = std::min(edge_topology.size(), chosen_ports.size());
+    for (size_t i = 0; i < k; ++i) {
+        const int from = edge_topology[i].first;
+        const int to = edge_topology[i].second;
+        const int sPort = chosen_ports[i].first;
+        const int tPort = chosen_ports[i].second;
+        const int atom_a = setup.portToAtom.at(from).at(sPort);
+        const int atom_b = setup.portToAtom.at(to).at(tPort);
+        const int bv = setup.crossBondStart + static_cast<int>(i);
+        ADDONEEDGE(g.data(), atom_a, bv, setup.m);
+        ADDONEEDGE(g.data(), bv, atom_b, setup.m);
+    }
+
+    // Copies of lab/ptn because densenauty mutates them.
+    std::vector<int> lab(setup.lab);
+    std::vector<int> ptn(setup.ptn);
+    std::vector<int> orbits(setup.n);
+
+    DEFAULTOPTIONS_GRAPH(options);
+    options.getcanon = TRUE;
+    options.defaultptn = FALSE;
+    statsblk stats;
+
+    std::vector<setword> canong(static_cast<size_t>(setup.m) * setup.n, 0);
+    densenauty(g.data(), lab.data(), ptn.data(), orbits.data(),
+               &options, &stats, setup.m, setup.n, canong.data());
+
+    canong.reserve(canong.size() + setup.n);
+    for (int i = 0; i < setup.n; ++i) {
+        canong.push_back(setup.colorHash[lab[i]]);
+    }
+    return canong;
 }
 
 std::string GroupGraph::serialize() const {
@@ -1263,21 +1544,100 @@ void GroupGraph::toNautyGraph(int* n, int* m, graph** adj) const {
 }
 
 std::vector<setword> GroupGraph::canonize() const {
-    int n, m;
-    graph* adj = nullptr; // Initialize pointer
+    if (nodes.empty()) {
+        return {};
+    }
 
-    toNautyGraph(&n, &m, &adj); // Now `adj` is allocated in toNautyGraph
+    // Encode the GroupGraph as a colored simple graph for nauty. Three vertex
+    // types are interleaved: one nauty vertex per Group, one per (group, port),
+    // and one per edge. A per-vertex color (group ntype, port hub-label, edge
+    // bond order) is fed to nauty via lab/ptn so the canonical form respects
+    // the labels — without that, two graphs differing only in chemistry would
+    // canonicalize to the same value.
+    std::unordered_map<NodeIDType, int> group_to_nauty;
+    std::unordered_map<std::pair<NodeIDType, PortType>, int> port_to_nauty;
+    std::unordered_map<std::tuple<NodeIDType, PortType, NodeIDType, PortType, double>, int> edge_to_nauty;
+
+    int nodeIndex = 0;
+    for (const auto& [nodeID, group] : nodes) group_to_nauty[nodeID] = nodeIndex++;
+    for (const auto& [nodeID, group] : nodes) {
+        for (PortType port : group.ports) {
+            port_to_nauty[{nodeID, port}] = nodeIndex++;
+        }
+    }
+    for (const auto& edge : edges) edge_to_nauty[edge] = nodeIndex++;
+
+    int n = nodeIndex;
+    int m = SETWORDSNEEDED(n);
+
+    std::vector<setword> g(static_cast<size_t>(m) * n, 0);
+    EMPTYGRAPH(g.data(), m, n);
+
+    for (const auto& [nodeID, group] : nodes) {
+        int gnode = group_to_nauty[nodeID];
+        for (PortType port : group.ports) {
+            int pnode = port_to_nauty[{nodeID, port}];
+            ADDONEEDGE(g.data(), gnode, pnode, m);
+        }
+    }
+    for (const auto& edge : edges) {
+        auto [src, srcPort, dst, dstPort, order] = edge;
+        int enode = edge_to_nauty[edge];
+        int p1 = port_to_nauty[{src, srcPort}];
+        int p2 = port_to_nauty[{dst, dstPort}];
+        ADDONEEDGE(g.data(), p1, enode, m);
+        ADDONEEDGE(g.data(), enode, p2, m);
+    }
+
+    // Compute a color *string* for each nauty vertex. Group nodes use the
+    // ntype, port nodes use the hub label, edge nodes use the bond order.
+    std::vector<std::string> color_str(n);
+    for (const auto& [nodeID, group] : nodes) {
+        color_str[group_to_nauty[nodeID]] = "g:" + group.ntype;
+    }
+    for (const auto& [nodeID, group] : nodes) {
+        for (size_t i = 0; i < group.ports.size(); ++i) {
+            int hub_label = (i < group.hubs.size()) ? group.hubs[i] : -1;
+            color_str[port_to_nauty[{nodeID, group.ports[i]}]] =
+                "p:" + std::to_string(hub_label);
+        }
+    }
+    for (const auto& edge : edges) {
+        color_str[edge_to_nauty[edge]] =
+            "e:" + std::to_string(std::get<4>(edge));
+    }
+
+    // Sort vertices by the string color so the partition class order is a
+    // function of chemistry only — not of the insertion order in `nodes`.
+    // This is what makes canonize() reproducible across reorderings.
+    std::vector<std::pair<std::string, int>> color_sorted;
+    color_sorted.reserve(n);
+    for (int i = 0; i < n; ++i) color_sorted.emplace_back(color_str[i], i);
+    std::sort(color_sorted.begin(), color_sorted.end());
 
     std::vector<int> lab(n), ptn(n), orbits(n);
-    std::vector<setword> canong(n);
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted[i].second;
+    for (int i = 0; i < n - 1; ++i)
+        ptn[i] = (color_sorted[i].first == color_sorted[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
+
     DEFAULTOPTIONS_GRAPH(options);
-    statsblk stats;
     options.getcanon = TRUE;
+    options.defaultptn = FALSE;
+    statsblk stats;
 
-    densenauty(adj, lab.data(), ptn.data(), orbits.data(), &options, &stats, m, n, canong.data());
+    std::vector<setword> canong(static_cast<size_t>(m) * n, 0);
+    densenauty(g.data(), lab.data(), ptn.data(), orbits.data(),
+               &options, &stats, m, n, canong.data());
 
-    delete[] adj; // Free allocated memory
-
+    // Append the canonical-order color sequence so the returned key encodes
+    // both topology and labels. We hash the color *string* (not a per-call
+    // integer code) so two graphs with disjoint color sets do not alias.
+    canong.reserve(canong.size() + n);
+    std::hash<std::string> hasher;
+    for (int i = 0; i < n; ++i) {
+        canong.push_back(static_cast<setword>(hasher(color_str[lab[i]])));
+    }
     return canong;
 }
 
@@ -1987,147 +2347,81 @@ int AtomGraph::getNodeIndex(int node_id) const {
     return -1; // Not found
 }
 
-std::vector<setword> AtomGraph::canonize() {
-    // Convert AtomGraph to a Nauty graph representation
-    std::vector<setword> g = this->toNautyGraph();
+std::vector<setword> AtomGraph::canonize() const {
+    if (nodes.empty()) {
+        return {};
+    }
 
-    // Prepare vectors and workspace
-    int n = nodes.size();
-    int m = SETWORDSNEEDED(n);
+    // One nauty vertex per atom; one auxiliary vertex per bond colored
+    // by bond order, so single/double/triple/aromatic bonds canonicalize
+    // distinctly even though densenauty doesn't natively support edge
+    // weights. This is the same trick used in GroupGraph::canonize().
+    const int numAtoms = static_cast<int>(nodes.size());
+    const int numBonds = static_cast<int>(edges.size());
+    const int n = numAtoms + numBonds;
+    const int m = SETWORDSNEEDED(n);
+
+    std::vector<setword> g(static_cast<size_t>(m) * n, 0);
+    EMPTYGRAPH(g.data(), m, n);
+
+    // Walk edges in unordered_set iteration order. The order is
+    // implementation-defined, but we'll feed a colored partition to
+    // nauty so the canonical form is invariant to it anyway.
+    std::vector<double> bondOrders;
+    bondOrders.reserve(numBonds);
+    int bondVertex = numAtoms;
+    for (const auto& [src, dst, order] : edges) {
+        ADDONEEDGE(g.data(), src, bondVertex, m);
+        ADDONEEDGE(g.data(), bondVertex, dst, m);
+        bondOrders.push_back(order);
+        ++bondVertex;
+    }
+
+    // Color each nauty vertex with a string. Atoms get "a:<element>",
+    // bond vertices get "b:<order>". AtomGraph::addNode assigns IDs in
+    // 0..numAtoms-1 by construction (id = nodes.size() at insert time),
+    // so atom i in the partition is nodes.at(i).
+    std::vector<std::string> color_str(n);
+    for (int i = 0; i < numAtoms; ++i) {
+        color_str[i] = "a:" + nodes.at(i).ntype;
+    }
+    for (int i = 0; i < numBonds; ++i) {
+        color_str[numAtoms + i] = "b:" + std::to_string(bondOrders[i]);
+    }
+
+    // Sort vertices by color string so the partition order is a function
+    // of chemistry only — not of insertion order. Without this the
+    // canonical form would shift if the same molecule were built atom-
+    // by-atom in a different sequence.
+    std::vector<std::pair<std::string, int>> color_sorted;
+    color_sorted.reserve(n);
+    for (int i = 0; i < n; ++i) color_sorted.emplace_back(color_str[i], i);
+    std::sort(color_sorted.begin(), color_sorted.end());
+
     std::vector<int> lab(n), ptn(n), orbits(n);
-    std::vector<setword> canong(n * m);
+    for (int i = 0; i < n; ++i) lab[i] = color_sorted[i].second;
+    for (int i = 0; i < n - 1; ++i)
+        ptn[i] = (color_sorted[i].first == color_sorted[i + 1].first) ? 1 : 0;
+    ptn[n - 1] = 0;
 
-    // Use dynamic allocation for workspace
-    DYNALLSTAT(setword, workspace, workspace_sz);
-    DYNALLOC2(setword, workspace, workspace_sz, 4*m, n, "malloc workspace");
-
-    // Create edge colors based on bond orders
-    // We can't directly color edges in nauty, but we can use the node coloring
-    // to encode the edge color information
-
-    // First, group nodes by their atom type
-    std::vector<int> node_colors(n);
-    std::map<std::string, int> atom_type_map;
-    int color_index = 0;
-
-    for (int i = 0; i < n; i++) {
-        const auto& atom = nodes.at(i);
-        if (atom_type_map.find(atom.ntype) == atom_type_map.end()) {
-            atom_type_map[atom.ntype] = color_index;
-            color_index++;
-        }
-        node_colors[i] = atom_type_map[atom.ntype];
-    }
-
-    // Set up initial coloring based on atom types
-    for (int i = 0; i < n; i++) {
-        lab[i] = i;  // Identity permutation initially
-        ptn[i] = 1;  // All in one partition initially
-    }
-    ptn[n-1] = 0;    // End the last partition
-
-    // Sort nodes by color to set up the initial partition
-    std::sort(lab.begin(), lab.end(), [&node_colors](int a, int b) {
-        return node_colors[a] < node_colors[b];
-    });
-
-    // Update the partition array to separate different atom types
-    for (int i = 0; i < n-1; i++) {
-        if (node_colors[lab[i]] != node_colors[lab[i+1]]) {
-            ptn[i] = 0;  // End the current partition
-        }
-    }
-
-    // Set up Nauty options for sparse graphs
-    static DEFAULTOPTIONS_SPARSEGRAPH(options);  // Use SPARSEGRAPH options instead of GRAPH
+    DEFAULTOPTIONS_GRAPH(options);
     options.getcanon = TRUE;
     options.defaultptn = FALSE;
-
-    // These options are compatible with sparse graphs
-    options.mininvarlevel = 1;
-    options.maxinvarlevel = 100;
-    options.invararg = 3;
-
     statsblk stats;
 
-    // Run Nauty with edge weights consideration
-    // Create a SparseGraph representation for edge weights
-    sparsegraph sg;
-    SG_INIT(sg);
+    std::vector<setword> canong(static_cast<size_t>(m) * n, 0);
+    densenauty(g.data(), lab.data(), ptn.data(), orbits.data(),
+               &options, &stats, m, n, canong.data());
 
-    // Convert g to sparse format and include edge weights
-    SG_ALLOC(sg, n, edges.size(), "SparseGraph");
-    sg.nv = n;
-    sg.nde = 0;
-
-    std::vector<size_t> sg_v(n+1, 0);  // Use size_t instead of int
-    std::vector<int> sg_d(n, 0);
-    std::vector<int> sg_e;
-    std::vector<int> sg_w;  // Edge weights for bond orders
-
-    // Count degrees first
-    for (const auto& [src, dst, order] : edges) {
-        sg_d[src]++;
-        sg_d[dst]++;
+    // Append the canonical-order color sequence so two graphs with
+    // disjoint element sets do not alias. We hash the color *string*
+    // (not a per-call integer code) so the encoding is globally stable.
+    canong.reserve(canong.size() + n);
+    std::hash<std::string> hasher;
+    for (int i = 0; i < n; ++i) {
+        canong.push_back(static_cast<setword>(hasher(color_str[lab[i]])));
     }
-
-    // Set up vertex offsets
-    sg_v[0] = 0;
-    for (int i = 0; i < n; i++) {
-        sg_v[i+1] = sg_v[i] + sg_d[i];
-        sg_d[i] = 0;  // Reset for use as counter below
-    }
-
-    // Resize edge arrays
-    sg_e.resize(sg_v[n]);
-    sg_w.resize(sg_v[n]);
-
-    // Fill edge arrays
-    for (const auto& [src, dst, order] : edges) {
-        // Add src -> dst edge
-        int pos = sg_v[src] + sg_d[src]++;
-        sg_e[pos] = dst;
-        sg_w[pos] = order;  // Store bond order as edge weight
-
-        // Add dst -> src edge (for undirected graph)
-        pos = sg_v[dst] + sg_d[dst]++;
-        sg_e[pos] = src;
-        sg_w[pos] = order;  // Same bond order
-    }
-
-    // Set sparse graph properties
-    sg.v = sg_v.data();
-    sg.d = sg_d.data();
-    sg.e = sg_e.data();
-    sg.w = sg_w.data();  // Edge weights
-
-    // Initialize the canonical graph
-    int total_edges = 2 * int(edges.size());
-    sparsegraph canon_sg;
-    SG_INIT(canon_sg);
-    SG_ALLOC(canon_sg, n, total_edges, "CanonicalGraph");
-    sg.nv = n;
-    sg.nde = total_edges;
-
-    printf("Nauty: %d vertices, %d edges\n", n, total_edges);
-
-    // Run Nauty with the sparse graph representation
-    sparsenauty(&sg, lab.data(), ptn.data(), orbits.data(), &options, &stats, &canon_sg);
-
-
-    // Get the canonical labeling
-    std::vector<setword> canon_g(n * m);
-    EMPTYGRAPH(canon_g.data(), m, n);
-
-    // Build canonical graph with edge weights
-    for (const auto& [src, dst, order] : edges) {
-        int src_canon = lab[src];
-        int dst_canon = lab[dst];
-        // Add edge to canonical graph
-        ADDONEEDGE(canon_g.data(), src_canon, dst_canon, m);
-    }
-
-    return canon_g;
+    return canong;
 }
 
 std::vector<std::vector<AtomGraph::NodeIDType>> AtomGraph::nodeAut() const {

@@ -1,6 +1,7 @@
 #ifndef DATASTRUCTURES_H
 #define DATASTRUCTURES_H
 
+#include <cstdint>
 #include <iostream>
 #include <unordered_map>
 #include <vector>
@@ -111,7 +112,7 @@ public:
     std::vector<std::vector<NodeIDType>> nodeAut() const;
     std::vector<NodeIDType> nodeOrbits() const;
     std::vector<setword> toNautyGraph() const;
-    std::vector<setword> canonize();
+    std::vector<setword> canonize() const;
     int getNodeIndex(int node_id) const;
     void fromSmiles(const std::string& smiles);
     void fromSmarts(const std::string& smarts);
@@ -149,7 +150,14 @@ public:
     std::unordered_set<std::tuple<NodeIDType, PortType, NodeIDType, PortType, double>> edges; ///< List of edges connecting nodes. (srcNodeID, srcPort, dstNodeID, dstPort, bondOrder)
     std::unordered_map<std::string, std::vector<PortType>> nodetypes; ///< Map of node types to their respective ports.
     bool isCoarseGrained = false;
-    std::unordered_set<std::pair<NodeIDType, PortType>> used_ports; // Fast lookup for used ports
+    // Per-node bitmask of which ports are currently bonded by an edge.
+    // port_used_bits[nodeID] bit i == 1 iff port i of nodeID is in use.
+    // Indexed by NodeID directly: addNode assigns id = nodes.size(), so
+    // IDs are dense 0..n-1, and port_used_bits is kept in lockstep with
+    // nodes via push_back in addNode. addEdge then does O(1) array
+    // access and a bit-test, no hash work at all. Limit: 64 ports per
+    // group, larger than any realistic chemical group.
+    std::vector<std::uint64_t> port_used_bits;
 
     // Operators
     GroupGraph();
@@ -192,6 +200,49 @@ public:
     std::string serialize() const;
     void deserialize(const std::string& state);
     std::vector<setword> canonize() const;
+    // Fused toAtomicGraph()->canonize(): build the colored atom-level
+    // nauty graph directly without materializing an AtomGraph. Used as
+    // the dedup key in exhaustive_generate's hot path.
+    std::vector<setword> canonizeAtomic() const;
+
+    // Per-nauty-line precompute that lets canonizeAtomicWithSetup skip
+    // the work that's invariant across leaves of the same line: atom
+    // list, intra-group bonds, color partition, color hashes. Only the
+    // cross-group bond adjacencies are added per leaf in the fast path.
+    // Built once after the GroupGraph's nodes are added but before any
+    // cross-group edges are added; reused for every leaf of the line.
+    struct AtomicCanonSetup {
+        int n = 0;                  // total nauty vertex count
+        int m = 0;                  // SETWORDSNEEDED(n)
+        int numAtoms = 0;
+        int numIntraBonds = 0;
+        int numCrossSlots = 0;      // reserved cross-group bond vertices
+        int crossBondStart = 0;     // first cross-bond nauty index
+        std::vector<setword> baseGraph;  // m*n setwords; atoms+intra wired
+        std::vector<int> lab;       // pre-sorted by color
+        std::vector<int> ptn;
+        std::vector<setword> colorHash;  // size n; hash of each vertex's color string
+        // (group nodeID, port id) -> global atom index
+        std::unordered_map<NodeIDType, std::unordered_map<int, int>> portToAtom;
+    };
+
+    // Fill `out` with precomputed data based on the current `nodes`
+    // (caller must have added nodes but not yet added cross-group edges).
+    // numCrossEdges is the number of cross-group edges that will appear
+    // per leaf (constant within a nauty line).
+    void buildAtomicCanonSetup(AtomicCanonSetup& out, int numCrossEdges) const;
+
+    // Per-leaf dedup key. Uses the precomputed setup for invariant work
+    // and only re-wires the cross-bond adjacencies. `edge_topology[i]`
+    // = (srcNodeID, dstNodeID) for cross-edge i; `chosen_ports[i]` =
+    // (srcPort, dstPort) actually used (after addEdge's potential swap).
+    // Returns a vector<setword> bit-identical to canonizeAtomic() called
+    // on the equivalent fully-edged GroupGraph.
+    std::vector<setword> canonizeAtomicWithSetup(
+        const AtomicCanonSetup& setup,
+        const std::vector<std::pair<int, int>>& edge_topology,
+        const std::vector<std::pair<int, int>>& chosen_ports
+    ) const;
 
 
 private:

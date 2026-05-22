@@ -510,6 +510,247 @@ class TestGroupGraph(BaseTest):
         assert edge_orbits == [0, 1, 0, 1]
 
 
+class TestCanonize(BaseTest):
+    """Pin GroupGraph.to_canonical() against to_smiles().
+
+    These tests assert that to_canonical() induces the same equivalence
+    classes as to_smiles() — the contract that makes it usable as a dedup
+    key inside exhaustive_generate. Each targeted case isolates one
+    discrimination axis (group ntype, bond order, hub label, port symmetry,
+    construction order); the cross-check at the bottom runs an actual
+    exhaustive_generate and verifies the partitions agree.
+    """
+
+    def test_reordered_construction_is_canon_equal(self):
+        a = GroupGraph()
+        a.add_node("C", "C", [0, 0, 0, 0])
+        a.add_node("N", "N", [0, 0, 0])
+        a.add_edge((0, 0), (1, 0))
+
+        b = GroupGraph()
+        b.add_node("N", "N", [0, 0, 0])
+        b.add_node("C", "C", [0, 0, 0, 0])
+        b.add_edge((1, 0), (0, 0))
+
+        assert tuple(a.to_canonical()) == tuple(b.to_canonical())
+        assert a.to_smiles() == b.to_smiles()
+
+    def test_different_ntype_differs(self):
+        a = GroupGraph()
+        a.add_node("C", "C", [0, 0, 0, 0])
+        a.add_node("C", "C", [0, 0, 0, 0])
+        a.add_edge((0, 0), (1, 0))
+
+        b = GroupGraph()
+        b.add_node("C", "C", [0, 0, 0, 0])
+        b.add_node("N", "N", [0, 0, 0])
+        b.add_edge((0, 0), (1, 0))
+
+        assert tuple(a.to_canonical()) != tuple(b.to_canonical())
+        assert a.to_smiles() != b.to_smiles()
+
+    def test_different_bond_order_differs(self):
+        a = GroupGraph()
+        a.add_node("C", "C", [0, 0, 0, 0])
+        a.add_node("C", "C", [0, 0, 0, 0])
+        a.add_edge((0, 0), (1, 0), 1)
+
+        b = GroupGraph()
+        b.add_node("C", "C", [0, 0, 0, 0])
+        b.add_node("C", "C", [0, 0, 0, 0])
+        b.add_edge((0, 0), (1, 0), 2)
+
+        assert tuple(a.to_canonical()) != tuple(b.to_canonical())
+        assert a.to_smiles() != b.to_smiles()
+
+    def test_asymmetric_hub_choice_differs(self):
+        # ester hubs [0, 2]: port 0 = carbon, port 1 = oxygen — chemically distinct.
+        a = GroupGraph()
+        a.add_node("ester", "C(=O)O", [0, 2])
+        a.add_node("methyl", "C", [0, 0, 0])
+        a.add_edge((0, 0), (1, 0))
+
+        b = GroupGraph()
+        b.add_node("ester", "C(=O)O", [0, 2])
+        b.add_node("methyl", "C", [0, 0, 0])
+        b.add_edge((0, 1), (1, 0))
+
+        assert tuple(a.to_canonical()) != tuple(b.to_canonical())
+        assert a.to_smiles() != b.to_smiles()
+
+    def test_symmetric_ports_are_canon_equal(self):
+        # methyl hubs [0,0,0,0]: all ports interchangeable — picking any of them
+        # must canonicalize the same.
+        a = GroupGraph()
+        a.add_node("C", "C", [0, 0, 0, 0])
+        a.add_node("C", "C", [0, 0, 0, 0])
+        a.add_edge((0, 0), (1, 0))
+
+        b = GroupGraph()
+        b.add_node("C", "C", [0, 0, 0, 0])
+        b.add_node("C", "C", [0, 0, 0, 0])
+        b.add_edge((0, 1), (1, 2))
+
+        assert tuple(a.to_canonical()) == tuple(b.to_canonical())
+        assert a.to_smiles() == b.to_smiles()
+
+    def test_canonize_matches_smiles_on_exhaustive_output(self):
+        """End-to-end: exhaustive_generate output must partition identically
+        under to_smiles() and to_canonical().
+        """
+        from collections import defaultdict
+
+        from Grouper import exhaustive_generate
+
+        node_defs = {
+            Group("amine", "N", [0, 0, 0]),
+            Group("methyl", "C", [0, 0, 0]),
+            Group("ester", "C(=O)O", [0, 2]),
+            Group("hydroxyl", "O", [0, 0]),
+        }
+        graphs = list(
+            exhaustive_generate(
+                n_nodes=4,
+                node_defs=node_defs,
+                num_procs=1,
+                vcolg_output_file="",
+                positive_constraints={},
+                negative_constraints=set(),
+                config_path="",
+            )
+        )
+        assert len(graphs) > 0
+
+        smiles_to_canon = defaultdict(set)
+        canon_to_smiles = defaultdict(set)
+        for g in graphs:
+            s = g.to_smiles()
+            c = tuple(g.to_canonical())
+            smiles_to_canon[s].add(c)
+            canon_to_smiles[c].add(s)
+
+        splits = {s: cs for s, cs in smiles_to_canon.items() if len(cs) > 1}
+        collisions = {c: ss for c, ss in canon_to_smiles.items() if len(ss) > 1}
+        assert not splits, (
+            f"{len(splits)} SMILES split across canon keys: "
+            f"{list(splits.items())[:3]}"
+        )
+        assert not collisions, (
+            f"{len(collisions)} canon keys collide across SMILES: "
+            f"{[(sorted(ss),) for ss in list(collisions.values())[:3]]}"
+        )
+
+
+class TestAtomCanonize(BaseTest):
+    """Pin AtomGraph.to_canonical() against to_smiles() at the atom level.
+
+    AtomGraph canonical form is what the dedup inside exhaustive_generate
+    is keyed on (since e6e6f3c). It must induce the same equivalence
+    relation as to_smiles() — the atom-level relation, which is *coarser*
+    than GroupGraph.to_canonical() (multiple group decompositions can
+    flatten to the same molecule).
+    """
+
+    def test_atomgraph_reordered_construction(self):
+        a = AtomGraph()
+        a.add_node("C", 4)
+        a.add_node("O", 2)
+        a.add_edge(0, 1)
+        b = AtomGraph()
+        b.add_node("O", 2)
+        b.add_node("C", 4)
+        b.add_edge(0, 1)
+        assert tuple(a.to_canonical()) == tuple(b.to_canonical())
+
+    def test_atomgraph_different_element_differs(self):
+        a = AtomGraph()
+        a.add_node("C", 4)
+        a.add_node("O", 2)
+        a.add_edge(0, 1)
+        b = AtomGraph()
+        b.add_node("C", 4)
+        b.add_node("N", 3)
+        b.add_edge(0, 1)
+        assert tuple(a.to_canonical()) != tuple(b.to_canonical())
+
+    def test_atomgraph_different_bond_order_differs(self):
+        a = AtomGraph()
+        a.add_node("C", 4)
+        a.add_node("C", 4)
+        a.add_edge(0, 1, 1)
+        b = AtomGraph()
+        b.add_node("C", 4)
+        b.add_node("C", 4)
+        b.add_edge(0, 1, 2)
+        assert tuple(a.to_canonical()) != tuple(b.to_canonical())
+
+    def test_atomgraph_canon_collapses_group_decomposition(self):
+        """The bug we caught the hard way: two GroupGraphs that decompose
+        the same molecule into different groups must canonicalise to the
+        same AtomGraph key, even though they have *different*
+        GroupGraph.to_canonical() keys.
+        """
+        # Same molecule (CCOC(=O)O), built two ways:
+        #   g0: hydroxyl is the linker O, ester contributes the terminal -OH
+        #   g1: ester's port-1 O is the linker, hydroxyl is the terminal -OH
+        g0 = GroupGraph()
+        g0.add_node("methyl", "C", [0, 0, 0])
+        g0.add_node("ester", "C(=O)O", [0, 2])
+        g0.add_node("methyl", "C", [0, 0, 0])
+        g0.add_node("hydroxyl", "O", [0, 0])
+        g0.add_edge((1, 0), (3, 0))
+        g0.add_edge((0, 0), (3, 1))
+        g0.add_edge((0, 1), (2, 0))
+
+        g1 = GroupGraph()
+        g1.add_node("methyl", "C", [0, 0, 0])
+        g1.add_node("hydroxyl", "O", [0, 0])
+        g1.add_node("methyl", "C", [0, 0, 0])
+        g1.add_node("ester", "C(=O)O", [0, 2])
+        g1.add_edge((0, 0), (3, 1))
+        g1.add_edge((0, 1), (2, 0))
+        g1.add_edge((1, 1), (3, 0))
+
+        assert g0.to_smiles() == g1.to_smiles(), "premise: same molecule"
+        assert tuple(g0.to_canonical()) != tuple(g1.to_canonical()), (
+            "premise: GroupGraph distinguishes group decompositions"
+        )
+        # The actual contract:
+        assert tuple(g0.to_atom_graph().to_canonical()) == tuple(g1.to_atom_graph().to_canonical())
+
+    def test_atomgraph_canon_matches_smiles_on_exhaustive_output(self):
+        """End-to-end: exhaustive_generate output must partition identically
+        under to_smiles() and AtomGraph.to_canonical().
+        """
+        from collections import defaultdict
+        from Grouper import exhaustive_generate
+
+        node_defs = {
+            Group("amine", "N", [0, 0, 0]),
+            Group("methyl", "C", [0, 0, 0]),
+            Group("ester", "C(=O)O", [0, 2]),
+            Group("hydroxyl", "O", [0, 0]),
+        }
+        graphs = list(exhaustive_generate(
+            n_nodes=4, node_defs=node_defs, num_procs=1,
+            vcolg_output_file="", positive_constraints={},
+            negative_constraints=set(), config_path="",
+        ))
+        assert len(graphs) > 0
+
+        s2c = defaultdict(set)
+        c2s = defaultdict(set)
+        for g in graphs:
+            s = g.to_smiles()
+            c = tuple(g.to_atom_graph().to_canonical())
+            s2c[s].add(c)
+            c2s[c].add(s)
+        splits = {s: cs for s, cs in s2c.items() if len(cs) > 1}
+        collisions = {c: ss for c, ss in c2s.items() if len(ss) > 1}
+        assert not splits, f"{len(splits)} SMILES split across canon keys"
+        assert not collisions, f"{len(collisions)} canon keys collide across SMILES"
+
+
 class TestAtomGraph(BaseTest):
     def to_set_of_sets(self, matches):
         """Helper function for set comparison."""

@@ -1,7 +1,8 @@
 from Grouper import GroupGraph
 from Grouper.utils import (
-    convert_to_nx, 
-    data_to_gg_edge
+    convert_to_nx,
+    data_to_gg_edge,
+    parse_vcolg_line,
 )
 from Grouper.tests.base_test import BaseTest
 import networkx as nx
@@ -95,3 +96,79 @@ class TestUtils(BaseTest):
         # Add bond order
         edges = [(e[0], e[1], e[2], e[3], 1) for e in edges]
         assert set(edges) == set(graph.edges)
+
+
+class TestParseVcolgLine:
+    """Public parser for vcolg's terse-format (``-T``) lines.
+
+    The pin-down values come from running ``geng -c <n> | vcolg -T -m<c>``
+    on small inputs and copying the resulting lines verbatim.
+    """
+
+    def test_simple_line(self):
+        """Three-node path, single color — n_vertices, colors, edges
+        all parse cleanly."""
+        # `geng -c 3 | vcolg -T -m1` on the path graph
+        n, colors, edges = parse_vcolg_line("3 2 0 0 0   0 1 1 2")
+        assert n == 3
+        assert colors == [0, 0, 0]
+        assert edges == [(0, 1), (1, 2)]
+
+    def test_multi_color_line(self):
+        """Multiple colors land in the right slots, edges still parse
+        correctly. From a typical n=4, c=2 vcolg sample."""
+        n, colors, edges = parse_vcolg_line("4 3 0 1 0 1   0 1 1 2 2 3")
+        assert n == 4
+        assert colors == [0, 1, 0, 1]
+        assert edges == [(0, 1), (1, 2), (2, 3)]
+
+    def test_no_edges_line(self):
+        """An isolated single node has no edges — make sure the empty
+        edge list parses cleanly (the line still has the double-space
+        separator, just nothing after it)."""
+        n, colors, edges = parse_vcolg_line("1 0 0  ")
+        assert n == 1
+        assert colors == [0]
+        assert edges == []
+
+    def test_missing_separator_raises(self):
+        """A line without the double-space header/edge separator is
+        malformed and the parser must say so clearly rather than
+        silently returning garbage."""
+        with pytest.raises(ValueError, match="double-space"):
+            parse_vcolg_line("3 2 0 0 0 0 1 1 2")  # only single spaces
+
+    def test_odd_edge_count_raises(self):
+        """vcolg always emits edges as (src, dst) pairs — an odd number
+        of edge tokens means the input is corrupted, not that the last
+        edge is half-formed."""
+        with pytest.raises(ValueError, match="odd token count"):
+            parse_vcolg_line("3 2 0 0 0   0 1 1")  # 3 edge tokens
+
+    def test_round_trip_with_exhaustive_generate(self):
+        """A regression check that hardwires us against the actual
+        vcolg format: shell out to vcolg on a tiny input and confirm
+        the parser handles every line.
+
+        Belt-and-suspenders since the simple-line tests above already
+        pin the format, but if a future vcolg release changes the
+        spacing or column order this catches it.
+        """
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            geng_path = os.path.join(td, "g.txt")
+            vcolg_path = os.path.join(td, "v.txt")
+            os.system(f"geng -c 3 > {geng_path} 2>/dev/null")
+            os.system(f"vcolg {geng_path} -T -m2 > {vcolg_path} 2>/dev/null")
+            with open(vcolg_path) as f:
+                lines = [ln.rstrip("\n") for ln in f if ln.strip()]
+        assert lines, "vcolg produced no output — is nauty on PATH?"
+        for line in lines:
+            n, colors, edges = parse_vcolg_line(line)
+            assert n == 3
+            assert len(colors) == n
+            # Every edge endpoint must reference a valid node index.
+            for src, dst in edges:
+                assert 0 <= src < n and 0 <= dst < n

@@ -18,6 +18,7 @@
 #include <boost/functional/hash.hpp>
 
 #include "dataStructures.hpp"
+#include "processColoredGraphs.hpp"
 
 #include <GraphMol/ROMol.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
@@ -338,12 +339,20 @@ std::vector<std::vector<int>> generateNonAutomorphicEdgeColorings(
 // The coloring is accepted if and only if none of its images are lexicographically
 // greater than the coloring itself.
 bool full_maximality_test(const std::vector<int>& coloring, const EdgeGroup& group) {
+    // For each generator: walk the permutation in place and bail at the
+    // first position where coloring[i] differs from coloring[perm[i]].
+    // The original wrote the full permuted vector via apply_permutation
+    // (allocating a fresh std::vector per generator) and then ran
+    // lex_compare end-to-end. This version avoids both the allocation
+    // and the duplicated traversal — fused into a single early-out loop.
+    const size_t n = coloring.size();
     for (const auto& perm : group.perms) {
-        std::vector<int> permuted = apply_permutation(coloring, perm);
-        // If the current coloring is lexicographically less than one of its images,
-        // then it is not canonical.
-        if (lex_compare(coloring, permuted)) {
-            return false;
+        for (size_t i = 0; i < n; ++i) {
+            int original = coloring[i];
+            int image = coloring[perm[i]];
+            if (original < image) return false;  // image is lex-greater here
+            if (original > image) break;          // image is lex-lesser; this perm is fine
+            // equal: keep walking
         }
     }
     return true;
@@ -517,32 +526,46 @@ EdgeGroup obtainEdgeAutomorphismGenerators(
 void processColoring(
     const std::vector<int>& coloring,
     const std::vector<std::pair<int, int>>& edge_list,
-    const std::unordered_map<std::pair<int, int>, std::vector<std::pair<int, int>>, hash_pair>& color_to_port_pair,
+    // Indexed by edge position in edge_list (same ordering used to fill
+    // `coloring`), value is the per-edge list of (sPort, tPort) pairs.
+    // Was previously a pair<int,int>-keyed unordered_map; the inner
+    // loop is hot enough that swapping the hash lookup for direct
+    // vector indexing is worth the parameter-type churn.
+    const std::vector<std::vector<std::pair<int, int>>>& color_to_port_pair_by_edge,
     const std::unordered_map<int, std::string>& int_to_node_type,
     const std::unordered_map<std::string, std::vector<int>>& node_types,
     const std::vector<int>& colors,
-    std::unordered_set<std::string>& canon_set,
-    std::unordered_set<GroupGraph>* graph_basis,
-    GroupGraph& gG
+    const std::unordered_set<std::string>& negativeConstraints,
+    // Precomputed atom-level canonical-form setup for this nauty line.
+    // Built once before the recursive coloring search, reused per leaf.
+    const GroupGraph::AtomicCanonSetup& canon_setup,
+    LocalBasis* graph_basis,
+    GroupGraph& gG,
+    std::vector<std::pair<int, int>>& chosen_ports_buf
 ) {
     gG.clearEdges();
-    size_t edge_index = 0;
     bool all_edges_added = true;
+    const size_t numEdges = edge_list.size();
+    chosen_ports_buf.resize(numEdges);
 
-    for (const auto& edge : edge_list) {
-        // Ensure canonical order for undirected edge:
+    for (size_t edge_index = 0; edge_index < numEdges; ++edge_index) {
+        const auto& edge = edge_list[edge_index];
         int s = edge.first;
         int t = edge.second;
 
-        int color = coloring[edge_index++];
-        std::pair<int,int> colorPort = color_to_port_pair.at(edge)[color];
+        int color = coloring[edge_index];
+        const auto& colorPort = color_to_port_pair_by_edge[edge_index][color];
         int sPort = colorPort.first;
         int tPort = colorPort.second;
         bool added;
 
         added = gG.addEdge({s, sPort}, {t, tPort}, 1, false);
-        if (!added)
+        if (added) {
+            chosen_ports_buf[edge_index] = {sPort, tPort};
+        } else {
             added = gG.addEdge({s, tPort}, {t, sPort}, 1, false);
+            if (added) chosen_ports_buf[edge_index] = {tPort, sPort};
+        }
 
         if (!added) {
             all_edges_added = false;
@@ -552,9 +575,30 @@ void processColoring(
 
     if (!all_edges_added) return;
 
-    std::string smiles = gG.toSmiles();
-    if (canon_set.insert(smiles).second) {
-        graph_basis->insert(gG);
+    // Dedup key via the precomputed-setup fast path: only the cross-
+    // group bond adjacencies vary per leaf; everything else (atom set,
+    // intra-group bonds, color partition, color hashes) is invariant
+    // within this nauty line and was already computed in canon_setup.
+    auto canon = gG.canonizeAtomicWithSetup(canon_setup, edge_list, chosen_ports_buf);
+
+    // Insert directly into the thread's canon-keyed local_basis. Same
+    // canon arriving from a different nauty line collapses into the
+    // existing entry — we don't accumulate duplicate GroupGraph copies
+    // for cross-line repeats. Replaces the previous {per-line canon_set
+    // + per-thread set<GroupGraph>} pair (memory was O(work performed)
+    // before; O(unique outputs) now).
+    if (negativeConstraints.empty()) {
+        graph_basis->try_emplace(std::move(canon), gG);
+    } else {
+        // Forbidden SMILES substrings. Compute toSmiles() only on canons
+        // we haven't seen in this thread yet; once accepted, any later
+        // leaf with the same canon would be rejected the same way.
+        if (graph_basis->find(canon) != graph_basis->end()) return;
+        std::string smiles = gG.toSmiles();
+        for (const auto& forbidden : negativeConstraints) {
+            if (smiles.find(forbidden) != std::string::npos) return;
+        }
+        graph_basis->emplace(std::move(canon), gG);
     }
 }
 //*****************************************************************************
@@ -562,7 +606,7 @@ void processColoring(
 void process_nauty_output(
     const std::string& line,
     const std::unordered_set<GroupGraph::Group>& node_defs,
-    std::unordered_set<GroupGraph>* graph_basis,
+    LocalBasis* graph_basis,
     const std::unordered_map<std::string, int> positiveConstraints,
     const std::unordered_set<std::string> negativeConstraints,
     graph* g, int* lab, int* ptn, int* orbits, optionblk* options, statsblk* stats // Pass nauty structures
@@ -583,8 +627,6 @@ void process_nauty_output(
     std::unordered_map<std::string, std::string> node_type_to_pattern_type;
     std::unordered_map<std::string, std::string> type_to_pattern;
     std::vector<GroupGraph> group_graphs_list;
-    // std::unordered_set<std::vector<setword>, hash_vector> canon_set;
-    std::unordered_set<std::string> canon_set;
 
     // Create necessary maps
     for (const auto& node : node_defs) {
@@ -637,6 +679,15 @@ void process_nauty_output(
             node_type_to_pattern_type.at(int_to_node_type.at(colors[i]))
         );
     }
+
+    // Build the per-line atom-level canonicalization setup once. Every
+    // leaf produced by the recursive coloring search reuses this — it
+    // captures the work that's invariant across leaves (atom list,
+    // intra-bond wiring, color partition, color hashes).
+    GroupGraph::AtomicCanonSetup canon_setup;
+    gG.buildAtomicCanonSetup(canon_setup, static_cast<int>(edge_list.size()));
+    // Per-leaf scratch buffer for chosen port pairs, reused across leaves.
+    std::vector<std::pair<int, int>> chosen_ports_buf;
     // Get degree of each node
     std::unordered_map<int, int> node_degree;
     for (const auto& edge : edge_list) {
@@ -648,7 +699,6 @@ void process_nauty_output(
     // Compute port representatives for each node
     std::unordered_map<int, std::vector<std::vector<int>>> node_port_representatives;
     std::unordered_map<std::pair<int, int>, std::vector<int>, hash_pair> possible_edge_colors;
-    std::unordered_map<std::pair<int, int>,std::vector<std::pair<int, int>>,hash_pair> color_to_port_pair;
     GroupGraph::Group tmp_g;
     for (const auto& [node, degree] : node_degree) {
         tmp_g.ntype = int_to_node_type.at(colors[node]);
@@ -665,8 +715,13 @@ void process_nauty_output(
         }
         return std::vector<int>(ports.begin(), ports.end());
     };
-    // Compute possible edge colors
-    for (const auto& [src, dst] : edge_list) {
+    // Compute possible edge colors. Build a parallel vector indexed by
+    // edge position so processColoring (and downstream
+    // generateNonAutomorphicEdgeColorings_Full) can avoid a pair<int,int>
+    // hash lookup per edge per leaf.
+    std::vector<std::vector<std::pair<int, int>>> color_to_port_pair_by_edge(edge_list.size());
+    for (size_t ei = 0; ei < edge_list.size(); ++ei) {
+        const auto& [src, dst] = edge_list[ei];
         const auto& src_reps = node_port_representatives.at(src);
         const auto& dst_reps = node_port_representatives.at(dst);
 
@@ -683,8 +738,8 @@ void process_nauty_output(
                 port_pairs.push_back({i, j});
             }
         }
-        possible_edge_colors[{src, dst}] = e_colors;
-        color_to_port_pair[{src, dst}] = port_pairs;
+        possible_edge_colors[{src, dst}] = std::move(e_colors);
+        color_to_port_pair_by_edge[ei] = std::move(port_pairs);
     }
 
     // Generate edge automorphism group
@@ -700,13 +755,15 @@ void process_nauty_output(
             processColoring(
                 coloring,
                 edge_list,
-                color_to_port_pair,
+                color_to_port_pair_by_edge,
                 int_to_node_type,
                 node_types,
                 colors,
-                canon_set,
+                negativeConstraints,
+                canon_setup,
                 graph_basis,
-                gG
+                gG,
+                chosen_ports_buf
             );
         }
     );
