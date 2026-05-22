@@ -58,6 +58,7 @@ set(LIBRARIES
     RDKitSmilesParse
     RDKitGraphMol
     RDKitRDGeneral
+    RDKitSubstructMatch
     omp
     nauty
     pq
