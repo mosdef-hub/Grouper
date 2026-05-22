@@ -203,7 +203,9 @@ class TestGroupGraph(BaseTest):
         groups = list(Joback().get_groups())
         out = exhaustive_fragment("CC(C)C", set(groups))
 
-        ring_or_aromatic = lambda t: t.startswith("ring") or t.startswith("aromatic")
+        def ring_or_aromatic(t):
+            return t.startswith("ring") or t.startswith("aromatic")
+
         for gg in out:
             for node in gg.nodes.values():
                 assert not ring_or_aromatic(node.type), (
