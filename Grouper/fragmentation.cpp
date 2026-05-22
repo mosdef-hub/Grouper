@@ -107,6 +107,88 @@ std::unordered_set<GroupGraph::Group> possibleValencyNode(const GroupGraph::Grou
     return possibleNodes;
 
 }
+// Run RDKit's substructure search against a *full-chemistry* parse of the
+// molecule (rings, aromaticity, hybridization, implicit H counts) and filter
+// each raw match by the same external-bond hub-count constraint that the
+// legacy AtomGraph::substructureSearch enforced.
+//
+// Returns matches in the same format as AtomGraph::substructureSearch:
+// vector<vector<pair<queryAtomIdx, molAtomIdx>>>. RDKit atom indices align
+// with AtomGraph node IDs because AtomGraph::fromSmiles iterates RDKit atoms
+// in insertion order (see createAtomGraphFromRDKit).
+static std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>>
+matchGroupRDKit(
+    const RDKit::ROMol& rdkitMol,
+    const AtomGraph& molAtomGraph,
+    const std::string& pattern,
+    const std::string& patternType,
+    const std::vector<int>& hubs
+) {
+    std::vector<std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>>> out;
+
+    std::unique_ptr<RDKit::ROMol> query;
+    if (patternType == "SMARTS") {
+        query.reset(RDKit::SmartsToMol(pattern));
+    } else {
+        query.reset(RDKit::SmilesToMol(pattern));
+    }
+    if (!query) return out;
+
+    std::vector<RDKit::MatchVectType> rdMatches;
+    // uniquify=false preserves atom-permutation matches so the recursive
+    // fragmentation explorer can try every (query atom -> mol atom) mapping
+    // (different mappings can leave different ports free for inter-group bonds).
+    RDKit::SubstructMatch(rdkitMol, *query, rdMatches,
+                          /*uniquify=*/false,
+                          /*recursionPossible=*/true,
+                          /*useChirality=*/false,
+                          /*useQueryQueryMatches=*/false);
+
+    // Count how many ports each query atom needs (one slot per occurrence
+    // in the hubs vector).
+    std::unordered_map<AtomGraph::NodeIDType, int> queryNeededFreeValency;
+    for (const auto& atom : query->atoms()) {
+        queryNeededFreeValency[atom->getIdx()] = 0;
+    }
+    for (int h : hubs) {
+        queryNeededFreeValency[h]++;
+    }
+
+    for (const auto& match : rdMatches) {
+        std::unordered_map<AtomGraph::NodeIDType, AtomGraph::NodeIDType> q2m;
+        std::unordered_set<AtomGraph::NodeIDType> mapped;
+        for (const auto& [qIdx, mIdx] : match) {
+            q2m[qIdx] = mIdx;
+            mapped.insert(mIdx);
+        }
+
+        // Each query atom must have exactly as many bonds leaving the matched
+        // subgraph as the hub-count for that query atom requires.
+        bool hubCountOk = true;
+        for (const auto& [qIdx, count] : queryNeededFreeValency) {
+            AtomGraph::NodeIDType mIdx = q2m[qIdx];
+            int external = 0;
+            for (const auto& edge : molAtomGraph.edges) {
+                if (std::get<0>(edge) == mIdx
+                    && mapped.find(std::get<1>(edge)) == mapped.end()) {
+                    external++;
+                }
+            }
+            if (external != count) { hubCountOk = false; break; }
+        }
+        if (!hubCountOk) continue;
+
+        std::vector<std::pair<AtomGraph::NodeIDType, AtomGraph::NodeIDType>> formatted;
+        formatted.reserve(match.size());
+        for (const auto& [qIdx, mIdx] : match) {
+            formatted.emplace_back(qIdx, mIdx);
+        }
+        out.push_back(std::move(formatted));
+    }
+    return out;
+}
+
+
 // TODO: This should accept nodeDefs which are NodeTraces
 // TODO: This should handle Groups which can be SMARTS or SMILES
 std::vector<GroupGraph> fragment(
@@ -117,9 +199,16 @@ std::vector<GroupGraph> fragment(
     GroupGraph groupGraph;
     std::vector<GroupGraph::Group> finalNodeDefinitions;
 
-    // Parse the SMILES string to an AtomGraph
+    // Parse the SMILES string to an AtomGraph (used for connectivity / edges /
+    // hub-count checks) and to a full-chemistry RDKit ROMol (used for SMARTS-
+    // aware substructure matching). Both index atoms 0..N-1 in the same order.
     AtomGraph mol;
     mol.fromSmiles(smiles);
+
+    std::unique_ptr<RDKit::ROMol> rdkitMol(RDKit::SmilesToMol(smiles));
+    if (!rdkitMol) {
+        throw std::invalid_argument("Could not parse SMILES '" + smiles + "'.");
+    }
 
     // Calculate possible nodes for each node definition
     std::unordered_map<GroupGraph::Group, std::unordered_set<GroupGraph::Group>> possibleNodes;
@@ -269,14 +358,10 @@ std::vector<GroupGraph> fragment(
 
         for (size_t i = startIdx; i < candidates.size(); ++i) {
             const auto& node = candidates[i];
-            AtomGraph query;
-            if (node.patternType == "SMARTS") {
-                query.fromSmarts(node.pattern);
-            } else {
-                query.fromSmiles(node.pattern);
-            }
 
-            auto matches = mol.substructureSearch(query, node.hubs);
+            auto matches = matchGroupRDKit(
+                *rdkitMol, mol, node.pattern, node.patternType, node.hubs
+            );
             if (matches.empty()) {
                 continue;
             }
