@@ -81,4 +81,6 @@ def random_generate(
     )
 
 
-from .fragmentation import fragment
+from .fragmentation import (  # noqa: E402  (intentional: must come after the wrapper defs above)
+    fragment,
+)
