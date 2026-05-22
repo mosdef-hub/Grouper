@@ -19,7 +19,7 @@ from PIL import Image
 import Grouper
 
 
-def visualize(group_graph, pos=None):
+def visualize(group_graph, pos=None, ax=None):
     """Visualize a graph with optional custom positioning for nodes.
 
     Parameters
@@ -27,17 +27,31 @@ def visualize(group_graph, pos=None):
     group_graph: A NetworkX graph object to be visualized.
     pos: A dictionary specifying positions for nodes (optional).
            If None, a default layout will be used.
+    ax: matplotlib Axes (optional). If provided, draw into the given
+           axes (used to compose with other panels — e.g., a side-by-side
+           chemical structure view). If None, a new figure is created.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The figure containing the rendered port-graph.
     """
     if pos is None:
         pos = spring_layout(group_graph, iterations=50, k=1.0)
-    fig, ax = plt.subplots(figsize=(5, 5))
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(5, 5))
+    else:
+        fig = ax.figure
 
-    # Set axis limits
+    # Set axis limits — use ax.set_*lim, not plt.*, so this works
+    # correctly when `ax` was passed in from a parent figure that has
+    # other subplots (plt.* targets the *current* axes, which may be
+    # the wrong one).
     x_values, y_values = zip(*pos.values())
     x_margin = (max(x_values) - min(x_values)) * 0.1 + 0.1
     y_margin = (max(y_values) - min(y_values)) * 0.1 + 0.1
-    plt.xlim(min(x_values) - x_margin, max(x_values) + x_margin)
-    plt.ylim(min(y_values) - y_margin, max(y_values) + y_margin)
+    ax.set_xlim(min(x_values) - x_margin, max(x_values) + x_margin)
+    ax.set_ylim(min(y_values) - y_margin, max(y_values) + y_margin)
 
     # Color map for nodes
     node_types = set([n.type for n in group_graph.nodes.values()])
