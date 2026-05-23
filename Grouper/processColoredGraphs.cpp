@@ -755,6 +755,15 @@ void process_nauty_output(
     // are chemically distinct and must be enumerated independently.
     // The literal-hub check is the largest collapse-safe subset and
     // covers the common high-port-count single-atom cases.
+    //
+    // Generalising this optimization to multi-atom multi-hub groups
+    // (full benzene, naphthalene, larger aromatics) requires either
+    // augmenting `EdgeGroup` with per-node port-permutation
+    // generators AND adding intermediate maximality pruning during
+    // the recursive edge-coloring search, OR reframing the search
+    // to per-node representative choices instead of per-edge port
+    // pairs. Both are real algorithm work. See issue #92 for the
+    // implementation outline and acceptance criteria.
     std::unordered_map<int, bool> node_all_equivalent;
     for (const auto& [node, degree] : node_degree) {
         const auto& hubs = node_type_to_hub.at(
