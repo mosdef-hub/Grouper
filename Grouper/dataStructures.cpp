@@ -410,9 +410,14 @@ std::vector<int> GroupGraph::Group::hubOrbits() const {
         ADDONEEDGE(adj.data(), from, to, m);
     }
 
-    // Step 2: Compute atom orbits using nauty
+    // Step 2: Compute atom orbits using nauty.
+    // canong is sized n*m (not n): nauty writes n setwords per row,
+    // m rows. For n < SIZEOF_WORD (typically 64) this happens to be
+    // n by luck (m=1); past that, the undersized buffer overruns and
+    // segfaults. Hits any Group whose pattern has ≥64 atoms (e.g.
+    // a 64+-mer polyethylene used as a single Group).
     std::vector<int> lab(n), ptn(n), orbits(n);
-    std::vector<setword> canong(n);
+    std::vector<setword> canong(static_cast<size_t>(m) * n);
     DEFAULTOPTIONS_GRAPH(options);
     statsblk stats;
     options.getcanon = TRUE;
@@ -477,10 +482,18 @@ std::vector<std::vector<int>> GroupGraph::Group::getPossibleAttachments(int degr
             modifiedGraph.addEdge(hubs[port_idx], modifiedGraph.nodes.size() - 1); // Connect to the hub
         }
 
-        // Compute the canonical form using Nauty
+        // Compute the canonical form using Nauty.
+        // canong is sized n*m (not n): nauty writes n setwords per
+        // row across m rows. For n < SIZEOF_WORD (typically 64) m=1
+        // and n is large enough by luck; for n ≥ 64 (e.g. patterns
+        // with ≥64 atoms) m ≥ 2 and the undersized buffer overruns,
+        // segfaulting on the first call. Hits any polymer-as-Group
+        // workflow (700-unit polyethylene case study).
         std::vector<setword> nauty_graph = modifiedGraph.toNautyGraph();
-        std::vector<int> lab(modifiedGraph.nodes.size()), ptn(modifiedGraph.nodes.size()), orbits(modifiedGraph.nodes.size());
-        std::vector<setword> canong(modifiedGraph.nodes.size());
+        const int n_modified = static_cast<int>(modifiedGraph.nodes.size());
+        const int m_modified = SETWORDSNEEDED(n_modified);
+        std::vector<int> lab(n_modified), ptn(n_modified), orbits(n_modified);
+        std::vector<setword> canong(static_cast<size_t>(m_modified) * n_modified);
 
         // Sort nodes by color and initialize `lab` and `ptn`
         int n = modifiedGraph.nodes.size();
