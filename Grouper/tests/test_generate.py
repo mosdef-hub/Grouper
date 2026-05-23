@@ -139,6 +139,50 @@ class TestGeneration(BaseTest):
             f"n=2 enumeration; got {sorted(smiles)}"
         )
 
+    def test_all_equivalent_port_orbit_collapses(self):
+        """When every port of a group sits in the same atom-orbit
+        (under the group's automorphism), the per-edge candidate
+        generator must collapse to one canonical port assignment per
+        side rather than cross-producing all p^2 combinations.
+
+        Pre-fix, this case bottlenecked on the recursive port-pairing
+        search (every port permutation of a node was materialized
+        and only deduped post-canonicalization), making carbon-only
+        n=5 effectively non-terminating: ~16^E candidate edge-colorings
+        per K5-shaped topology before dedup.
+
+        The fix recognises orbit equivalence in two flavours: literal
+        identical hubs (`C [0,0,0,0]`) and atoms equivalent under the
+        group's nauty-derived atom automorphism (`benzene c1ccccc1
+        [0,3]` — atoms 0 and 3 are para-equivalent under D6).
+
+        Pin: carbon-only n=5 must produce exactly A001349(5)=21
+        unique structures (every connected simple graph on 5 nodes
+        collapses to one canonical form when all groups are identical
+        single-atom carbons), and must do so in well under a second.
+        """
+        import time as _time
+        node_defs = {Group("c", "C", [0, 0, 0, 0])}
+        start = _time.perf_counter()
+        result = exhaustive_generate(
+            n_nodes=5,
+            node_defs=node_defs,
+            num_procs=1,
+            confirm=True,
+        )
+        elapsed = _time.perf_counter() - start
+        assert len(result) == 21, (
+            f"expected A001349(5)=21 unique graphs for carbon-only "
+            f"n=5; got {len(result)}"
+        )
+        # 5 seconds is generous — pre-fix this didn't terminate in an
+        # hour. With the fix it's milliseconds locally; the threshold
+        # is a CI-noise buffer, not a target.
+        assert elapsed < 5.0, (
+            f"carbon-only n=5 took {elapsed:.1f}s — port-orbit "
+            f"collapse appears regressed"
+        )
+
 
     @pytest.mark.skip(reason="Too slow for general testing")
     @pytest.mark.parametrize("n_nodes", [2, 3, 4, 5, 6])

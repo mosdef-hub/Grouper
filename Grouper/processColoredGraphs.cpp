@@ -725,18 +725,82 @@ void process_nauty_output(
         }
         return std::vector<int>(ports.begin(), ports.end());
     };
+
+    // Per-node "all ports in one orbit" flag. Two ports are
+    // equivalent under the group's automorphism iff their hub atoms
+    // lie in the same nauty orbit; when ALL hubs of a node share a
+    // single orbit, every permutation of ports among the node's
+    // incident edges yields the same canonical molecule.
+    //
+    // This holds in two distinct chemical situations:
+    //   1. All hubs point to the same atom (e.g. methane C [0,0,0,0],
+    //      hydroxide O [0,0]) — the trivial subcase.
+    //   2. Hubs point to different atoms that happen to be equivalent
+    //      under the group's atom automorphism (e.g. para-benzene
+    //      c1ccccc1 [0,3] — atoms 0 and 3 are para-related and
+    //      equivalent under D6).
+    //
+    // In both cases, the downstream edge-automorphism-group dedup
+    // catches the redundancy asymptotically, but only after
+    // materializing and canonicalizing each of the p^d port
+    // permutations per node. For high-port-count groups that
+    // expansion is the dominant cost — n=5 with all-carbon would
+    // otherwise enumerate 16^E candidate edge colorings before
+    // deduplication, exhausting any practical time budget.
+    //
+    // The fix: when a node is "all-equivalent" in this orbit sense,
+    // we collapse its per-side candidate to one canonical port per
+    // incident edge, assigned in topology order (port 0 to the first
+    // incident edge, port 1 to the second, ...). This is one
+    // canonical representative of the per-node port-permutation
+    // orbit AND keeps the uniqueness invariant that downstream
+    // `addEdge` relies on (each port used at most once).
+    std::unordered_map<int, bool> node_all_equivalent;
+    for (const auto& [node, degree] : node_degree) {
+        const std::string& ntype = int_to_node_type.at(colors[node]);
+        GroupGraph::Group probe;
+        probe.ntype = ntype;
+        probe.hubs = node_type_to_hub.at(ntype);
+        probe.pattern = int_to_pattern.at(colors[node]);
+        probe.patternType = node_type_to_pattern_type.at(ntype);
+        std::vector<int> orbits_of_hubs = probe.hubOrbits();
+        std::unordered_set<int> distinct(
+            orbits_of_hubs.begin(), orbits_of_hubs.end()
+        );
+        node_all_equivalent[node] = (distinct.size() == 1);
+    }
+
     // Compute possible edge colors. Build a parallel vector indexed by
     // edge position so processColoring (and downstream
     // generateNonAutomorphicEdgeColorings_Full) can avoid a pair<int,int>
     // hash lookup per edge per leaf.
     std::vector<std::vector<std::pair<int, int>>> color_to_port_pair_by_edge(edge_list.size());
+    // Per-node next-available port counter, used for all-equivalent
+    // nodes to assign distinct ports to incident edges in
+    // topology-order.
+    std::unordered_map<int, int> node_next_port;
     for (size_t ei = 0; ei < edge_list.size(); ++ei) {
         const auto& [src, dst] = edge_list[ei];
         const auto& src_reps = node_port_representatives.at(src);
         const auto& dst_reps = node_port_representatives.at(dst);
 
-        std::vector<int> src_ports = flatten_ports(src_reps);
-        std::vector<int> dst_ports = flatten_ports(dst_reps);
+        // For an all-equivalent node, the only choice that survives
+        // port-orbit equivalence is "the next unused port" — so
+        // collapse the per-side candidate set to a single value
+        // instead of cross-producing all ports. For a non-equivalent
+        // node, keep the full flatten_ports list.
+        std::vector<int> src_ports;
+        if (node_all_equivalent.at(src)) {
+            src_ports = {node_next_port[src]++};
+        } else {
+            src_ports = flatten_ports(src_reps);
+        }
+        std::vector<int> dst_ports;
+        if (node_all_equivalent.at(dst)) {
+            dst_ports = {node_next_port[dst]++};
+        } else {
+            dst_ports = flatten_ports(dst_reps);
+        }
 
         std::vector<int> e_colors;
         std::vector<std::pair<int, int>> port_pairs;
