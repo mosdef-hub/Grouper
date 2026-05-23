@@ -104,6 +104,41 @@ class TestGeneration(BaseTest):
             f"{len(result)} graphs."
         )
 
+    def test_generation_with_smarts_library(self):
+        """SMARTS-pattern libraries (e.g. Joback) must work in
+        exhaustive_generate.
+
+        Pre-existing bug: processColoredGraphs.cpp constructed a scratch
+        `tmp_g` Group via default-construction + field assignment without
+        setting `patternType`, so it stayed at the empty-string default.
+        `Group::getPossibleAttachments` then fell through to the SMILES
+        branch and called `AtomGraph::fromSmiles` on a SMARTS query like
+        `[CX4H3]`, which RDKit's SMILES parser rejects — followed by a
+        downstream valency-exhaustion crash because the resulting empty
+        AtomGraph can't carry the requested bond.
+
+        Pin-down: methyl `[CX4H3]` (1 free valence after H3) joined with
+        methylene `[CX4H2]` (2 free valences after H2) at n=2 yields
+        exactly 1 unique graph (CC = ethane), because methylene's
+        hubs=[0,0] requires 2 ports used but a 2-node 1-edge topology
+        only fills 1 — so methylene can't appear, and methyl-methyl
+        is the only valid pair.
+        """
+        methyl = Group("methyl", "[CX4H3]", [0], pattern_type="SMARTS")
+        methylene = Group(
+            "methylene", "[CX4H2]", [0, 0], pattern_type="SMARTS"
+        )
+        result = exhaustive_generate(
+            n_nodes=2,
+            node_defs={methyl, methylene},
+            num_procs=1,
+        )
+        smiles = {g.to_smiles() for g in result}
+        assert smiles == {"CC"}, (
+            f"expected only ethane (CC) from a methyl+methylene "
+            f"n=2 enumeration; got {sorted(smiles)}"
+        )
+
 
     @pytest.mark.skip(reason="Too slow for general testing")
     @pytest.mark.parametrize("n_nodes", [2, 3, 4, 5, 6])

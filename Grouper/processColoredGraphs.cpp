@@ -704,6 +704,16 @@ void process_nauty_output(
         tmp_g.ntype = int_to_node_type.at(colors[node]);
         tmp_g.hubs = node_type_to_hub.at(int_to_node_type.at(colors[node]));
         tmp_g.pattern = int_to_pattern.at(colors[node]);
+        // Restore the patternType (SMILES vs SMARTS) on the scratch
+        // Group before computing port representatives. Without this
+        // line tmp_g.patternType stays at the default empty string,
+        // and Group::getPossibleAttachments falls through to
+        // AtomGraph::fromSmiles — which then crashes when the actual
+        // pattern is a SMARTS query like `[CX4H2]` from a SMARTS-based
+        // library (Joback, UNIFAC, SAFT-γ-Mie).
+        tmp_g.patternType = node_type_to_pattern_type.at(
+            int_to_node_type.at(colors[node])
+        );
         node_port_representatives[node] = tmp_g.getPossibleAttachments(degree);
     }
 

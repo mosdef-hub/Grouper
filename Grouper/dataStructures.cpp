@@ -159,6 +159,13 @@ struct GroupMolCacheKeyHash {
 struct CachedAtom {
     int atomicNumber;
     int formalCharge;
+    // For SMARTS patterns with an explicit H-count constraint
+    // (e.g. `[CX4H3]` => 3), the number of hydrogens reserved on
+    // this atom. Counted only for SMARTS (RDKit's
+    // getNumExplicitHs() returns the query's H-spec); always 0
+    // for SMILES so the long-standing convention "hubs displace
+    // implicit Hs" keeps working for SMILES groups.
+    int explicitHs;
     std::string symbol;
 };
 
@@ -203,9 +210,18 @@ std::shared_ptr<const CachedMolData> getCachedMolData(
     auto data = std::make_shared<CachedMolData>();
     data->atoms.reserve(mol->getNumAtoms());
     for (const auto& atom : mol->atoms()) {
+        // For SMARTS query atoms with an H-count constraint
+        // (e.g. `[CX4H3]`), capture the explicit H spec so the
+        // downstream max-valence computation can subtract it.
+        // For SMILES atoms the H count is implicit and is
+        // intentionally NOT subtracted — the long-standing
+        // convention is that user-declared hubs displace those
+        // implicit Hs at attachment time.
+        int explicitHs = isSmarts ? atom->getNumExplicitHs() : 0;
         data->atoms.push_back({
             atom->getAtomicNum(),
             atom->getFormalCharge(),
+            explicitHs,
             atom->getSymbol()
         });
     }
@@ -1108,7 +1124,14 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         const auto& cached = *getCachedMolData(node.pattern, isSmarts);
 
         for (const auto& a : cached.atoms) {
-            int maxValence = pt->getDefaultValence(a.atomicNumber) + a.formalCharge;
+            // Subtract `explicitHs` for SMARTS atoms with an H-count
+            // constraint (e.g. `[CX4H3]` => maxValence 4-3=1). For
+            // SMILES atoms `explicitHs` is 0 by construction so this
+            // is a no-op and the legacy "hubs displace implicit Hs"
+            // semantics are preserved.
+            int maxValence = pt->getDefaultValence(a.atomicNumber)
+                             + a.formalCharge
+                             - a.explicitHs;
             atomGraph->addNode(a.symbol, maxValence);
         }
         for (const auto& b : cached.bonds) {
