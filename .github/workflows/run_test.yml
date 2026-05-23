@@ -36,6 +36,11 @@ jobs:
         environment-file: environment.yml
         create-args: >-
           python=${{ matrix.python-version }}
+        # Cache the resolved env so subsequent runs skip the 55-minute
+        # libmamba solve on ubuntu-3.9. Key includes the workflow file's
+        # hash so changes to the matrix or step list invalidate cleanly.
+        cache-environment: true
+        cache-environment-key: env-${{ matrix.os }}-py${{ matrix.python-version }}-${{ hashFiles('environment.yml') }}
 
     - name: Activate env
       run: micromamba activate grouper-dev
