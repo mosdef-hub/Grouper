@@ -726,48 +726,42 @@ void process_nauty_output(
         return std::vector<int>(ports.begin(), ports.end());
     };
 
-    // Per-node "all ports in one orbit" flag. Two ports are
-    // equivalent under the group's automorphism iff their hub atoms
-    // lie in the same nauty orbit; when ALL hubs of a node share a
-    // single orbit, every permutation of ports among the node's
-    // incident edges yields the same canonical molecule.
-    //
-    // This holds in two distinct chemical situations:
-    //   1. All hubs point to the same atom (e.g. methane C [0,0,0,0],
-    //      hydroxide O [0,0]) — the trivial subcase.
-    //   2. Hubs point to different atoms that happen to be equivalent
-    //      under the group's atom automorphism (e.g. para-benzene
-    //      c1ccccc1 [0,3] — atoms 0 and 3 are para-related and
-    //      equivalent under D6).
-    //
-    // In both cases, the downstream edge-automorphism-group dedup
+    // Per-node "all hubs point to the same atom" flag. When this
+    // holds, every port on the node is literally indexed into the
+    // same underlying atom of the pattern, so any permutation of
+    // ports among the node's incident edges produces the identical
+    // atom-level molecule. The downstream edge-automorphism dedup
     // catches the redundancy asymptotically, but only after
     // materializing and canonicalizing each of the p^d port
-    // permutations per node. For high-port-count groups that
-    // expansion is the dominant cost — n=5 with all-carbon would
-    // otherwise enumerate 16^E candidate edge colorings before
-    // deduplication, exhausting any practical time budget.
+    // permutations per node. For high-port-count groups
+    // (carbon C[0,0,0,0], ammonium N[0,0,0,0], etc.) in dense
+    // topologies that expansion is the dominant cost — carbon-only
+    // n=5 with a K5 topology would otherwise enumerate 16^10
+    // candidate edge colorings before deduplication.
     //
-    // The fix: when a node is "all-equivalent" in this orbit sense,
-    // we collapse its per-side candidate to one canonical port per
-    // incident edge, assigned in topology order (port 0 to the first
-    // incident edge, port 1 to the second, ...). This is one
-    // canonical representative of the per-node port-permutation
+    // The fix: collapse the per-side candidate set to one canonical
+    // port per incident edge, assigned in topology order. This is
+    // one canonical representative of the per-node port-permutation
     // orbit AND keeps the uniqueness invariant that downstream
     // `addEdge` relies on (each port used at most once).
+    //
+    // We deliberately gate this on hubs being LITERALLY identical
+    // (all pointing to the same atom index), not merely on hubs
+    // being in one nauty atom orbit. The orbit-only condition would
+    // wrongly collapse e.g. benzene c1ccccc1 [0,1,2,3,4,5]: all six
+    // hubs are in one orbit under D6, but the stabilizer of any one
+    // hub atom does NOT pointwise-fix the others (it maps neighbour
+    // atoms 1↔5 and 2↔4), so ortho/meta/para attachment patterns
+    // are chemically distinct and must be enumerated independently.
+    // The literal-hub check is the largest collapse-safe subset and
+    // covers the common high-port-count single-atom cases.
     std::unordered_map<int, bool> node_all_equivalent;
     for (const auto& [node, degree] : node_degree) {
-        const std::string& ntype = int_to_node_type.at(colors[node]);
-        GroupGraph::Group probe;
-        probe.ntype = ntype;
-        probe.hubs = node_type_to_hub.at(ntype);
-        probe.pattern = int_to_pattern.at(colors[node]);
-        probe.patternType = node_type_to_pattern_type.at(ntype);
-        std::vector<int> orbits_of_hubs = probe.hubOrbits();
-        std::unordered_set<int> distinct(
-            orbits_of_hubs.begin(), orbits_of_hubs.end()
+        const auto& hubs = node_type_to_hub.at(
+            int_to_node_type.at(colors[node])
         );
-        node_all_equivalent[node] = (distinct.size() == 1);
+        std::unordered_set<int> distinct_hubs(hubs.begin(), hubs.end());
+        node_all_equivalent[node] = (distinct_hubs.size() == 1);
     }
 
     // Compute possible edge colors. Build a parallel vector indexed by

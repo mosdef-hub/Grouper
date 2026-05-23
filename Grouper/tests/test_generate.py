@@ -183,6 +183,37 @@ class TestGeneration(BaseTest):
             f"collapse appears regressed"
         )
 
+    def test_multi_atom_hubs_not_overcollapsed(self):
+        """Correctness anchor for the port-orbit collapse: we must
+        NOT collapse when hubs land on chemically-distinct positions
+        within a multi-atom group.
+
+        Full benzene `c1ccccc1 [0,1,2,3,4,5]` has all six attachment
+        atoms in a single nauty orbit under D6, but the stabilizer of
+        any one attachment atom does NOT pointwise-fix the others
+        (it swaps ortho positions and meta positions across the
+        symmetry axis). So ortho/meta/para attachment patterns on a
+        given ring are chemically distinct and the enumeration must
+        produce all of them.
+
+        Pin: three full-benzene groups at n=3 must yield 13 unique
+        structures (the cyclic 3-ring + 12 distinct chain
+        configurations covering every ortho/meta/para combination on
+        the middle ring). An earlier orbit-only version of the
+        collapse heuristic gave only 2 here, silently dropping all
+        but one chain variant.
+        """
+        bf = Group("bf", "c1ccccc1", [0, 1, 2, 3, 4, 5])
+        result = exhaustive_generate(
+            n_nodes=3, node_defs={bf}, num_procs=1, confirm=True
+        )
+        assert len(result) == 13, (
+            f"full-benzene n=3 must yield 13 distinct structures "
+            f"covering ortho/meta/para chain variants + cyclic ring; "
+            f"got {len(result)}. If this dropped to 2, the port-orbit "
+            f"collapse was incorrectly applied to multi-atom hubs."
+        )
+
 
     @pytest.mark.skip(reason="Too slow for general testing")
     @pytest.mark.parametrize("n_nodes", [2, 3, 4, 5, 6])
