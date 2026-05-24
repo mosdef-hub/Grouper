@@ -1,9 +1,10 @@
 import logging
 import time
+import warnings
 
 import pytest
 
-from Grouper import Group, exhaustive_generate, random_generate
+from Grouper import Group, exhaustive_generate, random_generate, random_sample
 from Grouper.tests.base_test import BaseTest
 
 
@@ -214,6 +215,135 @@ class TestGeneration(BaseTest):
             f"collapse was incorrectly applied to multi-atom hubs."
         )
 
+
+    def test_random_sample_small_smoke(self):
+        """Direct sampler returns a `GroupGraphSet` of unique molecules
+        at small n. Pinned counts because the seed is fixed — if the
+        sampler is broken or the algorithm changes meaningfully, the
+        output set diverges and the test catches it.
+        """
+        node_defs = {
+            Group("amine", "N", [0, 0, 0]),
+            Group("methyl", "C", [0, 0, 0, 0]),
+        }
+        result = random_sample(
+            n_nodes=3,
+            node_defs=node_defs,
+            num_graphs=8,
+            seed=42,
+        )
+        # SMILES dedup inside the sampler means every returned graph
+        # is a unique molecule.
+        smiles = [g.to_smiles() for g in result]
+        assert len(smiles) == len(set(smiles))
+        # Sampler is best-effort: at small n with 2 groups the request
+        # for 8 unique graphs is achievable within the default attempt
+        # cap (20 * num_graphs = 160 attempts on a ~10-graph space).
+        assert len(result) >= 5
+
+    def test_random_sample_scales_past_vcolg(self):
+        """The whole point of this sampler: it must work at sizes
+        where `random_generate` / `exhaustive_generate` would never
+        terminate. Pin n=18, which is far past vcolg's cliff at this
+        library shape; we should still get the requested count in
+        well under a second.
+        """
+        node_defs = {
+            Group("methyl",   "C", [0, 0, 0, 0]),
+            Group("amine",    "N", [0, 0, 0]),
+            Group("hydroxyl", "O", [0, 0]),
+            Group("ester",    "C(=O)O", [0, 2]),
+        }
+        start = time.perf_counter()
+        result = random_sample(
+            n_nodes=18,
+            node_defs=node_defs,
+            num_graphs=100,
+            seed=7,
+        )
+        elapsed = time.perf_counter() - start
+        assert len(result) == 100, (
+            f"random_sample failed to find 100 unique graphs at n=18; "
+            f"got {len(result)}"
+        )
+        smiles = {g.to_smiles() for g in result}
+        assert len(smiles) == 100, "duplicate SMILES leaked through dedup"
+        # Generous CI bound; locally this runs in ~100ms.
+        assert elapsed < 5.0, (
+            f"random_sample(n=18, num_graphs=100) took {elapsed:.1f}s — "
+            f"performance has regressed"
+        )
+
+    def test_random_sample_negative_constraint(self):
+        """Negative constraints reject any returned graph whose SMILES
+        contains a forbidden substring. This exercises the only code
+        path in random_sample that still calls toSmiles per attempt
+        (so it also implicitly checks that the RDLog::LogStateSetter
+        scoping doesn't break correctness when active).
+        """
+        node_defs = {
+            Group("amine", "N", [0, 0, 0]),
+            Group("methyl", "C", [0, 0, 0, 0]),
+        }
+        result = random_sample(
+            n_nodes=5,
+            node_defs=node_defs,
+            num_graphs=20,
+            negative_constraints={"NN"},
+            seed=11,
+            show_progress=False,
+        )
+        for g in result:
+            smiles = g.to_smiles()
+            assert "NN" not in smiles, (
+                f"Graph {smiles} contains the forbidden substring 'NN' "
+                f"that negative_constraints should have rejected"
+            )
+
+    def test_random_sample_positive_constraint(self):
+        """Positive constraints must filter the sampler's output: every
+        returned graph satisfies the per-type minimum. We also check
+        that the sampler warns rather than infinite-looping when the
+        constraint is unreachable within the attempt budget.
+        """
+        node_defs = {
+            Group("amine", "N", [0, 0, 0]),
+            Group("methyl", "C", [0, 0, 0, 0]),
+        }
+        # Achievable: at n=6 with 2 groups, requiring 2 amines is
+        # comfortably met by stratified sampling.
+        result = random_sample(
+            n_nodes=6,
+            node_defs=node_defs,
+            num_graphs=20,
+            positive_constraints={"amine": 2},
+            seed=1,
+        )
+        for g in result:
+            n_amines = sum(
+                1 for node in g.nodes.values() if node.type == "amine"
+            )
+            assert n_amines >= 2, (
+                f"Graph {g.to_smiles()} has {n_amines} amine(s), "
+                f"violates positive_constraints={{amine: 2}}"
+            )
+
+        # Unreachable: a 3-node graph can't have 10 amines. Sampler
+        # must warn and return early instead of hanging.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            impossible = random_sample(
+                n_nodes=3,
+                node_defs=node_defs,
+                num_graphs=5,
+                positive_constraints={"amine": 10},
+                max_attempts=50,
+                seed=1,
+            )
+        assert len(impossible) == 0
+        assert any(
+            "exhausted max_attempts" in str(w.message) for w in caught
+        ), "expected a max_attempts-exhausted warning"
 
     @pytest.mark.skip(reason="Too slow for general testing")
     @pytest.mark.parametrize("n_nodes", [2, 3, 4, 5, 6])

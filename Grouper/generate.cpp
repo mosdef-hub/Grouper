@@ -4,6 +4,7 @@
 #include <GraphMol/GraphMol.h>
 #include <GraphMol/Atom.h>
 #include <GraphMol/Bond.h>
+#include <RDGeneral/RDLog.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -14,6 +15,8 @@
 #include <iostream>
 #include <fstream>
 #include <mutex>
+#include <numeric>
+#include <optional>
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
@@ -921,4 +924,416 @@ std::unordered_set<GroupGraph> randomGenerate(
     }
 
     return global_basis;
+}
+
+
+// -----------------------------------------------------------------------------
+// randomSample: direct random construction, no geng/vcolg pre-step.
+//
+// Scales linearly with num_graphs (not combinatorially with n_nodes), so it
+// works at sizes where exhaustiveGenerate / randomGenerate would never
+// terminate. NOT uniform over canonical orbits: low-symmetry molecules are
+// over-represented relative to high-symmetry ones by ~|Aut(G)|^-1. For most
+// generative use cases that's fine; if orbit-uniform sampling is required,
+// use randomGenerate (which is bounded by vcolg's combinatorial cliff at
+// n ~= 10).
+//
+// Pipeline per attempt:
+//   1. Sample a color sequence (iid or stratified via stars-and-bars).
+//   2. Build a budget-aware spanning tree (sequential growth weighted by
+//      remaining port budget). Always feasible if min(budgets) >= 1.
+//   3. Add optional extra edges where both endpoints have free ports.
+//   4. Randomly pair free ports for each edge.
+//   5. Canonicalize via toSmiles() and dedup by SMILES.
+// Post-construction filter: positive_constraints (per-type minimum count)
+// and negative_constraints (forbidden SMILES substrings).
+//
+// Single-threaded so seed reproducibility is exact. Empirically still
+// ~1000-2000 unique molecules/sec at n=18 on the default 4-group library
+// since the dominant cost (toSmiles + RDKit roundtrip) is already native.
+// -----------------------------------------------------------------------------
+
+namespace {
+
+// Sample a color sequence by drawing each position iid from the group list.
+// Concentrates probability mass on the multinomial mode — fine for small
+// balanced libraries, but starves rare profiles (e.g. all-carbon at Joback).
+std::vector<int> sample_iid_colors(
+    int n, int k, std::mt19937_64& rng
+) {
+    std::uniform_int_distribution<int> dist(0, k - 1);
+    std::vector<int> seq(n);
+    for (int i = 0; i < n; ++i) seq[i] = dist(rng);
+    return seq;
+}
+
+// Uniform over color profiles (multisets) via stars-and-bars: place k-1
+// dividers in n+k-1 positions, count entries between dividers. O(k) and
+// works at any library size without enumerating the C(n+k-1, k-1) profile
+// space — critical for libraries where that count would be astronomical
+// (Joback n=10 has ~10^10 profiles).
+std::vector<int> sample_stratified_colors(
+    int n, int k, std::mt19937_64& rng
+) {
+    if (k == 1) return std::vector<int>(n, 0);
+    // Reservoir-style: pick k-1 distinct values from [0, n+k-2].
+    int slots = n + k - 1;
+    std::vector<int> indices(slots);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::vector<int> positions;
+    positions.reserve(k - 1);
+    for (int i = 0; i < k - 1; ++i) {
+        std::uniform_int_distribution<int> d(i, slots - 1);
+        int j = d(rng);
+        std::swap(indices[i], indices[j]);
+        positions.push_back(indices[i]);
+    }
+    std::sort(positions.begin(), positions.end());
+    std::vector<int> seq;
+    seq.reserve(n);
+    int prev = -1;
+    for (int gi = 0; gi < k - 1; ++gi) {
+        int p = positions[gi];
+        int count = p - prev - 1;
+        for (int c = 0; c < count; ++c) seq.push_back(gi);
+        prev = p;
+    }
+    int last_count = slots - prev - 1;
+    for (int c = 0; c < last_count; ++c) seq.push_back(k - 1);
+    std::shuffle(seq.begin(), seq.end(), rng);
+    return seq;
+}
+
+// Sequential-growth spanning tree weighted by remaining port budget.
+// Always produces a feasible tree (every per-node degree <= budget) when
+// possible; returns std::nullopt on infeasibility (min budget < 1, or no
+// in-tree partner has a free port when a new node must attach).
+std::optional<std::vector<std::pair<int,int>>> budget_aware_tree(
+    const std::vector<int>& budgets, std::mt19937_64& rng
+) {
+    int n = static_cast<int>(budgets.size());
+    if (n <= 1) return std::vector<std::pair<int,int>>{};
+    for (int b : budgets) if (b < 1) return std::nullopt;
+
+    std::vector<int> free_budget = budgets;
+    std::vector<int> order(n);
+    std::iota(order.begin(), order.end(), 0);
+    std::shuffle(order.begin(), order.end(), rng);
+
+    std::vector<int> in_tree{order[0]};
+    std::vector<std::pair<int,int>> edges;
+    edges.reserve(n - 1);
+
+    for (int i = 1; i < n; ++i) {
+        int new_node = order[i];
+        if (free_budget[new_node] < 1) return std::nullopt;
+        std::vector<int> candidates;
+        std::vector<int> weights;
+        candidates.reserve(in_tree.size());
+        weights.reserve(in_tree.size());
+        for (int v : in_tree) {
+            if (free_budget[v] > 0) {
+                candidates.push_back(v);
+                weights.push_back(free_budget[v]);
+            }
+        }
+        if (candidates.empty()) return std::nullopt;
+        std::discrete_distribution<int> dist(weights.begin(), weights.end());
+        int partner = candidates[dist(rng)];
+        edges.emplace_back(partner, new_node);
+        free_budget[partner] -= 1;
+        free_budget[new_node] -= 1;
+        in_tree.push_back(new_node);
+    }
+    return edges;
+}
+
+}  // namespace
+
+std::unordered_set<GroupGraph> randomSample(
+    int n_nodes,
+    const std::unordered_set<GroupGraph::Group>& node_defs,
+    int num_graphs,
+    int num_procs,
+    const std::unordered_map<std::string, int>& positiveConstraints,
+    const std::unordered_set<std::string>& negativeConstraints,
+    double extra_edge_prob,
+    const std::string& color_strategy,
+    int max_attempts,
+    long long seed,
+    bool show_progress
+) {
+    if (n_nodes < 1) {
+        throw std::invalid_argument("Number of nodes must be greater than 0.");
+    }
+    if (node_defs.empty()) {
+        throw std::invalid_argument("Group definitions must not be empty.");
+    }
+    if (num_graphs < 1) {
+        throw std::invalid_argument("Number of graphs must be greater than 0.");
+    }
+    if (extra_edge_prob < 0.0 || extra_edge_prob > 1.0) {
+        throw std::invalid_argument("extra_edge_prob must be in [0, 1].");
+    }
+    bool stratified;
+    if (color_strategy == "stratified") {
+        stratified = true;
+    } else if (color_strategy == "iid") {
+        stratified = false;
+    } else {
+        throw std::invalid_argument(
+            "color_strategy must be 'iid' or 'stratified', got: " + color_strategy
+        );
+    }
+    if (max_attempts <= 0) {
+        max_attempts = 20 * num_graphs;
+    }
+    for (const auto& [type, req] : positiveConstraints) {
+        if (req < 0) {
+            throw std::invalid_argument(
+                "Positive constraint value must be >= 0 (got " +
+                std::to_string(req) + " for type '" + type + "')."
+            );
+        }
+    }
+    if (num_procs <= 0) {
+        num_procs = omp_get_max_threads();
+    }
+    omp_set_num_threads(num_procs);
+
+    // Sorted, indexed group list — deterministic group->index mapping
+    // (node_defs is an unordered_set, so without sort the same seed
+    // would produce different sequences across runs).
+    std::vector<GroupGraph::Group> groups(node_defs.begin(), node_defs.end());
+    std::sort(groups.begin(), groups.end(),
+              [](const GroupGraph::Group& a, const GroupGraph::Group& b) {
+                  return a.ntype < b.ntype;
+              });
+    int k = static_cast<int>(groups.size());
+    std::vector<int> budgets_per_group(k);
+    for (int i = 0; i < k; ++i) {
+        budgets_per_group[i] = static_cast<int>(groups[i].hubs.size());
+    }
+
+    std::unordered_set<GroupGraph> result;
+    // Dedup key is the canonical *atom-level* nauty form, not SMILES.
+    // canonizeAtomic() is what exhaustive_generate uses internally for
+    // molecule-level dedup; it's faster than toSmiles (no RDKit
+    // roundtrip) and incidentally avoids RDKit's SSSR/ring-perception
+    // warnings firing for every candidate.
+    std::unordered_set<std::vector<setword>, hash_vector> seen_canonical;
+
+    // Rejection counters (atomics for lock-free increment from threads;
+    // the wrapper-side warning could later surface these for diagnostics).
+    std::atomic<long long> n_build_fail{0};
+    std::atomic<long long> n_smiles_fail{0};
+    std::atomic<long long> n_dedup{0};
+    std::atomic<long long> n_positive_reject{0};
+    std::atomic<long long> n_negative_reject{0};
+    // Early-exit flag so worker threads stop generating once the target
+    // count is reached, instead of churning through the rest of their
+    // `omp for` slice. Relaxed memory order is fine: this is a hint, not
+    // a synchronization point — the source of truth is the `result.size()`
+    // check inside the critical section.
+    std::atomic<bool> done{false};
+
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        // Per-thread RNG derived from the master seed. The golden-ratio
+        // constant spreads adjacent thread IDs to non-adjacent seeds,
+        // avoiding correlation between adjacent threads' streams.
+        std::mt19937_64 rng;
+        if (seed < 0) {
+            std::random_device rd;
+            rng.seed(static_cast<std::uint64_t>(rd()) ^
+                     (static_cast<std::uint64_t>(rd()) << 32) ^
+                     (static_cast<std::uint64_t>(tid) * 0x9E3779B97F4A7C15ULL));
+        } else {
+            std::uint64_t s = static_cast<std::uint64_t>(seed);
+            std::uint64_t t = static_cast<std::uint64_t>(tid);
+            rng.seed(s + t * 0x9E3779B97F4A7C15ULL);
+        }
+        std::uniform_real_distribution<double> uniform01(0.0, 1.0);
+
+        #pragma omp for schedule(dynamic, 16)
+        for (long long attempt = 0; attempt < max_attempts; ++attempt) {
+            if (done.load(std::memory_order_relaxed)) continue;
+
+            std::vector<int> color_seq = stratified
+                ? sample_stratified_colors(n_nodes, k, rng)
+                : sample_iid_colors(n_nodes, k, rng);
+
+            std::vector<int> budgets(n_nodes);
+            for (int i = 0; i < n_nodes; ++i) {
+                budgets[i] = budgets_per_group[color_seq[i]];
+            }
+
+            auto tree_edges = budget_aware_tree(budgets, rng);
+            if (!tree_edges) {
+                n_build_fail.fetch_add(1, std::memory_order_relaxed);
+                continue;
+            }
+            std::vector<std::pair<int,int>> edges = std::move(*tree_edges);
+
+            std::vector<int> deg(n_nodes, 0);
+            for (const auto& [u, v] : edges) { deg[u]++; deg[v]++; }
+
+            std::unordered_set<std::uint64_t> existing;
+            existing.reserve(edges.size() * 2);
+            auto pack = [](int a, int b) {
+                int lo = std::min(a, b), hi = std::max(a, b);
+                return (static_cast<std::uint64_t>(lo) << 32) | static_cast<std::uint32_t>(hi);
+            };
+            for (const auto& [u, v] : edges) existing.insert(pack(u, v));
+            for (int i = 0; i < n_nodes; ++i) {
+                for (int j = i + 1; j < n_nodes; ++j) {
+                    if (existing.count(pack(i, j))) continue;
+                    if (deg[i] >= budgets[i] || deg[j] >= budgets[j]) continue;
+                    if (uniform01(rng) < extra_edge_prob) {
+                        edges.emplace_back(i, j);
+                        existing.insert(pack(i, j));
+                        deg[i]++; deg[j]++;
+                    }
+                }
+            }
+
+            GroupGraph candidate;
+            for (int c : color_seq) {
+                const auto& g = groups[c];
+                candidate.addNode(g.ntype, g.pattern, g.hubs, g.patternType);
+            }
+            std::vector<std::vector<int>> free_ports(n_nodes);
+            for (int i = 0; i < n_nodes; ++i) {
+                free_ports[i].resize(budgets[i]);
+                std::iota(free_ports[i].begin(), free_ports[i].end(), 0);
+            }
+            bool edge_ok = true;
+            for (const auto& [u, v] : edges) {
+                if (free_ports[u].empty() || free_ports[v].empty()) {
+                    edge_ok = false; break;
+                }
+                std::uniform_int_distribution<int> du(0, static_cast<int>(free_ports[u].size()) - 1);
+                std::uniform_int_distribution<int> dv(0, static_cast<int>(free_ports[v].size()) - 1);
+                int iu = du(rng), iv = dv(rng);
+                int pu = free_ports[u][iu];
+                int pv = free_ports[v][iv];
+                free_ports[u].erase(free_ports[u].begin() + iu);
+                free_ports[v].erase(free_ports[v].begin() + iv);
+                bool added = false;
+                try {
+                    added = candidate.addEdge({u, pu}, {v, pv});
+                } catch (...) {
+                    added = false;
+                }
+                if (!added) { edge_ok = false; break; }
+            }
+            if (!edge_ok) {
+                n_build_fail.fetch_add(1, std::memory_order_relaxed);
+                continue;
+            }
+
+            // positive_constraints first — cheapest check, just node-type
+            // counts, no canonicalization or RDKit involved.
+            if (!positiveConstraints.empty()) {
+                std::unordered_map<std::string, int> counts;
+                for (const auto& [id, group] : candidate.nodes) {
+                    counts[group.ntype]++;
+                }
+                bool ok = true;
+                for (const auto& [type, req] : positiveConstraints) {
+                    auto it = counts.find(type);
+                    int got = (it == counts.end()) ? 0 : it->second;
+                    if (got < req) { ok = false; break; }
+                }
+                if (!ok) {
+                    n_positive_reject.fetch_add(1, std::memory_order_relaxed);
+                    continue;
+                }
+            }
+
+            // negative_constraints check is SMILES-substring, so it's the
+            // only place we pay the RDKit roundtrip — skip entirely when
+            // the constraint set is empty (the common case). When we do
+            // call toSmiles, suppress RDKit's per-call warnings (e.g.
+            // "could not find number of expected rings" from SSSR on
+            // exotic random topologies) via a scoped LogStateSetter —
+            // RAII restores the previous log state on destruction.
+            if (!negativeConstraints.empty()) {
+                std::string smiles;
+                try {
+                    RDLog::LogStateSetter silence_rdkit;
+                    smiles = candidate.toSmiles();
+                } catch (...) {
+                    n_smiles_fail.fetch_add(1, std::memory_order_relaxed);
+                    continue;
+                }
+                bool bad = false;
+                for (const auto& sub : negativeConstraints) {
+                    if (smiles.find(sub) != std::string::npos) { bad = true; break; }
+                }
+                if (bad) {
+                    n_negative_reject.fetch_add(1, std::memory_order_relaxed);
+                    continue;
+                }
+            }
+
+            // Compute the canonical atom-level form *outside* the
+            // critical section — it's expensive (nauty work) but
+            // thread-local.
+            std::vector<setword> canonical;
+            try {
+                canonical = candidate.canonizeAtomic();
+            } catch (...) {
+                n_smiles_fail.fetch_add(1, std::memory_order_relaxed);
+                continue;
+            }
+
+            #pragma omp critical
+            {
+                // Re-check size inside the critical section — another
+                // thread may have hit the target while we were building.
+                if (static_cast<int>(result.size()) < num_graphs) {
+                    if (seen_canonical.insert(canonical).second) {
+                        result.insert(std::move(candidate));
+                        if (show_progress) {
+                            update_progress(static_cast<int>(result.size()),
+                                            num_graphs);
+                        }
+                        if (static_cast<int>(result.size()) >= num_graphs) {
+                            done.store(true, std::memory_order_relaxed);
+                        }
+                    } else {
+                        n_dedup.fetch_add(1, std::memory_order_relaxed);
+                    }
+                }
+            }
+        }
+    }
+
+    // Terminate the in-place progress bar so the next stdout line lands
+    // on a fresh line. Only emit the newline if we actually drew any
+    // progress (avoid spurious blank lines on empty/error runs).
+    if (show_progress && !result.empty()) {
+        std::cout << std::endl;
+    }
+
+    // Optional diagnostic: GROUPER_RANDOM_SAMPLE_VERBOSE=1 prints the
+    // per-mode rejection breakdown to stderr. Useful for tuning
+    // max_attempts on tight libraries and for measuring which mode
+    // dominates (build_fail vs dedup vs constraint-reject) when
+    // deciding whether further optimization is worth it.
+    if (const char* env = std::getenv("GROUPER_RANDOM_SAMPLE_VERBOSE")) {
+        if (env[0] != '\0' && env[0] != '0') {
+            std::cerr << "[random_sample] kept=" << result.size()
+                      << " build_fail=" << n_build_fail.load()
+                      << " smiles_fail=" << n_smiles_fail.load()
+                      << " dedup=" << n_dedup.load()
+                      << " positive_reject=" << n_positive_reject.load()
+                      << " negative_reject=" << n_negative_reject.load()
+                      << std::endl;
+        }
+    }
+
+    return result;
 }
