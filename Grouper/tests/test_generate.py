@@ -104,6 +104,116 @@ class TestGeneration(BaseTest):
             f"{len(result)} graphs."
         )
 
+    def test_generation_with_smarts_library(self):
+        """SMARTS-pattern libraries (e.g. Joback) must work in
+        exhaustive_generate.
+
+        Pre-existing bug: processColoredGraphs.cpp constructed a scratch
+        `tmp_g` Group via default-construction + field assignment without
+        setting `patternType`, so it stayed at the empty-string default.
+        `Group::getPossibleAttachments` then fell through to the SMILES
+        branch and called `AtomGraph::fromSmiles` on a SMARTS query like
+        `[CX4H3]`, which RDKit's SMILES parser rejects — followed by a
+        downstream valency-exhaustion crash because the resulting empty
+        AtomGraph can't carry the requested bond.
+
+        Pin-down: methyl `[CX4H3]` (1 free valence after H3) joined with
+        methylene `[CX4H2]` (2 free valences after H2) at n=2 yields
+        exactly 1 unique graph (CC = ethane), because methylene's
+        hubs=[0,0] requires 2 ports used but a 2-node 1-edge topology
+        only fills 1 — so methylene can't appear, and methyl-methyl
+        is the only valid pair.
+        """
+        methyl = Group("methyl", "[CX4H3]", [0], pattern_type="SMARTS")
+        methylene = Group(
+            "methylene", "[CX4H2]", [0, 0], pattern_type="SMARTS"
+        )
+        result = exhaustive_generate(
+            n_nodes=2,
+            node_defs={methyl, methylene},
+            num_procs=1,
+        )
+        smiles = {g.to_smiles() for g in result}
+        assert smiles == {"CC"}, (
+            f"expected only ethane (CC) from a methyl+methylene "
+            f"n=2 enumeration; got {sorted(smiles)}"
+        )
+
+    def test_all_equivalent_port_orbit_collapses(self):
+        """When every port of a group sits in the same atom-orbit
+        (under the group's automorphism), the per-edge candidate
+        generator must collapse to one canonical port assignment per
+        side rather than cross-producing all p^2 combinations.
+
+        Pre-fix, this case bottlenecked on the recursive port-pairing
+        search (every port permutation of a node was materialized
+        and only deduped post-canonicalization), making carbon-only
+        n=5 effectively non-terminating: ~16^E candidate edge-colorings
+        per K5-shaped topology before dedup.
+
+        The fix recognises orbit equivalence in two flavours: literal
+        identical hubs (`C [0,0,0,0]`) and atoms equivalent under the
+        group's nauty-derived atom automorphism (`benzene c1ccccc1
+        [0,3]` — atoms 0 and 3 are para-equivalent under D6).
+
+        Pin: carbon-only n=5 must produce exactly A001349(5)=21
+        unique structures (every connected simple graph on 5 nodes
+        collapses to one canonical form when all groups are identical
+        single-atom carbons), and must do so in well under a second.
+        """
+        import time as _time
+        node_defs = {Group("c", "C", [0, 0, 0, 0])}
+        start = _time.perf_counter()
+        result = exhaustive_generate(
+            n_nodes=5,
+            node_defs=node_defs,
+            num_procs=1,
+            confirm=True,
+        )
+        elapsed = _time.perf_counter() - start
+        assert len(result) == 21, (
+            f"expected A001349(5)=21 unique graphs for carbon-only "
+            f"n=5; got {len(result)}"
+        )
+        # 5 seconds is generous — pre-fix this didn't terminate in an
+        # hour. With the fix it's milliseconds locally; the threshold
+        # is a CI-noise buffer, not a target.
+        assert elapsed < 5.0, (
+            f"carbon-only n=5 took {elapsed:.1f}s — port-orbit "
+            f"collapse appears regressed"
+        )
+
+    def test_multi_atom_hubs_not_overcollapsed(self):
+        """Correctness anchor for the port-orbit collapse: we must
+        NOT collapse when hubs land on chemically-distinct positions
+        within a multi-atom group.
+
+        Full benzene `c1ccccc1 [0,1,2,3,4,5]` has all six attachment
+        atoms in a single nauty orbit under D6, but the stabilizer of
+        any one attachment atom does NOT pointwise-fix the others
+        (it swaps ortho positions and meta positions across the
+        symmetry axis). So ortho/meta/para attachment patterns on a
+        given ring are chemically distinct and the enumeration must
+        produce all of them.
+
+        Pin: three full-benzene groups at n=3 must yield 13 unique
+        structures (the cyclic 3-ring + 12 distinct chain
+        configurations covering every ortho/meta/para combination on
+        the middle ring). An earlier orbit-only version of the
+        collapse heuristic gave only 2 here, silently dropping all
+        but one chain variant.
+        """
+        bf = Group("bf", "c1ccccc1", [0, 1, 2, 3, 4, 5])
+        result = exhaustive_generate(
+            n_nodes=3, node_defs={bf}, num_procs=1, confirm=True
+        )
+        assert len(result) == 13, (
+            f"full-benzene n=3 must yield 13 distinct structures "
+            f"covering ortho/meta/para chain variants + cyclic ring; "
+            f"got {len(result)}. If this dropped to 2, the port-orbit "
+            f"collapse was incorrectly applied to multi-atom hubs."
+        )
+
 
     @pytest.mark.skip(reason="Too slow for general testing")
     @pytest.mark.parametrize("n_nodes", [2, 3, 4, 5, 6])

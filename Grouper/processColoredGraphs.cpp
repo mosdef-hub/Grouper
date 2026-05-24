@@ -704,6 +704,16 @@ void process_nauty_output(
         tmp_g.ntype = int_to_node_type.at(colors[node]);
         tmp_g.hubs = node_type_to_hub.at(int_to_node_type.at(colors[node]));
         tmp_g.pattern = int_to_pattern.at(colors[node]);
+        // Restore the patternType (SMILES vs SMARTS) on the scratch
+        // Group before computing port representatives. Without this
+        // line tmp_g.patternType stays at the default empty string,
+        // and Group::getPossibleAttachments falls through to
+        // AtomGraph::fromSmiles — which then crashes when the actual
+        // pattern is a SMARTS query like `[CX4H2]` from a SMARTS-based
+        // library (Joback, UNIFAC, SAFT-γ-Mie).
+        tmp_g.patternType = node_type_to_pattern_type.at(
+            int_to_node_type.at(colors[node])
+        );
         node_port_representatives[node] = tmp_g.getPossibleAttachments(degree);
     }
 
@@ -715,18 +725,85 @@ void process_nauty_output(
         }
         return std::vector<int>(ports.begin(), ports.end());
     };
+
+    // Per-node "all hubs point to the same atom" flag. When this
+    // holds, every port on the node is literally indexed into the
+    // same underlying atom of the pattern, so any permutation of
+    // ports among the node's incident edges produces the identical
+    // atom-level molecule. The downstream edge-automorphism dedup
+    // catches the redundancy asymptotically, but only after
+    // materializing and canonicalizing each of the p^d port
+    // permutations per node. For high-port-count groups
+    // (carbon C[0,0,0,0], ammonium N[0,0,0,0], etc.) in dense
+    // topologies that expansion is the dominant cost — carbon-only
+    // n=5 with a K5 topology would otherwise enumerate 16^10
+    // candidate edge colorings before deduplication.
+    //
+    // The fix: collapse the per-side candidate set to one canonical
+    // port per incident edge, assigned in topology order. This is
+    // one canonical representative of the per-node port-permutation
+    // orbit AND keeps the uniqueness invariant that downstream
+    // `addEdge` relies on (each port used at most once).
+    //
+    // We deliberately gate this on hubs being LITERALLY identical
+    // (all pointing to the same atom index), not merely on hubs
+    // being in one nauty atom orbit. The orbit-only condition would
+    // wrongly collapse e.g. benzene c1ccccc1 [0,1,2,3,4,5]: all six
+    // hubs are in one orbit under D6, but the stabilizer of any one
+    // hub atom does NOT pointwise-fix the others (it maps neighbour
+    // atoms 1↔5 and 2↔4), so ortho/meta/para attachment patterns
+    // are chemically distinct and must be enumerated independently.
+    // The literal-hub check is the largest collapse-safe subset and
+    // covers the common high-port-count single-atom cases.
+    //
+    // Generalising this optimization to multi-atom multi-hub groups
+    // (full benzene, naphthalene, larger aromatics) requires either
+    // augmenting `EdgeGroup` with per-node port-permutation
+    // generators AND adding intermediate maximality pruning during
+    // the recursive edge-coloring search, OR reframing the search
+    // to per-node representative choices instead of per-edge port
+    // pairs. Both are real algorithm work. See issue #92 for the
+    // implementation outline and acceptance criteria.
+    std::unordered_map<int, bool> node_all_equivalent;
+    for (const auto& [node, degree] : node_degree) {
+        const auto& hubs = node_type_to_hub.at(
+            int_to_node_type.at(colors[node])
+        );
+        std::unordered_set<int> distinct_hubs(hubs.begin(), hubs.end());
+        node_all_equivalent[node] = (distinct_hubs.size() == 1);
+    }
+
     // Compute possible edge colors. Build a parallel vector indexed by
     // edge position so processColoring (and downstream
     // generateNonAutomorphicEdgeColorings_Full) can avoid a pair<int,int>
     // hash lookup per edge per leaf.
     std::vector<std::vector<std::pair<int, int>>> color_to_port_pair_by_edge(edge_list.size());
+    // Per-node next-available port counter, used for all-equivalent
+    // nodes to assign distinct ports to incident edges in
+    // topology-order.
+    std::unordered_map<int, int> node_next_port;
     for (size_t ei = 0; ei < edge_list.size(); ++ei) {
         const auto& [src, dst] = edge_list[ei];
         const auto& src_reps = node_port_representatives.at(src);
         const auto& dst_reps = node_port_representatives.at(dst);
 
-        std::vector<int> src_ports = flatten_ports(src_reps);
-        std::vector<int> dst_ports = flatten_ports(dst_reps);
+        // For an all-equivalent node, the only choice that survives
+        // port-orbit equivalence is "the next unused port" — so
+        // collapse the per-side candidate set to a single value
+        // instead of cross-producing all ports. For a non-equivalent
+        // node, keep the full flatten_ports list.
+        std::vector<int> src_ports;
+        if (node_all_equivalent.at(src)) {
+            src_ports = {node_next_port[src]++};
+        } else {
+            src_ports = flatten_ports(src_reps);
+        }
+        std::vector<int> dst_ports;
+        if (node_all_equivalent.at(dst)) {
+            dst_ports = {node_next_port[dst]++};
+        } else {
+            dst_ports = flatten_ports(dst_reps);
+        }
 
         std::vector<int> e_colors;
         std::vector<std::pair<int, int>> port_pairs;

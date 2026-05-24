@@ -159,6 +159,13 @@ struct GroupMolCacheKeyHash {
 struct CachedAtom {
     int atomicNumber;
     int formalCharge;
+    // For SMARTS patterns with an explicit H-count constraint
+    // (e.g. `[CX4H3]` => 3), the number of hydrogens reserved on
+    // this atom. Counted only for SMARTS (RDKit's
+    // getNumExplicitHs() returns the query's H-spec); always 0
+    // for SMILES so the long-standing convention "hubs displace
+    // implicit Hs" keeps working for SMILES groups.
+    int explicitHs;
     std::string symbol;
 };
 
@@ -203,9 +210,18 @@ std::shared_ptr<const CachedMolData> getCachedMolData(
     auto data = std::make_shared<CachedMolData>();
     data->atoms.reserve(mol->getNumAtoms());
     for (const auto& atom : mol->atoms()) {
+        // For SMARTS query atoms with an H-count constraint
+        // (e.g. `[CX4H3]`), capture the explicit H spec so the
+        // downstream max-valence computation can subtract it.
+        // For SMILES atoms the H count is implicit and is
+        // intentionally NOT subtracted — the long-standing
+        // convention is that user-declared hubs displace those
+        // implicit Hs at attachment time.
+        int explicitHs = isSmarts ? atom->getNumExplicitHs() : 0;
         data->atoms.push_back({
             atom->getAtomicNum(),
             atom->getFormalCharge(),
+            explicitHs,
             atom->getSymbol()
         });
     }
@@ -394,9 +410,14 @@ std::vector<int> GroupGraph::Group::hubOrbits() const {
         ADDONEEDGE(adj.data(), from, to, m);
     }
 
-    // Step 2: Compute atom orbits using nauty
+    // Step 2: Compute atom orbits using nauty.
+    // canong is sized n*m (not n): nauty writes n setwords per row,
+    // m rows. For n < SIZEOF_WORD (typically 64) this happens to be
+    // n by luck (m=1); past that, the undersized buffer overruns and
+    // segfaults. Hits any Group whose pattern has ≥64 atoms (e.g.
+    // a 64+-mer polyethylene used as a single Group).
     std::vector<int> lab(n), ptn(n), orbits(n);
-    std::vector<setword> canong(n);
+    std::vector<setword> canong(static_cast<size_t>(m) * n);
     DEFAULTOPTIONS_GRAPH(options);
     statsblk stats;
     options.getcanon = TRUE;
@@ -461,10 +482,18 @@ std::vector<std::vector<int>> GroupGraph::Group::getPossibleAttachments(int degr
             modifiedGraph.addEdge(hubs[port_idx], modifiedGraph.nodes.size() - 1); // Connect to the hub
         }
 
-        // Compute the canonical form using Nauty
+        // Compute the canonical form using Nauty.
+        // canong is sized n*m (not n): nauty writes n setwords per
+        // row across m rows. For n < SIZEOF_WORD (typically 64) m=1
+        // and n is large enough by luck; for n ≥ 64 (e.g. patterns
+        // with ≥64 atoms) m ≥ 2 and the undersized buffer overruns,
+        // segfaulting on the first call. Hits any polymer-as-Group
+        // workflow (700-unit polyethylene case study).
         std::vector<setword> nauty_graph = modifiedGraph.toNautyGraph();
-        std::vector<int> lab(modifiedGraph.nodes.size()), ptn(modifiedGraph.nodes.size()), orbits(modifiedGraph.nodes.size());
-        std::vector<setword> canong(modifiedGraph.nodes.size());
+        const int n_modified = static_cast<int>(modifiedGraph.nodes.size());
+        const int m_modified = SETWORDSNEEDED(n_modified);
+        std::vector<int> lab(n_modified), ptn(n_modified), orbits(n_modified);
+        std::vector<setword> canong(static_cast<size_t>(m_modified) * n_modified);
 
         // Sort nodes by color and initialize `lab` and `ptn`
         int n = modifiedGraph.nodes.size();
@@ -1108,7 +1137,14 @@ std::unique_ptr<AtomGraph> GroupGraph::toAtomicGraph() const {
         const auto& cached = *getCachedMolData(node.pattern, isSmarts);
 
         for (const auto& a : cached.atoms) {
-            int maxValence = pt->getDefaultValence(a.atomicNumber) + a.formalCharge;
+            // Subtract `explicitHs` for SMARTS atoms with an H-count
+            // constraint (e.g. `[CX4H3]` => maxValence 4-3=1). For
+            // SMILES atoms `explicitHs` is 0 by construction so this
+            // is a no-op and the legacy "hubs displace implicit Hs"
+            // semantics are preserved.
+            int maxValence = pt->getDefaultValence(a.atomicNumber)
+                             + a.formalCharge
+                             - a.explicitHs;
             atomGraph->addNode(a.symbol, maxValence);
         }
         for (const auto& b : cached.bonds) {
