@@ -12,9 +12,9 @@ from ._safeguards import (
     check_resource_limits,
     estimate_vcolg_lines,
 )
+from .fragmentation import fragment
 from .generate import exhaustive_generate, random_generate, random_sample
 from .group_graph_set import GroupGraphSet
-from .fragmentation import fragment
 
 
 # Add Pythonic export shortcuts to the C++ GroupGraph class. We do this
