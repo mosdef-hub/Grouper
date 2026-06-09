@@ -199,7 +199,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 Kieran Nehil-Puleo - nehilkieran@gmail.com
 
-Cal Craven
+Cal Craven - nicholas.c.craven@vanderbilt.edu
 
 Project Link: [https://github.com/kierannp/Grouper](https://github.com/kierannp/Grouper)
 
@@ -209,9 +209,9 @@ Project Link: [https://github.com/kierannp/Grouper](https://github.com/kierannp/
 
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
-[NSF Graduate Research Fellowship Program (GRFP)](https://www.nsfgrfp.org/)
-[NSF Designing Materials to Revolutionize and Engineer our Future (DMREF) grant DMR-2119575](https://www.nsf.gov/funding/opportunities/dmref-designing-materials-revolutionize-engineer-our-future) 
-[UKRI EPSRC Enabling CO2 capture and storage using AI, grant EP/Y006143/1 (ECO-AI)]((https://ai4netzero.github.io/eco-ai/))
+NSF Graduate Research Fellowship Program ([GRFP](https://www.nsfgrfp.org/))</br>
+NSF Designing Materials to Revolutionize and Engineer our Future ([DMREF](https://www.nsf.gov/funding/opportunities/dmref-designing-materials-revolutionize-engineer-our-future)) grant DMR-2119575</br>
+UKRI EPSRC Enabling CO2 capture and storage using AI, grant EP/Y006143/1 ([ECO-AI](https://ai4netzero.github.io/eco-ai/))
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
