@@ -4,6 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "Grouper"
+version = "0.4.0"
 description = "A package for working with group graphs"
 readme = "README.md"
 authors = [{name = "Kieran Nehil-Puleo"}]
@@ -27,7 +28,6 @@ classifiers=[
     "Operating System :: MacOS",
 ]
 requires-python = ">=3.9"
-dynamic = ["version"]
 
 [project.urls]
 Documentation = "https://mosdef-hub.github.io/Grouper/"
@@ -59,7 +59,7 @@ exclude_lines = [
 ]
 
 [tool.bumpversion]
-current_version = "0.0.5"
+current_version = "0.0.4"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"
@@ -79,3 +79,13 @@ commit_args = "--no-verify"
 setup_hooks = []
 pre_commit_hooks = []
 post_commit_hooks = []
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "Grouper/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
