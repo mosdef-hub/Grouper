@@ -18,7 +18,7 @@ from ._safeguards import (
 )
 from .group_graph_set import GroupGraphSet
 
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 
 
 # Pre-flight wrappers around the two C++ entry points whose runtime
