@@ -20,6 +20,7 @@ from .group_graph_set import GroupGraphSet
 
 __version__ = "0.0.4"
 
+
 # Pre-flight wrappers around the two C++ entry points whose runtime
 # scales combinatorially with `n_nodes`. The C++ side itself doesn't
 # refuse oversized inputs, so a user pasting `exhaustive_generate(12,
