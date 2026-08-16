@@ -403,6 +403,56 @@ Two graphs return equal lists iff they are isomorphic with group ntype, port hub
         py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
         py::arg("negative_constraints") = std::unordered_set<std::string>{}
     );
+    m.def("random_sample", [](int n_nodes,
+                              const std::unordered_set<GroupGraph::Group>& node_defs,
+                              int num_graphs,
+                              int num_procs,
+                              const std::unordered_map<std::string, int>& positive_constraints,
+                              const std::unordered_set<std::string>& negative_constraints,
+                              double extra_edge_prob,
+                              const std::string& color_strategy,
+                              int max_attempts,
+                              long long seed,
+                              bool show_progress) {
+        auto result = randomSample(
+            n_nodes, node_defs, num_graphs, num_procs,
+            positive_constraints, negative_constraints,
+            extra_edge_prob, color_strategy, max_attempts, seed, show_progress
+        );
+        return convert_unordered_set(result);
+    },
+    R"doc(Sample unique connected colored port graphs without enumerating the orbit space.
+
+    Bypasses geng/vcolg. Runtime scales linearly with ``num_graphs`` rather than
+    combinatorially with ``n_nodes`` — works at sizes where ``exhaustive_generate``
+    and ``random_generate`` are infeasible. NOT uniform over canonical orbits:
+    low-symmetry molecules are over-represented by a factor of ``|Aut(G)|^-1``.
+    For uniform-over-orbits sampling at small n use ``random_generate`` instead.
+
+    .. code-block:: python
+
+        from Grouper import Group, random_sample
+
+        node_defs = {
+            Group("methyl",   "C",       [0, 0, 0, 0]),
+            Group("amine",    "N",       [0, 0, 0]),
+            Group("hydroxyl", "O",       [0, 0]),
+            Group("ester",    "C(=O)O",  [0, 2]),
+        }
+        graphs = random_sample(n_nodes=18, node_defs=node_defs, num_graphs=200, seed=7)
+    )doc",
+        py::arg("n_nodes"),
+        py::arg("node_defs"),
+        py::arg("num_graphs") = 100,
+        py::arg("num_procs") = -1,
+        py::arg("positive_constraints") = std::unordered_map<std::string, int>{},
+        py::arg("negative_constraints") = std::unordered_set<std::string>{},
+        py::arg("extra_edge_prob") = 0.10,
+        py::arg("color_strategy") = std::string("stratified"),
+        py::arg("max_attempts") = 0,
+        py::arg("seed") = -1LL,
+        py::arg("show_progress") = true
+    );
     m.def("exhaustive_fragment", &fragment,
         R"(Fragment a molecule into a set of GroupGraphs based on a given set of group definitions.
 
