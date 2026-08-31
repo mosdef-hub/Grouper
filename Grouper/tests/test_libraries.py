@@ -1,7 +1,7 @@
-# ruff: noqa: F401
+from collections import Counter
+
 import pytest
 from networkx import is_connected
-from collections import Counter
 
 from Grouper import Group, fragment
 from Grouper.libraries.Libraries import (

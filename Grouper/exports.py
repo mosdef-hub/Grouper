@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     # it at runtime would create a circular dependency through
     # Grouper.__init__.py. The string-forward-reference in the function
     # signatures below points here, satisfying static analyzers.
-    from Grouper import GroupGraph  # noqa: F401
+    from Grouper import GroupGraph
 
 
 class GrouperError(Exception):
@@ -67,7 +67,7 @@ class EmbedError(GrouperError):
     """
 
 
-def _smiles_of(target: Union[str, "GroupGraph"]) -> str:
+def _smiles_of(target: Union[str, GroupGraph]) -> str:
     """Coerce a SMILES str or a GroupGraph (anything with `to_smiles()`)
     to a SMILES string. Duck-typed to avoid importing GroupGraph here
     (would create a circular import via Grouper/__init__.py)."""
@@ -89,7 +89,7 @@ def _mol_with_explicit_h(smiles: str) -> Chem.Mol:
 
 
 def to_3d_mol(
-    target: Union[str, "GroupGraph"],
+    target: Union[str, GroupGraph],
     seed: int = 42,
     force_field: str = "mmff94",
     max_iters: int = 200,
@@ -262,7 +262,7 @@ def to_sdf(
 
 
 def to_mol(
-    target: Union[str, "GroupGraph"],
+    target: Union[str, GroupGraph],
     path: Optional[str] = None,
     embed_3d: bool = True,
     **embed_kwargs,
@@ -280,7 +280,7 @@ def to_mol(
 
 
 def to_xyz(
-    target: Union[str, "GroupGraph"],
+    target: Union[str, GroupGraph],
     path: Optional[str] = None,
     **embed_kwargs,
 ) -> Optional[str]:
@@ -292,7 +292,7 @@ def to_xyz(
 
 
 def to_pdb(
-    target: Union[str, "GroupGraph"],
+    target: Union[str, GroupGraph],
     path: Optional[str] = None,
     **embed_kwargs,
 ) -> Optional[str]:
@@ -309,7 +309,7 @@ def to_pdb(
 # database lookup (PubChem, ChEMBL, NIST), substructure querying, and
 # stable cross-tool referencing.
 # ---------------------------------------------------------------------
-def to_inchi(target: Union[str, "GroupGraph"]) -> str:
+def to_inchi(target: Union[str, GroupGraph]) -> str:
     """Return the IUPAC InChI string. InChI is a layered, deterministic
     identifier that's standard across cheminformatics databases — two
     drawings of the same molecule produce the same InChI even when
@@ -325,7 +325,7 @@ def to_inchi(target: Union[str, "GroupGraph"]) -> str:
     return Chem.MolToInchi(mol)
 
 
-def to_inchi_key(target: Union[str, "GroupGraph"]) -> str:
+def to_inchi_key(target: Union[str, GroupGraph]) -> str:
     """Return the 27-character InChIKey hash of the InChI. This is the
     primary-key form most chemistry databases use — fixed length,
     URL-safe, and deterministic across implementations.
@@ -341,7 +341,7 @@ def to_inchi_key(target: Union[str, "GroupGraph"]) -> str:
     return Chem.MolToInchiKey(mol)
 
 
-def to_smarts(target: Union[str, "GroupGraph"]) -> str:
+def to_smarts(target: Union[str, GroupGraph]) -> str:
     """Return the SMARTS pattern for the molecule, as produced by
     RDKit's ``Chem.MolToSmarts``. Useful when a generated structure
     becomes a query pattern for substructure searching elsewhere in
