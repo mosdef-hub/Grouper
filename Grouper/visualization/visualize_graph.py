@@ -581,5 +581,3 @@ def _handle_edge_initializations(elements, updated_elements):
                 element, ele_source, ele_target
             )
         updated_elements.append(element)
-
-    return
