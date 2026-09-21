@@ -21,7 +21,8 @@ membership tests, comprehensions) keeps working unchanged.
 from __future__ import annotations
 
 import warnings
-from typing import Any, Callable, List, Optional, Sequence, Type, Union
+from collections.abc import Sequence
+from typing import Any, Callable, List, Optional, Type, Union
 
 # ---------------------------------------------------------------------
 # Property-estimator registry (lazy import so this module loads even if
@@ -199,7 +200,7 @@ class GroupGraphSet(set):
 
     # ----- convenience filtering / sampling -------------------------
 
-    def filter(self, predicate: Callable[[Any], bool]) -> "GroupGraphSet":
+    def filter(self, predicate: Callable[[Any], bool]) -> GroupGraphSet:
         """Return a new GroupGraphSet containing only graphs for which
         `predicate(graph)` is True. Standard list/set comprehensions
         return a plain set; this returns the wrapper so chained calls
@@ -211,7 +212,7 @@ class GroupGraphSet(set):
         self,
         n: int,
         seed: Optional[int] = None,
-    ) -> "GroupGraphSet":
+    ) -> GroupGraphSet:
         """Return a uniformly-random subset of `n` graphs.
 
         `seed` makes the sample reproducible — useful when you want

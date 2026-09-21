@@ -2,6 +2,7 @@
 import pytest
 
 from Grouper import Group, GroupGraph
+from Grouper._Grouper import GrouperParseException
 from Grouper.fragmentation import (
     _get_first_compatible_tuples,
     _get_hubs_from_string,
@@ -11,7 +12,6 @@ from Grouper.fragmentation import (
     fragment,
 )
 from Grouper.tests.base_test import BaseTest
-from Grouper._Grouper import GrouperParseException
 
 
 class TestGeneralFragmentations(BaseTest):
