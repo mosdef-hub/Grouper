@@ -17,7 +17,7 @@ class GraphBase:
         permutations = []
         for sign in signs:
             value = tuple(val * s for val, s in zip(values, sign))
-            permutations.extend(list((itertools.permutations(value, 3))))
+            permutations.extend(list(itertools.permutations(value, 3)))
         coords = np.vstack((coords, np.array(list(set(permutations)))))
         return coords
 

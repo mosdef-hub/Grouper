@@ -84,6 +84,7 @@ class TestGroupGraph(BaseTest):
 
     def test_nx_visualize(self):
         import matplotlib.pyplot as plt
+
         from Grouper.utils import convert_to_nx
         gG = GroupGraph()
         gG.add_node("node1", "CCC", [0,1,2])
@@ -96,8 +97,9 @@ class TestGroupGraph(BaseTest):
         assert isinstance(ax, plt.Axes)
 
     def test_cytoscape_visualize(self):
-        from Grouper.visualization.visualize_graph import visualize_cytoscape
         from dash import Dash
+
+        from Grouper.visualization.visualize_graph import visualize_cytoscape
 
         gG = GroupGraph()
         gG.add_node("node1", "CCC", [0,1,2])
