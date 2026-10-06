@@ -8,7 +8,6 @@ molecule.
 """
 
 import pytest
-
 from rdkit import Chem
 
 from Grouper import GroupGraph

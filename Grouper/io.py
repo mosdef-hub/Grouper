@@ -11,8 +11,6 @@ from unittest import SkipTest
 class DelayImportError(ImportError, SkipTest):
     """Error to allow better import handling."""
 
-    pass
-
 
 MESSAGES = dict()
 MESSAGES["mbuild"] = """
@@ -96,7 +94,7 @@ def import_(module):
             + "\033[0m"
         )
 
-        print("", file=sys.stderr)
+        print(file=sys.stderr)
         print(bar, file=sys.stderr)
         print(m, file=sys.stderr)
         print(bar, file=sys.stderr)

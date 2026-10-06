@@ -1,16 +1,19 @@
 
-from Grouper import Group, GroupGraph, exhaustive_generate
-from Grouper.tests.base_test import BaseTest
-from Grouper.counting import NodeColoredGraph
-from Grouper.utils import parse_vcolg_line
+import itertools
+import os
+
+import igraph
+import networkx as nx
 import numpy as np
 import sympy
 from sympy.combinatorics.perm_groups import PermutationGroup
-import os
-import networkx as nx
-import igraph
-import itertools
 from tqdm import tqdm
+
+from Grouper import Group, GroupGraph, exhaustive_generate
+from Grouper.counting import NodeColoredGraph
+from Grouper.tests.base_test import BaseTest
+from Grouper.utils import parse_vcolg_line
+
 
 class TestCounting(BaseTest):
 
