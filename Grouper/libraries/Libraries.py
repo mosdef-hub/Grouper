@@ -11,8 +11,8 @@ import rdkit.Chem
 import rdkit.Chem.Draw
 
 from Grouper import Group, GroupGraph
-from Grouper.fragmentation import fragment
 from Grouper._Grouper import GrouperFragmentationError
+from Grouper.fragmentation import fragment
 
 # Declaring namedtuple for defining adding groups and their SMARTS to a library.
 GroupExtension = namedtuple(
@@ -20,7 +20,7 @@ GroupExtension = namedtuple(
 )
 
 
-class BasisSet(object):
+class BasisSet:
     """Base class for managing a library of chemical groups.
 
     Attributes:
