@@ -154,7 +154,7 @@ class TestGroupGraph(BaseTest):
         graph.add_node("type2", "C", [0])
 
         assert len(graph.nodes) == 3
-        assert set(n.type for n in graph.nodes.values()) == {"type1", "type1", "type2"}
+        assert set(n.type for n in graph.nodes.values()) == {"type1", "type2"}
         assert set(n.pattern for n in graph.nodes.values()) == {"C"}
         assert set(tuple(n.ports) for n in graph.nodes.values()) == {(0,), (0, 1)}
         assert set(tuple(n.hubs) for n in graph.nodes.values()) == {(0,), (0, 0)}
@@ -164,7 +164,6 @@ class TestGroupGraph(BaseTest):
 
         assert len(graph.nodes) == 4
         assert set(n.type for n in graph.nodes.values()) == {
-            "type1",
             "type1",
             "type2",
             "alkene",
@@ -723,6 +722,7 @@ class TestAtomCanonize(BaseTest):
         under to_smiles() and AtomGraph.to_canonical().
         """
         from collections import defaultdict
+
         from Grouper import exhaustive_generate
 
         node_defs = {
@@ -792,8 +792,8 @@ class TestAtomGraph(BaseTest):
 
         atom = Atom("C", 4)
         agraph.add_node(atom)
-        assert set(n.type for n in agraph.nodes.values()) == {"C", "C"}
-        assert set(n.valency for n in agraph.nodes.values()) == {4, 4}
+        assert set(n.type for n in agraph.nodes.values()) == {"C"}
+        assert set(n.valency for n in agraph.nodes.values()) == {4}
         assert len(agraph.nodes) == 2
         assert len(agraph.edges) == 0
 
@@ -858,7 +858,7 @@ class TestAtomGraph(BaseTest):
         # check nodes
         assert len(mol.GetAtoms()) == len(ag.nodes)
         # check edges
-        assert int(len(mol.GetBonds())) * 2 == len(ag.edges)
+        assert len(mol.GetBonds()) * 2 == len(ag.edges)
 
         # check connectivity
         agBonds = [
