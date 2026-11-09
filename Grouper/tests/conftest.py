@@ -1,6 +1,4 @@
-from typing import Any, List
-
-from typing_extensions import Final
+from typing import Any, Final, List
 
 NO_SKIP_OPTION: Final[str] = "--no-skip"
 

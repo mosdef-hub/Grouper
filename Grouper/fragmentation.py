@@ -79,7 +79,7 @@ def fragment(
         raise GrouperParseException(
             f"Fragmentation of {smiles} is not readable by RDKit.MolFromSmiles."
         )
-    if not smiles or not nodeDefs:  #
+    if not smiles or not nodeDefs:
         return []
     if returnHandler == "exhaustive":  # call cpp fragmenter for exhaustive matching
         _, nodeDefs = _generate_queries_from_nodedefs(
@@ -139,12 +139,12 @@ def fragment(
 
 class MatchState:
     __slots__ = (
+        "all_group_indices",
+        "all_group_names",
         "all_matched_atoms",
         "all_unmatched_atoms",
-        "all_group_names",
-        "all_group_indices",
-        "nodeDefs_indices",
         "group_bonds",
+        "nodeDefs_indices",
     )
 
     def __init__(self, n_atoms):
