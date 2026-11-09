@@ -1,6 +1,7 @@
 import pytest
 
 from Grouper import GroupGraph
+
 # from group_selfies import Group
 
 class BaseTest:
