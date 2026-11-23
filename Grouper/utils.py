@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from copy import deepcopy
-from typing import Any, Callable, Dict, List, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 import networkx as nx
 import numpy as np
@@ -62,7 +63,7 @@ class nxGroupGraph(
         ValueError
             If keys in node_types are not of the same type or values are not lists.
         """
-        super(nxGroupGraph, self).__init__()
+        super().__init__()
         if node_types is None:
             node_types = {}
 
@@ -171,7 +172,7 @@ class nxGroupGraph(
         # Sanity check to see if the node is already present in Graph
         if nodeID in self.nodes:
             raise AttributeError(f"Node: {nodeID} is already present in Graph")
-        super(nxGroupGraph, self).add_node(nodeID)
+        super().add_node(nodeID)
         self.nodes[nodeID]["type"] = node_type
         self.nodes[nodeID]["ports"] = range(len(hubs))
         self.nodes[nodeID]["smarts"] = smarts
@@ -239,9 +240,7 @@ class nxGroupGraph(
         if self.has_edge(node_port_1[0], node_port_2[0]):
             self.edges[node_port_1[0], node_port_2[0]]["ports"].append(edge_ports)
         else:
-            super(nxGroupGraph, self).add_edge(
-                node_port_1[0], node_port_2[0], ports=[edge_ports]
-            )
+            super().add_edge(node_port_1[0], node_port_2[0], ports=[edge_ports])
 
         # remove ports from portsList
 

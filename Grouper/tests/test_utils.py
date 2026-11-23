@@ -1,18 +1,20 @@
+from math import isnan
+
+import networkx as nx
+import pytest
+import rdkit.Chem
+import torch
+import torch_geometric
+import torch_geometric.data
+from rdkit.Chem import Descriptors
+
 from Grouper import GroupGraph
+from Grouper.tests.base_test import BaseTest
 from Grouper.utils import (
     convert_to_nx,
     data_to_gg_edge,
     parse_vcolg_line,
 )
-from Grouper.tests.base_test import BaseTest
-import networkx as nx
-import pytest
-import torch
-import rdkit.Chem
-from rdkit.Chem import Descriptors
-from math import isnan
-import torch_geometric
-import torch_geometric.data
 
 
 def node_descriptor_generator(node_smiles):
