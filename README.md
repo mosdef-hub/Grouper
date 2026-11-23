@@ -93,14 +93,22 @@ from Grouper import GroupGraph
 gG = GroupGraph()
 
 # Adding nodes
-gG.add_node(type = 'nitrogen', pattern = 'N', hubs = [0,0,0], is_smarts=False) # default of is_smarts is False
-gG.add_node('nitrogen') # Once the type of the node has been specified we can use it again
-gG.add_node(type = '', pattern = '[N]', hubs = [0,0,0], is_smarts=True) # Alternatively we can just use smarts
+gG.add_node(
+    type="nitrogen", pattern="N", hubs=[0, 0, 0], is_smarts=False
+)  # default of is_smarts is False
+gG.add_node(
+    "nitrogen"
+)  # Once the type of the node has been specified we can use it again
+gG.add_node(
+    type="", pattern="[N]", hubs=[0, 0, 0], is_smarts=True
+)  # Alternatively we can just use smarts
 
 # Adding edges
-gG.add_edge(src = (0,0), dst = (1,0), order=1) # In the format ((nodeID, srcPort), (nodeID, dstPort), bondOrder)
-gG.add_edge(src = (1,1), dst = (2,0))
-gG.add_edge(src = (2,1), dst = (0,1))
+gG.add_edge(
+    src=(0, 0), dst=(1, 0), order=1
+)  # In the format ((nodeID, srcPort), (nodeID, dstPort), bondOrder)
+gG.add_edge(src=(1, 1), dst=(2, 0))
+gG.add_edge(src=(2, 1), dst=(0, 1))
 
 """
 Will make
@@ -128,18 +136,18 @@ from Grouper import Group, exhaustive_generate
 
 node_defs = set()
 # Define out node types that we will use to built our chemistries
-node_defs.add(Group('nitrogen', 'N', [0,0,0]))
-node_defs.add(Group('carbon', 'C', [0,0,0,0]))
-node_defs.add(Group('oxygen', 'O', [0,0]))
-node_defs.add(Group('benzene', 'c1ccccc1', [0,1,2,3,4,5]))
+node_defs.add(Group("nitrogen", "N", [0, 0, 0]))
+node_defs.add(Group("carbon", "C", [0, 0, 0, 0]))
+node_defs.add(Group("oxygen", "O", [0, 0]))
+node_defs.add(Group("benzene", "c1ccccc1", [0, 1, 2, 3, 4, 5]))
 
 # Call method to enumerate possibilities
 exhausted_space = exhaustive_generate(
-    n_nodes = 4,
-    node_defs = node_defs,
-    input_file_path = '',
-    nauty_path = '/path/to/nauty_X_X_X',
-    num_procs = -1, # -1 utilizes all availible CPUs
+    n_nodes=4,
+    node_defs=node_defs,
+    input_file_path="",
+    nauty_path="/path/to/nauty_X_X_X",
+    num_procs=-1,  # -1 utilizes all availible CPUs
 )
 ```
 
@@ -148,19 +156,25 @@ exhausted_space = exhaustive_generate(
 import Grouper
 from Grouper.utils import convert_to_nx
 
+
 def node_descriptor_generator(node_smiles):
     mol = rdkit.Chem.MolFromSmiles(node_smiles)
     desc = Descriptors.CalcMolDescriptors(mol)
-    desc = {k: desc[k] for k in desc.keys() if (not isnan(desc[k]) or desc[k] is not None)}
-    desc = [v for k,v in desc.items()] # flatten descriptors into single vector
+    desc = {
+        k: desc[k] for k in desc.keys() if (not isnan(desc[k]) or desc[k] is not None)
+    }
+    desc = [v for k, v in desc.items()]  # flatten descriptors into single vector
     desc = torch.tensor(desc, dtype=torch.float64)
     return desc
+
 
 nxG = convert_to_nx(gG)
 max_ports = max(len(n.hubs) for n in node_defs)
 
 data = nxG.to_PyG_Data(node_descriptor_generator, max_ports)
-data.y = torch.tensor([rdkit.Chem.Descriptors.MolLogP(rdkit.Chem.MolFromSmiles(d))]) # here we utilize rdkit to estimate logP, but obviously can be generated another way
+data.y = torch.tensor(
+    [rdkit.Chem.Descriptors.MolLogP(rdkit.Chem.MolFromSmiles(d))]
+)  # here we utilize rdkit to estimate logP, but obviously can be generated another way
 ```
 
 
